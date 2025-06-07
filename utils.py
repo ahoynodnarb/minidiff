@@ -1,5 +1,6 @@
-from diff_graph import FuncNode
+from topology import FuncNode
 import networkx as nx
+
 
 def print_graph(root: FuncNode):
     if root is None:
@@ -8,9 +9,3 @@ def print_graph(root: FuncNode):
     for node in root.input_nodes:
         print_graph(node)
     print()
-    
-# def draw_graph(root: FuncNode):
-#     if root is None:
-#         return
-#     G = nx.graph()
-    
