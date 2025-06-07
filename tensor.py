@@ -236,7 +236,7 @@ def _generate_unary_op_func(backend_func, grad_a=None, differentiable=True):
         assert isinstance(a, Tensor)
 
         can_allow_grad = minidiff.grad_allowed() and a.allow_grad
-        output = Tensor(backend_func(a._tensor, **kwargs), allow_grad=can_allow_grad)
+        output = Tensor(backend_func(a._tensor, **kwargs), allow_grad=a.allow_grad)
 
         if can_allow_grad:
             func_node = topology.UnaryNode(a, grad_a)
@@ -324,7 +324,7 @@ def reshape(a: Tensor, shape: tuple, **kwargs):
     can_allow_grad = minidiff.grad_allowed() and a.allow_grad
 
     original_shape = a.shape
-    output = Tensor(np.reshape(a._tensor, shape, **kwargs), allow_grad=can_allow_grad)
+    output = Tensor(np.reshape(a._tensor, shape, **kwargs), allow_grad=a.allow_grad)
 
     if can_allow_grad:
         reshape_node = topology.UnaryNode(
