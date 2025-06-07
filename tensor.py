@@ -207,7 +207,7 @@ def full_like(t1: Tensor, x, allow_grad=True, **kwargs):
     return Tensor(np.full_like(t1._tensor, x, **kwargs), allow_grad=allow_grad)
 
 
-def _generate_unary_backend_interop(backend_func, grad_a=None, differentiable=True):
+def _generate_unary_op_func(backend_func, grad_a=None, differentiable=True):
     def minidiff_func(a: Tensor, allow_grad=True, **kwargs):
         assert isinstance(a, Tensor)
 
@@ -223,7 +223,7 @@ def _generate_unary_backend_interop(backend_func, grad_a=None, differentiable=Tr
     return minidiff_func
 
 
-def _generate_binary_backend_interop(
+def _generate_binary_op_func(
     backend_func, grad_a=None, grad_b=None, differentiable=True, tensor_only=False
 ):
     if tensor_only:
@@ -300,34 +300,34 @@ def reshape(a: Tensor, shape: tuple, allow_grad=None, **kwargs):
     return output
 
 
-matmul = _generate_binary_backend_interop(
+matmul = _generate_binary_op_func(
     backend_func=np.matmul,
     grad_a=lambda a, b, grad: matmul(grad, b.t),
     grad_b=lambda a, b, grad: matmul(a.t, grad),
     tensor_only=True,
 )
-add = _generate_binary_backend_interop(
+add = _generate_binary_op_func(
     backend_func=np.add, grad_a=lambda a, b, grad: grad, grad_b=lambda a, b, grad: grad
 )
-subtract = _generate_binary_backend_interop(
+subtract = _generate_binary_op_func(
     backend_func=np.subtract,
     grad_a=lambda a, b, grad: grad,
     grad_b=lambda a, b, grad: -grad,
 )
-multiply = _generate_binary_backend_interop(
+multiply = _generate_binary_op_func(
     backend_func=np.multiply,
     grad_a=lambda a, b, grad: grad * b,
     grad_b=lambda a, b, grad: grad * a,
 )
-true_divide = _generate_binary_backend_interop(
+true_divide = _generate_binary_op_func(
     backend_func=np.true_divide,
     grad_a=lambda a, b, grad: grad / b,
     grad_b=lambda a, b, grad: (-grad * a) / (b**2),
 )
-floor_divide = _generate_binary_backend_interop(
+floor_divide = _generate_binary_op_func(
     backend_func=np.floor_divide, differentiable=False
 )
-power = _generate_binary_backend_interop(
+power = _generate_binary_op_func(
     backend_func=np.power,
     grad_a=lambda a, b, grad: grad * b * (a ** (b - 1)),
     grad_b=lambda a, b, grad: grad * np.log(a) * a**b,
@@ -338,35 +338,35 @@ def sqrt(x, allow_grad=True, **kwargs):
     return power(x, 0.5, allow_grad=allow_grad, **kwargs)
 
 
-floor = _generate_unary_backend_interop(backend_func=np.floor, differentiable=False)
-ceil = _generate_unary_backend_interop(backend_func=np.ceil, differentiable=False)
-cos = _generate_unary_backend_interop(
+floor = _generate_unary_op_func(backend_func=np.floor, differentiable=False)
+ceil = _generate_unary_op_func(backend_func=np.ceil, differentiable=False)
+cos = _generate_unary_op_func(
     backend_func=np.cos, grad_a=lambda a, grad: grad * -sin(a)
 )
-sin = _generate_unary_backend_interop(
+sin = _generate_unary_op_func(
     backend_func=np.sin, grad_a=lambda a, grad: grad * cos(a)
 )
-tan = _generate_unary_backend_interop(
+tan = _generate_unary_op_func(
     backend_func=np.tan, grad_a=lambda a, grad: grad * (1 / cos(a) ** 2)
 )
-cosh = _generate_unary_backend_interop(
+cosh = _generate_unary_op_func(
     backend_func=np.cosh, grad_a=lambda a, grad: grad * sinh(a)
 )
-sinh = _generate_unary_backend_interop(
+sinh = _generate_unary_op_func(
     backend_func=np.sinh, grad_a=lambda a, grad: grad * cosh(a)
 )
-tanh = _generate_unary_backend_interop(
+tanh = _generate_unary_op_func(
     backend_func=np.sinh, grad_a=lambda a, grad: grad * (1 / cosh(a) ** 2)
 )
-exp = _generate_unary_backend_interop(
+exp = _generate_unary_op_func(
     backend_func=np.exp, grad_a=lambda a, grad: grad * exp(a)
 )
-log = _generate_unary_backend_interop(
+log = _generate_unary_op_func(
     backend_func=np.log, grad_a=lambda a, grad: grad / a
 )
-sum = _generate_unary_backend_interop(
+sum = _generate_unary_op_func(
     backend_func=np.log, grad_a=lambda a, grad: grad * sum(a)
 )
-mean = _generate_unary_backend_interop(
+mean = _generate_unary_op_func(
     backend_func=np.log, grad_a=lambda a, grad: grad * sum(a) / a.size
 )
