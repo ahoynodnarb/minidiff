@@ -17,18 +17,42 @@ import topology
 
 
 class Tensor:
-    def __init__(self, tensor, allow_grad=False, dtype=np.float32):
+    def __init__(self, tensor, allow_grad=False, dtype=np.float32, is_leaf=True):
         if isinstance(tensor, np.ndarray):
             self._tensor = tensor
         else:
             self._tensor = np.array(tensor, dtype=dtype)
 
-        self.grad = zeros_like(self, allow_grad=False) if allow_grad else None
-
-        self.traversal_path = None
+        # tensors not created by ops are leafs. this property is immutable
+        self._is_leaf = is_leaf
         self.func_node = None
         self.graphed = False
-        self.allow_grad = allow_grad
+        self._allow_grad = allow_grad
+        # don't store gradients unless we are user-created.
+        self.grad = (
+            zeros_like(self, allow_grad=False) if allow_grad and is_leaf else None
+        )
+
+    @property
+    def is_leaf(self):
+        return self._is_leaf
+
+    @property
+    def allow_grad(self):
+        return self._allow_grad
+
+    @allow_grad.setter
+    def allow_grad(self, allow_grad):
+        assert (
+            allow_grad or not self.graphed
+        ), "Tensors can only stop tracking gradients if they are not part of a computational graph"
+        if self._allow_grad == allow_grad:
+            return
+        if not self.is_leaf or not allow_grad:
+            self.grad = None
+        else:
+            self.grad = zeros_like(self, allow_grad=False)
+        self._allow_grad = allow_grad
 
     @property
     def t(self):
@@ -46,40 +70,51 @@ class Tensor:
     def dtype(self):
         return self._tensor.dtype
 
-    def backward(self, force_retraversal=False):
+    def backward(self, retain_graph=False):
         if not self.allow_grad:
             return
 
         if self.func_node is None:
             return
 
-        if force_retraversal or self.traversal_path is None:
-            # it is usually faster just to keep this as a list because we're probably not
-            # going to iterate over that many nodes, so a linear search is much faster and
-            # much more worth the overhead than a set
-            seen = []
-            self.traversal_path = []
+        # it is usually faster just to keep this as a list because we're probably not
+        # going to iterate over that many nodes, so a linear search is much faster and
+        # much more worth the overhead than a set
+        seen = []
+        traversal_path = []
 
-            # topologically sort
-            def dfs(tensor):
-                root = tensor.func_node
-                if root is None or root in seen:
-                    return
-                seen.append(root)
-                for input_tensor in root.input_tensors:
-                    dfs(input_tensor)
-                self.traversal_path.append(tensor)
+        # topologically sort
+        def dfs(tensor):
+            root = tensor.func_node
+            if root is None or root in seen:
+                return
+            # temporarily maintain gradients only during backward pass
+            if not tensor.is_leaf:
+                tensor.grad = zeros_like(tensor, allow_grad=False)
+            seen.append(root)
+            for input_tensor in root.input_tensors:
+                dfs(input_tensor)
+            traversal_path.append(tensor)
 
-            dfs(self)
+        dfs(self)
 
         self.grad = ones_like(self, allow_grad=False)
-        for tensor in reversed(self.traversal_path):
+
+        for tensor in reversed(traversal_path):
             n = tensor.func_node
             n_grad = tensor.grad
             n.update_grads(n_grad)
+            # we're only temporarily storing grads, so we need to remove any references when
+            # we're done for the sake of memory
+            if not tensor.is_leaf:
+                tensor.grad = None
+            if not retain_graph:
+                tensor.func_node = None
 
     def item(self):
-        assert len(self) == 1
+        assert (
+            len(self) == 1
+        ), "only Tensors with a single element can be reduced to a Python scalar"
         return self._tensor[0].item()
 
     def reshape(self, shape, **kwargs):
@@ -95,12 +130,14 @@ class Tensor:
         return multiply(self, other, **kwargs)
 
     def __matmul__(self, other):
-        assert isinstance(other, Tensor)
+        assert isinstance(other, Tensor), "can only matrix multiply between two Tensors"
         return matmul(self, other)
 
     def __imatmul__(self, other):
-        assert isinstance(other, Tensor)
-        assert not self.allow_grad
+        assert isinstance(other, Tensor), "can only matrix multiply between two Tensors"
+        assert (
+            not self.allow_grad
+        ), "in-place operations are not allowed while tracking gradients"
         self._tensor = self._tensor @ other._tensor
         return self
 
@@ -111,7 +148,9 @@ class Tensor:
         return add(other, self)
 
     def __iadd__(self, other):
-        assert not self.allow_grad
+        assert (
+            not self.allow_grad
+        ), "in-place operations are not allowed while tracking gradients"
         if isinstance(other, Tensor):
             self._tensor += other._tensor
         else:
@@ -126,7 +165,9 @@ class Tensor:
         return subtract(other, self)
 
     def __isub__(self, other):
-        assert not self.allow_grad
+        assert (
+            not self.allow_grad
+        ), "in-place operations are not allowed while tracking gradients"
         if isinstance(other, Tensor):
             self._tensor = self._tensor - other._tensor
         else:
@@ -141,7 +182,9 @@ class Tensor:
         return multiply(other, self)
 
     def __imul__(self, other):
-        assert not self.allow_grad
+        assert (
+            not self.allow_grad
+        ), "in-place operations are not allowed while tracking gradients"
         if isinstance(other, Tensor):
             self._tensor = self._tensor * other._tensor
         else:
@@ -156,7 +199,9 @@ class Tensor:
         return true_divide(other, self)
 
     def __itruediv__(self, other):
-        assert not self.allow_grad
+        assert (
+            not self.allow_grad
+        ), "in-place operations are not allowed while tracking gradients"
         if isinstance(other, Tensor):
             self._tensor = self._tensor / other._tensor
         else:
@@ -171,7 +216,9 @@ class Tensor:
         return floor_divide(other, self)
 
     def __ifloordiv__(self, other):
-        assert not self.allow_grad
+        assert (
+            not self.allow_grad
+        ), "in-place operations are not allowed while tracking gradients"
         if isinstance(other, Tensor):
             self._tensor = self._tensor // other._tensor
         else:
@@ -186,13 +233,15 @@ class Tensor:
         return power(other, self)
 
     def __ipow__(self, other):
-        assert not self.allow_grad
+        assert (
+            not self.allow_grad
+        ), "in-place operations are not allowed while tracking gradients"
         self._tensor = self._tensor**other
 
         return self
 
     def __neg__(self):
-        ret = Tensor(-self._tensor, allow_grad=self.allow_grad)
+        ret = Tensor(-self._tensor, allow_grad=self.allow_grad, is_leaf=self.is_leaf)
         return ret
 
     def __repr__(self):
@@ -202,11 +251,17 @@ class Tensor:
         return self._tensor.__len__()
 
     def __getitem__(self, key):
-        return Tensor(self._tensor[key], allow_grad=self.allow_grad)
+        return Tensor(
+            self._tensor[key], allow_grad=self.allow_grad, is_leaf=self.is_leaf
+        )
 
     def __setitem__(self, key, val):
-        assert not self.allow_grad
-        assert not self.graphed
+        assert (
+            not self.allow_grad
+        ), "in-place operations are not allowed while tracking gradients"
+        assert (
+            not self.graphed
+        ), "mutating tensors is not allowed if the tensor is on a computational graph"
         self._tensor[key] = val
 
 
@@ -236,7 +291,9 @@ def _generate_unary_op_func(backend_func, grad_a=None, differentiable=True):
         assert isinstance(a, Tensor)
 
         can_allow_grad = minidiff.grad_allowed() and a.allow_grad
-        output = Tensor(backend_func(a._tensor, **kwargs), allow_grad=a.allow_grad)
+        output = Tensor(
+            backend_func(a._tensor, **kwargs), allow_grad=a.allow_grad, is_leaf=False
+        )
 
         if can_allow_grad:
             func_node = topology.UnaryNode(a, grad_a)
@@ -258,13 +315,15 @@ def _generate_binary_op_func(
     if tensor_only:
 
         def minidiff_func(a, b, **kwargs):
-            assert isinstance(a, Tensor)
-            assert isinstance(b, Tensor)
+            assert isinstance(a, Tensor), "this function only supports minidiff Tensors"
+            assert isinstance(b, Tensor), "this function only supports minidiff Tensors"
 
             allow_grad = a.allow_grad or b.allow_grad
             can_allow_grad = minidiff.grad_allowed() and allow_grad
             output = Tensor(
-                backend_func(a._tensor, b._tensor, **kwargs), allow_grad=allow_grad
+                backend_func(a._tensor, b._tensor, **kwargs),
+                allow_grad=allow_grad,
+                is_leaf=False,
             )
 
             if can_allow_grad:
@@ -284,22 +343,29 @@ def _generate_binary_op_func(
         def minidiff_func(a, b, **kwargs):
             a_is_scalar = not isinstance(a, Tensor)
             b_is_scalar = not isinstance(b, Tensor)
-            assert not (a_is_scalar and b_is_scalar)
+            assert not (
+                a_is_scalar and b_is_scalar
+            ), "minidiff functions only work when at least one argument is a minidiff Tensor"
 
             allow_grad = (a_is_scalar or a.allow_grad) or (b_is_scalar or b.allow_grad)
             can_track_grad = minidiff.grad_allowed() and allow_grad
             if a_is_scalar:
                 output = Tensor(
-                    backend_func(a, b._tensor, **kwargs), allow_grad=allow_grad
+                    backend_func(a, b._tensor, **kwargs),
+                    allow_grad=allow_grad,
+                    is_leaf=False,
                 )
             elif b_is_scalar:
                 output = Tensor(
-                    backend_func(a._tensor, b, **kwargs), allow_grad=allow_grad
+                    backend_func(a._tensor, b, **kwargs),
+                    allow_grad=allow_grad,
+                    is_leaf=False,
                 )
             else:
                 output = Tensor(
                     backend_func(a._tensor, b._tensor, **kwargs),
                     allow_grad=allow_grad,
+                    is_leaf=False,
                 )
 
             if can_track_grad:
@@ -319,12 +385,14 @@ def _generate_binary_op_func(
 
 # default behavior to allow grad if a allows it unless otherwise specified
 def reshape(a: Tensor, shape: tuple, **kwargs):
-    assert isinstance(a, Tensor)
-    assert isinstance(shape, tuple)
+    assert isinstance(a, Tensor), "input argument is not a Tensor"
+    assert isinstance(shape, tuple), "shape argument is not a Tuple"
     can_allow_grad = minidiff.grad_allowed() and a.allow_grad
 
     original_shape = a.shape
-    output = Tensor(np.reshape(a._tensor, shape, **kwargs), allow_grad=a.allow_grad)
+    output = Tensor(
+        np.reshape(a._tensor, shape, **kwargs), allow_grad=a.allow_grad, is_leaf=False
+    )
 
     if can_allow_grad:
         reshape_node = topology.UnaryNode(

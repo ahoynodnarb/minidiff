@@ -33,9 +33,9 @@ class UnaryNode(FuncNode):
         self.grad_a = grad_a
 
     def update_grads(self, grad):
+        a = self.inputs[0]
         with minidiff.no_grad():
-            if self.grad_a is not None:
-                a = self.inputs[0]
+            if self.grad_a is not None and a.allow_grad:
                 a.grad += self.grad_a(a, grad)
 
 
@@ -53,7 +53,7 @@ class BinaryNode(FuncNode):
         a = self.inputs[0]
         b = self.inputs[1]
         with minidiff.no_grad():
-            if self.grad_a is not None:
+            if self.grad_a is not None and a.allow_grad:
                 a.grad += self.grad_a(a, b, grad)
-            if self.grad_b is not None:
+            if self.grad_b is not None and b.allow_grad:
                 b.grad += self.grad_b(a, b, grad)
