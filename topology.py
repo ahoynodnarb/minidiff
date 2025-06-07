@@ -29,6 +29,7 @@ class FuncNode:
 class UnaryNode(FuncNode):
     def __init__(self, a, grad_a):
         super().__init__(a)
+        a.graphed = True
         self.grad_a = grad_a
 
     def update_grads(self, grad):
@@ -41,6 +42,10 @@ class UnaryNode(FuncNode):
 class BinaryNode(FuncNode):
     def __init__(self, a, b, grad_a, grad_b):
         super().__init__(a, b)
+        if isinstance(a, Tensor):
+            a.graphed = True
+        if isinstance(b, Tensor):
+            b.graphed = True
         self.grad_a = grad_a
         self.grad_b = grad_b
 

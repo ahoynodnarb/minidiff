@@ -26,6 +26,7 @@ class Tensor:
 
         self.traversal_path = None
         self.func_node = None
+        self.graphed = False
         self._allow_grad = allow_grad
 
     @property
@@ -83,6 +84,10 @@ class Tensor:
             n = tensor.func_node
             n_grad = tensor.grad
             n.update_grads(n_grad)
+
+    def item(self):
+        assert len(self) == 1
+        return self._tensor[0].item()
 
     def reshape(self, shape, **kwargs):
         return reshape(self, shape, **kwargs)
@@ -199,12 +204,16 @@ class Tensor:
 
     def __repr__(self):
         return self._tensor.__repr__()
+    
+    def __len__(self):
+        return self._tensor.__len__()
 
     def __getitem__(self, key):
         return Tensor(self._tensor[key], allow_grad=self._allow_grad)
     
     def __setitem__(self, key, val):
         assert not self.allow_grad
+        assert not self.graphed
         self._tensor[key] = val
 
 
@@ -230,6 +239,7 @@ def _generate_unary_op_func(backend_func, grad_a=None, differentiable=True):
         if can_allow_grad:
             func_node = topology.UnaryNode(a, grad_a)
             output.func_node = func_node
+            output.graphed = True
 
         return output
 
@@ -254,6 +264,7 @@ def _generate_binary_op_func(
             if can_allow_grad:
                 func_node = topology.BinaryNode(a, b, None if not a.allow_grad else grad_a, None if not b.allow_grad else grad_b)
                 output.func_node = func_node
+                output.graphed = True
 
             return output
 
@@ -288,6 +299,7 @@ def _generate_binary_op_func(
                     None if b_is_scalar or not b.allow_grad else grad_b,
                 )
                 output.func_node = func_node
+                output.graphed = True
 
             return output
 
