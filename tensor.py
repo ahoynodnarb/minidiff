@@ -15,6 +15,7 @@ import topology
 # everything created in no_grad maintains that no gradient state even when exiting unless updated
 # everything created outside no_grad becomes no gradient within the scope, but reverts outside
 
+
 class Tensor:
     def __init__(self, tensor, allow_grad=False, dtype=np.float32):
         if isinstance(tensor, np.ndarray):
@@ -27,15 +28,7 @@ class Tensor:
         self.traversal_path = None
         self.func_node = None
         self.graphed = False
-        self._allow_grad = allow_grad
-
-    @property
-    def allow_grad(self):
-        return self._allow_grad and minidiff.grad_allowed()
-
-    @allow_grad.setter
-    def allow_grad(self, allow_grad):
-        self._allow_grad = allow_grad
+        self.allow_grad = allow_grad
 
     @property
     def t(self):
@@ -48,7 +41,7 @@ class Tensor:
     @property
     def size(self):
         return self._tensor.size
-    
+
     @property
     def dtype(self):
         return self._tensor.dtype
@@ -199,18 +192,18 @@ class Tensor:
         return self
 
     def __neg__(self):
-        ret = Tensor(-self._tensor, allow_grad=self._allow_grad)
+        ret = Tensor(-self._tensor, allow_grad=self.allow_grad)
         return ret
 
     def __repr__(self):
         return self._tensor.__repr__()
-    
+
     def __len__(self):
         return self._tensor.__len__()
 
     def __getitem__(self, key):
-        return Tensor(self._tensor[key], allow_grad=self._allow_grad)
-    
+        return Tensor(self._tensor[key], allow_grad=self.allow_grad)
+
     def __setitem__(self, key, val):
         assert not self.allow_grad
         assert not self.graphed
@@ -218,22 +211,31 @@ class Tensor:
 
 
 def ones_like(a: Tensor, allow_grad=False, **kwargs):
-    return Tensor(np.ones_like(a._tensor, dtype=a.dtype, **kwargs), allow_grad=allow_grad)
+    return Tensor(
+        np.ones_like(a._tensor, dtype=a.dtype, **kwargs), allow_grad=allow_grad
+    )
 
 
 def zeros_like(a: Tensor, allow_grad=False, **kwargs):
-    return Tensor(np.zeros_like(a._tensor, dtype=a.dtype, **kwargs), allow_grad=allow_grad)
+    return Tensor(
+        np.zeros_like(a._tensor, dtype=a.dtype, **kwargs), allow_grad=allow_grad
+    )
 
 
 def full_like(a: Tensor, x, allow_grad=False, **kwargs):
-    return Tensor(np.full_like(a._tensor, x, dtype=a.dtype, **kwargs), allow_grad=allow_grad)
+    return Tensor(
+        np.full_like(a._tensor, x, dtype=a.dtype, **kwargs), allow_grad=allow_grad
+    )
 
 
 def _generate_unary_op_func(backend_func, grad_a=None, differentiable=True):
+    if not differentiable:
+        grad_a = lambda a, b, grad: 0
+
     def minidiff_func(a: Tensor, **kwargs):
         assert isinstance(a, Tensor)
 
-        can_allow_grad = minidiff.grad_allowed() and a.allow_grad and differentiable
+        can_allow_grad = minidiff.grad_allowed() and a.allow_grad
         output = Tensor(backend_func(a._tensor, **kwargs), allow_grad=can_allow_grad)
 
         if can_allow_grad:
@@ -249,6 +251,10 @@ def _generate_unary_op_func(backend_func, grad_a=None, differentiable=True):
 def _generate_binary_op_func(
     backend_func, grad_a=None, grad_b=None, differentiable=True, tensor_only=False
 ):
+    if not differentiable:
+        grad_a = lambda a, b, grad: 0
+        grad_b = lambda a, b, grad: 0
+
     if tensor_only:
 
         def minidiff_func(a, b, **kwargs):
@@ -256,13 +262,18 @@ def _generate_binary_op_func(
             assert isinstance(b, Tensor)
 
             allow_grad = a.allow_grad or b.allow_grad
-            can_allow_grad = minidiff.grad_allowed() and allow_grad and differentiable
+            can_allow_grad = minidiff.grad_allowed() and allow_grad
             output = Tensor(
-                backend_func(a._tensor, b._tensor, **kwargs), allow_grad=can_allow_grad
+                backend_func(a._tensor, b._tensor, **kwargs), allow_grad=allow_grad
             )
 
             if can_allow_grad:
-                func_node = topology.BinaryNode(a, b, None if not a.allow_grad else grad_a, None if not b.allow_grad else grad_b)
+                func_node = topology.BinaryNode(
+                    a,
+                    b,
+                    None if not a.allow_grad else grad_a,
+                    None if not b.allow_grad else grad_b,
+                )
                 output.func_node = func_node
                 output.graphed = True
 
@@ -276,22 +287,22 @@ def _generate_binary_op_func(
             assert not (a_is_scalar and b_is_scalar)
 
             allow_grad = (a_is_scalar or a.allow_grad) or (b_is_scalar or b.allow_grad)
-            can_allow_grad = minidiff.grad_allowed() and allow_grad and differentiable
+            can_track_grad = minidiff.grad_allowed() and allow_grad
             if a_is_scalar:
                 output = Tensor(
-                    backend_func(a, b._tensor, **kwargs), allow_grad=can_allow_grad
+                    backend_func(a, b._tensor, **kwargs), allow_grad=allow_grad
                 )
             elif b_is_scalar:
                 output = Tensor(
-                    backend_func(a._tensor, b, **kwargs), allow_grad=can_allow_grad
+                    backend_func(a._tensor, b, **kwargs), allow_grad=allow_grad
                 )
             else:
                 output = Tensor(
                     backend_func(a._tensor, b._tensor, **kwargs),
-                    allow_grad=can_allow_grad,
+                    allow_grad=allow_grad,
                 )
 
-            if can_allow_grad:
+            if can_track_grad:
                 func_node = topology.BinaryNode(
                     a,
                     b,
@@ -367,9 +378,7 @@ ceil = _generate_unary_op_func(backend_func=np.ceil, differentiable=False)
 cos = _generate_unary_op_func(
     backend_func=np.cos, grad_a=lambda a, grad: grad * -sin(a)
 )
-sin = _generate_unary_op_func(
-    backend_func=np.sin, grad_a=lambda a, grad: grad * cos(a)
-)
+sin = _generate_unary_op_func(backend_func=np.sin, grad_a=lambda a, grad: grad * cos(a))
 tan = _generate_unary_op_func(
     backend_func=np.tan, grad_a=lambda a, grad: grad * (1 / cos(a) ** 2)
 )
@@ -382,15 +391,9 @@ sinh = _generate_unary_op_func(
 tanh = _generate_unary_op_func(
     backend_func=np.sinh, grad_a=lambda a, grad: grad * (1 / cosh(a) ** 2)
 )
-exp = _generate_unary_op_func(
-    backend_func=np.exp, grad_a=lambda a, grad: grad * exp(a)
-)
-log = _generate_unary_op_func(
-    backend_func=np.log, grad_a=lambda a, grad: grad / a
-)
-sum = _generate_unary_op_func(
-    backend_func=np.log, grad_a=lambda a, grad: grad * sum(a)
-)
+exp = _generate_unary_op_func(backend_func=np.exp, grad_a=lambda a, grad: grad * exp(a))
+log = _generate_unary_op_func(backend_func=np.log, grad_a=lambda a, grad: grad / a)
+sum = _generate_unary_op_func(backend_func=np.log, grad_a=lambda a, grad: grad * sum(a))
 mean = _generate_unary_op_func(
     backend_func=np.log, grad_a=lambda a, grad: grad * sum(a) / a.size
 )
