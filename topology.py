@@ -14,7 +14,7 @@ class FuncNode:
     def __init__(self, *inputs):
         self.inputs = inputs
         self.input_tensors = [x for x in inputs if isinstance(x, Tensor)]
-        self.input_nodes = [x.diff_node for x in self.input_tensors]
+        self.input_nodes = [x.func_node for x in self.input_tensors]
 
     def update_grads(self, grad):
         raise NotImplementedError

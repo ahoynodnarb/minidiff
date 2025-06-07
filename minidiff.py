@@ -1,5 +1,5 @@
 try:
-    import cupy as np # type: ignore
+    import cupy as np  # type: ignore
 
     BACKEND = "cupy"
 except ImportError:

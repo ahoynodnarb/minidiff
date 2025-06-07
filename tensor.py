@@ -19,7 +19,8 @@ class Tensor:
 
         self.grad = zeros_like(self, allow_grad=False) if allow_grad else None
 
-        self.diff_node = None
+        self.traversal_path = None
+        self.func_node = None
         self._allow_grad = allow_grad
 
     @property
@@ -38,44 +39,53 @@ class Tensor:
     def shape(self):
         return self._tensor.shape
 
-    def backward(self):
+    @property
+    def size(self):
+        return self._tensor.size
+
+    def backward(self, force_retraversal=False):
         if not self.allow_grad:
             return
 
-        if self.diff_node is None:
+        if self.func_node is None:
             return
 
-        seen = []
-        stack = []
+        if force_retraversal or self.traversal_path is None:
+            # it is usually faster just to keep this as a list because we're probably not
+            # going to iterate over that many nodes, so a linear search is much faster and
+            # much more worth the overhead than a set
+            seen = []
+            self.traversal_path = []
 
-        # topologically sort
-        def dfs(tensor):
-            root = tensor.diff_node
-            if root is None or root in seen:
-                return
-            seen.append(root)
-            for input_tensor in root.input_tensors:
-                dfs(input_tensor)
-            stack.append(tensor)
+            # topologically sort
+            def dfs(tensor):
+                root = tensor.func_node
+                if root is None or root in seen:
+                    return
+                seen.append(root)
+                for input_tensor in root.input_tensors:
+                    dfs(input_tensor)
+                self.traversal_path.append(tensor)
 
-        dfs(self)
+            dfs(self)
+
         self.grad = ones_like(self, allow_grad=False)
-        for tensor in reversed(stack):
-            n = tensor.diff_node
+        for tensor in reversed(self.traversal_path):
+            n = tensor.func_node
             n_grad = tensor.grad
             n.update_grads(n_grad)
 
-    def reshape(self, *args, **kwargs):
-        self._tensor = self._tensor.reshape(*args, **kwargs)
+    def reshape(self, shape, **kwargs):
+        return reshape(self, shape, **kwargs)
 
-    def dot(self, other):
-        return self @ other
+    def dot(self, other, **kwargs):
+        return matmul(self, other, **kwargs)
 
-    def add(self, other):
-        return add(self, other)
+    def add(self, other, **kwargs):
+        return add(self, other, **kwargs)
 
-    def multiply(self, other):
-        return multiply(self, other)
+    def multiply(self, other, **kwargs):
+        return multiply(self, other, **kwargs)
 
     def __matmul__(self, other):
         assert isinstance(other, Tensor)
@@ -133,10 +143,10 @@ class Tensor:
         return self
 
     def __truediv__(self, other):
-        return truediv(self, other)
+        return true_divide(self, other)
 
     def __rtruediv__(self, other):
-        return truediv(other, self)
+        return true_divide(other, self)
 
     def __itruediv__(self, other):
         assert not self.allow_grad
@@ -148,10 +158,10 @@ class Tensor:
         return self
 
     def __floordiv__(self, other):
-        return floordiv(self, other)
+        return floor_divide(self, other)
 
     def __rfloordiv__(self, other):
-        return floordiv(other, self)
+        return floor_divide(other, self)
 
     def __ifloordiv__(self, other):
         assert not self.allow_grad
@@ -180,21 +190,21 @@ class Tensor:
 
     def __repr__(self):
         return self._tensor.__repr__()
-    
+
     def __getitem__(self, key):
         return Tensor(self._tensor[key], allow_grad=self._allow_grad)
 
 
-def ones_like(t1: Tensor, allow_grad=True):
-    return Tensor(np.ones_like(t1._tensor), allow_grad=allow_grad)
+def ones_like(t1: Tensor, allow_grad=True, **kwargs):
+    return Tensor(np.ones_like(t1._tensor, **kwargs), allow_grad=allow_grad)
 
 
-def zeros_like(t1: Tensor, allow_grad=True):
-    return Tensor(np.zeros_like(t1._tensor), allow_grad=allow_grad)
+def zeros_like(t1: Tensor, allow_grad=True, **kwargs):
+    return Tensor(np.zeros_like(t1._tensor, **kwargs), allow_grad=allow_grad)
 
 
-def full_like(t1: Tensor, x, allow_grad=True):
-    return Tensor(np.full_like(t1._tensor, x), allow_grad=allow_grad)
+def full_like(t1: Tensor, x, allow_grad=True, **kwargs):
+    return Tensor(np.full_like(t1._tensor, x, **kwargs), allow_grad=allow_grad)
 
 
 def _generate_unary_backend_interop(backend_func, grad_a=None, differentiable=True):
@@ -205,9 +215,8 @@ def _generate_unary_backend_interop(backend_func, grad_a=None, differentiable=Tr
         output = Tensor(backend_func(a._tensor, **kwargs), allow_grad=can_allow_grad)
 
         if can_allow_grad:
-            with minidiff.no_grad():
-                func_node = topology.UnaryNode(a, grad_a)
-                output.diff_node = func_node
+            func_node = topology.UnaryNode(a, grad_a)
+            output.func_node = func_node
 
         return output
 
@@ -229,9 +238,8 @@ def _generate_binary_backend_interop(
             )
 
             if can_allow_grad:
-                with minidiff.no_grad():
-                    func_node = topology.BinaryNode(a, b, grad_a, grad_b)
-                    output.diff_node = func_node
+                func_node = topology.BinaryNode(a, b, grad_a, grad_b)
+                output.func_node = func_node
 
             return output
 
@@ -258,24 +266,44 @@ def _generate_binary_backend_interop(
                 )
 
             if can_allow_grad:
-                with minidiff.no_grad():
-                    func_node = topology.BinaryNode(
-                        a,
-                        b,
-                        None if a_is_scalar else grad_a,
-                        None if b_is_scalar else grad_b,
-                    )
-                    output.diff_node = func_node
+                func_node = topology.BinaryNode(
+                    a,
+                    b,
+                    None if a_is_scalar else grad_a,
+                    None if b_is_scalar else grad_b,
+                )
+                output.func_node = func_node
 
             return output
 
     return minidiff_func
 
 
+# default behavior to allow grad if a allows it unless otherwise specified
+def reshape(a: Tensor, shape: tuple, allow_grad=None, **kwargs):
+    assert isinstance(a, Tensor)
+    assert isinstance(shape, tuple)
+    if allow_grad is None:
+        can_allow_grad = minidiff.grad_allowed() and a.allow_grad
+    else:
+        can_allow_grad = minidiff.grad_allowed() and allow_grad
+
+    original_shape = a.shape
+    output = Tensor(np.reshape(a._tensor, shape, **kwargs), allow_grad=can_allow_grad)
+
+    if can_allow_grad:
+        reshape_node = topology.UnaryNode(
+            a, lambda a, grad: grad.reshape(original_shape)
+        )
+        output.func_node = reshape_node
+
+    return output
+
+
 matmul = _generate_binary_backend_interop(
     backend_func=np.matmul,
-    grad_a=lambda a, b, grad: grad.matmul(b.t),
-    grad_b=lambda a, b, grad: a.t.matmul(grad),
+    grad_a=lambda a, b, grad: matmul(grad, b.t),
+    grad_b=lambda a, b, grad: matmul(a.t, grad),
     tensor_only=True,
 )
 add = _generate_binary_backend_interop(
@@ -291,12 +319,12 @@ multiply = _generate_binary_backend_interop(
     grad_a=lambda a, b, grad: grad * b,
     grad_b=lambda a, b, grad: grad * a,
 )
-truediv = _generate_binary_backend_interop(
+true_divide = _generate_binary_backend_interop(
     backend_func=np.true_divide,
     grad_a=lambda a, b, grad: grad / b,
     grad_b=lambda a, b, grad: (-grad * a) / (b**2),
 )
-floordiv = _generate_binary_backend_interop(
+floor_divide = _generate_binary_backend_interop(
     backend_func=np.floor_divide, differentiable=False
 )
 power = _generate_binary_backend_interop(
@@ -304,13 +332,41 @@ power = _generate_binary_backend_interop(
     grad_a=lambda a, b, grad: grad * b * (a ** (b - 1)),
     grad_b=lambda a, b, grad: grad * np.log(a) * a**b,
 )
+
+
+def sqrt(x, allow_grad=True, **kwargs):
+    return power(x, 0.5, allow_grad=allow_grad, **kwargs)
+
+
 floor = _generate_unary_backend_interop(backend_func=np.floor, differentiable=False)
+ceil = _generate_unary_backend_interop(backend_func=np.ceil, differentiable=False)
 cos = _generate_unary_backend_interop(
     backend_func=np.cos, grad_a=lambda a, grad: grad * -sin(a)
 )
 sin = _generate_unary_backend_interop(
     backend_func=np.sin, grad_a=lambda a, grad: grad * cos(a)
 )
+tan = _generate_unary_backend_interop(
+    backend_func=np.tan, grad_a=lambda a, grad: grad * (1 / cos(a) ** 2)
+)
+cosh = _generate_unary_backend_interop(
+    backend_func=np.cosh, grad_a=lambda a, grad: grad * sinh(a)
+)
+sinh = _generate_unary_backend_interop(
+    backend_func=np.sinh, grad_a=lambda a, grad: grad * cosh(a)
+)
+tanh = _generate_unary_backend_interop(
+    backend_func=np.sinh, grad_a=lambda a, grad: grad * (1 / cosh(a) ** 2)
+)
 exp = _generate_unary_backend_interop(
     backend_func=np.exp, grad_a=lambda a, grad: grad * exp(a)
+)
+log = _generate_unary_backend_interop(
+    backend_func=np.log, grad_a=lambda a, grad: grad / a
+)
+sum = _generate_unary_backend_interop(
+    backend_func=np.log, grad_a=lambda a, grad: grad * sum(a)
+)
+mean = _generate_unary_backend_interop(
+    backend_func=np.log, grad_a=lambda a, grad: grad * sum(a) / a.size
 )
