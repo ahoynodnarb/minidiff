@@ -1,0 +1,1 @@
+This is a very small automatic differentiation engine I'm trying to implement. For now, it just has plain NumPy and CuPy backends. So far it only supports basic operations (+,-,*,/); some basic functions (sin, cos, exp, pow); and matrix multiplication (untested).
