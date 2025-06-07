@@ -1,3 +1,6 @@
+from tensor import matmul, add, subtract, multiply, true_divide, floor_divide, power, sqrt, floor, ceil, cos, sin, tan, cosh, sinh, tanh, exp, log, sum, mean
+from minidiff import no_grad, set_allow_grad, grad_allowed
+
 try:
     import cupy as np  # type: ignore
 
