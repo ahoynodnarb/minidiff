@@ -7,8 +7,6 @@ except ImportError:
 
     BACKEND = "numpy"
 
-from contextvars import ContextVar
-
 allow_grad = True
 
 
