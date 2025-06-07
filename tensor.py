@@ -1,3 +1,5 @@
+# NEED TO MAKE SURE GRADIENTS ARE STABLE, LOOKING AT YOU LOG/EXP
+
 try:
     import cupy as np  # type: ignore
 except ImportError:
@@ -9,13 +11,16 @@ import topology
 # compute from left to right, dy/dw2 then dw2/dw1 to get dy/dw1 and finally dw1/dx to get dy/dx
 # dy/dw2 would just be the loss gradient
 
+# all tensors by default should not allow grad
+# everything created in no_grad maintains that no gradient state even when exiting unless updated
+# everything created outside no_grad becomes no gradient within the scope, but reverts outside
 
 class Tensor:
-    def __init__(self, tensor, allow_grad=True):
+    def __init__(self, tensor, allow_grad=False, dtype=np.float32):
         if isinstance(tensor, np.ndarray):
             self._tensor = tensor
         else:
-            self._tensor = np.array(tensor)
+            self._tensor = np.array(tensor, dtype=dtype)
 
         self.grad = zeros_like(self, allow_grad=False) if allow_grad else None
 
@@ -42,6 +47,10 @@ class Tensor:
     @property
     def size(self):
         return self._tensor.size
+    
+    @property
+    def dtype(self):
+        return self._tensor.dtype
 
     def backward(self, force_retraversal=False):
         if not self.allow_grad:
@@ -193,25 +202,29 @@ class Tensor:
 
     def __getitem__(self, key):
         return Tensor(self._tensor[key], allow_grad=self._allow_grad)
+    
+    def __setitem__(self, key, val):
+        assert not self.allow_grad
+        self._tensor[key] = val
 
 
-def ones_like(t1: Tensor, allow_grad=True, **kwargs):
-    return Tensor(np.ones_like(t1._tensor, **kwargs), allow_grad=allow_grad)
+def ones_like(a: Tensor, allow_grad=False, **kwargs):
+    return Tensor(np.ones_like(a._tensor, dtype=a.dtype, **kwargs), allow_grad=allow_grad)
 
 
-def zeros_like(t1: Tensor, allow_grad=True, **kwargs):
-    return Tensor(np.zeros_like(t1._tensor, **kwargs), allow_grad=allow_grad)
+def zeros_like(a: Tensor, allow_grad=False, **kwargs):
+    return Tensor(np.zeros_like(a._tensor, dtype=a.dtype, **kwargs), allow_grad=allow_grad)
 
 
-def full_like(t1: Tensor, x, allow_grad=True, **kwargs):
-    return Tensor(np.full_like(t1._tensor, x, **kwargs), allow_grad=allow_grad)
+def full_like(a: Tensor, x, allow_grad=False, **kwargs):
+    return Tensor(np.full_like(a._tensor, x, dtype=a.dtype, **kwargs), allow_grad=allow_grad)
 
 
 def _generate_unary_op_func(backend_func, grad_a=None, differentiable=True):
-    def minidiff_func(a: Tensor, allow_grad=True, **kwargs):
+    def minidiff_func(a: Tensor, **kwargs):
         assert isinstance(a, Tensor)
 
-        can_allow_grad = minidiff.grad_allowed() and allow_grad and differentiable
+        can_allow_grad = minidiff.grad_allowed() and a.allow_grad and differentiable
         output = Tensor(backend_func(a._tensor, **kwargs), allow_grad=can_allow_grad)
 
         if can_allow_grad:
@@ -228,28 +241,30 @@ def _generate_binary_op_func(
 ):
     if tensor_only:
 
-        def minidiff_func(a, b, allow_grad=True, **kwargs):
+        def minidiff_func(a, b, **kwargs):
             assert isinstance(a, Tensor)
             assert isinstance(b, Tensor)
 
+            allow_grad = a.allow_grad or b.allow_grad
             can_allow_grad = minidiff.grad_allowed() and allow_grad and differentiable
             output = Tensor(
                 backend_func(a._tensor, b._tensor, **kwargs), allow_grad=can_allow_grad
             )
 
             if can_allow_grad:
-                func_node = topology.BinaryNode(a, b, grad_a, grad_b)
+                func_node = topology.BinaryNode(a, b, None if not a.allow_grad else grad_a, None if not b.allow_grad else grad_b)
                 output.func_node = func_node
 
             return output
 
     else:
 
-        def minidiff_func(a, b, allow_grad=True, **kwargs):
+        def minidiff_func(a, b, **kwargs):
             a_is_scalar = not isinstance(a, Tensor)
             b_is_scalar = not isinstance(b, Tensor)
             assert not (a_is_scalar and b_is_scalar)
 
+            allow_grad = (a_is_scalar or a.allow_grad) or (b_is_scalar or b.allow_grad)
             can_allow_grad = minidiff.grad_allowed() and allow_grad and differentiable
             if a_is_scalar:
                 output = Tensor(
@@ -269,8 +284,8 @@ def _generate_binary_op_func(
                 func_node = topology.BinaryNode(
                     a,
                     b,
-                    None if a_is_scalar else grad_a,
-                    None if b_is_scalar else grad_b,
+                    None if a_is_scalar or not a.allow_grad else grad_a,
+                    None if b_is_scalar or not b.allow_grad else grad_b,
                 )
                 output.func_node = func_node
 
@@ -280,13 +295,10 @@ def _generate_binary_op_func(
 
 
 # default behavior to allow grad if a allows it unless otherwise specified
-def reshape(a: Tensor, shape: tuple, allow_grad=None, **kwargs):
+def reshape(a: Tensor, shape: tuple, **kwargs):
     assert isinstance(a, Tensor)
     assert isinstance(shape, tuple)
-    if allow_grad is None:
-        can_allow_grad = minidiff.grad_allowed() and a.allow_grad
-    else:
-        can_allow_grad = minidiff.grad_allowed() and allow_grad
+    can_allow_grad = minidiff.grad_allowed() and a.allow_grad
 
     original_shape = a.shape
     output = Tensor(np.reshape(a._tensor, shape, **kwargs), allow_grad=can_allow_grad)
@@ -334,8 +346,8 @@ power = _generate_binary_op_func(
 )
 
 
-def sqrt(x, allow_grad=True, **kwargs):
-    return power(x, 0.5, allow_grad=allow_grad, **kwargs)
+def sqrt(x, **kwargs):
+    return power(x, 0.5, **kwargs)
 
 
 floor = _generate_unary_op_func(backend_func=np.floor, differentiable=False)
