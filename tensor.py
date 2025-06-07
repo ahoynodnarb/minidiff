@@ -180,6 +180,9 @@ class Tensor:
 
     def __repr__(self):
         return self._tensor.__repr__()
+    
+    def __getitem__(self, key):
+        return Tensor(self._tensor[key], allow_grad=self._allow_grad)
 
 
 def ones_like(t1: Tensor, allow_grad=True):
