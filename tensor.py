@@ -43,8 +43,8 @@ class Tensor:
 
     @allow_grad.setter
     def allow_grad(self, allow_grad):
-        assert (
-            allow_grad or not self.graphed
+        assert not (
+            not allow_grad and self.graphed
         ), "Tensors can only stop tracking gradients if they are not part of a computational graph"
         if self._allow_grad == allow_grad:
             return
