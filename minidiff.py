@@ -13,6 +13,7 @@ import contextvars
 _allow_grad = contextvars.ContextVar("allow_grad", default=True)
 _allow_leafs = contextvars.ContextVar("allow_leafs", default=True)
 
+
 class no_grad:
     def __enter__(self):
         self.prev = _allow_grad.get()
@@ -20,7 +21,7 @@ class no_grad:
 
     def __exit__(self, type, value, traceback):
         set_allow_grad(self.prev)
-        
+
 
 class no_leafs:
     def __enter__(self):
@@ -41,9 +42,11 @@ def grad_allowed():
 
 def set_allow_leafs(allow):
     _allow_leafs.set(allow)
-    
+
+
 def leafs_allowed():
     return _allow_leafs.get()
+
 
 # compute from left to right, dy/dw2 then dw2/dw1 to get dy/dw1 and finally dw1/dx to get dy/dx
 # dy/dw2 would just be the loss gradient
@@ -402,7 +405,7 @@ def _generate_binary_op_func(
     if not differentiable:
         grad_a = lambda a, b, grad: zeros_like(grad)
         grad_b = lambda a, b, grad: zeros_like(grad)
-        
+
     def minidiff_func(a, b, **kwargs):
         a_is_scalar = not isinstance(a, Tensor)
         b_is_scalar = not isinstance(b, Tensor)
@@ -435,7 +438,7 @@ def _generate_binary_op_func(
             func_node = topology.BinaryNode(a, b, first_grad, second_grad)
             if propagate_kwargs:
                 func_node.kwargs = kwargs
-                
+
             output.func_node = func_node
             output.graphed = True
 
@@ -446,9 +449,10 @@ def _generate_binary_op_func(
 
 clip = _generate_unary_op_func(
     forward_func=np.clip,
-    grad_a=lambda a, grad, a_min=None, a_max=None: grad * Tensor(np.asarray(a_min < a._tensor < a_max)),
+    grad_a=lambda a, grad, a_min=None, a_max=None: grad
+    * Tensor(np.asarray(a_min < a._tensor < a_max)),
     propagate_kwargs=True,
-    backend_op=True
+    backend_op=True,
 )
 # should technically be unary, but I like to preserve interoperability so it will take in two inputs instead of a shape kwarg
 reshape = _generate_unary_op_func(
@@ -543,7 +547,6 @@ sum = _generate_unary_op_func(
 mean = _generate_unary_op_func(
     forward_func=np.mean, grad_a=lambda a, grad: grad / a.size, backend_op=True
 )
-
 greater = _generate_binary_op_func(
     forward_func=np.greater, differentiable=False, backend_op=True
 )

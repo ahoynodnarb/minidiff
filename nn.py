@@ -6,8 +6,8 @@ except ImportError:
     import numpy as np
 
 import minidiff as md
-    
-    
+
+
 class Convolve2D:
     @staticmethod
     def add_padding(mat, padding=None):
@@ -29,7 +29,12 @@ class Convolve2D:
                 padding = int(math.floor(padding))
                 pad_top = pad_left = padding
                 pad_bottom = pad_right = padding + 1
-        pad_top, pad_bottom, pad_left, pad_right = int(pad_top), int(pad_bottom), int(pad_left), int(pad_right)
+        pad_top, pad_bottom, pad_left, pad_right = (
+            int(pad_top),
+            int(pad_bottom),
+            int(pad_left),
+            int(pad_right),
+        )
         padded = np.zeros(
             (
                 batch_size,
@@ -78,7 +83,9 @@ class Convolve2D:
         return (int(out_height), int(out_width))
 
     @staticmethod
-    def calculate_im2col_indices(rows_out, cols_out, kernel_height, kernel_width, stride):
+    def calculate_im2col_indices(
+        rows_out, cols_out, kernel_height, kernel_width, stride
+    ):
         # these are the indices that correspond to each row within the patch
         kernel_row_indices = np.repeat(np.arange(kernel_height), kernel_width)
         # these are the indices corresponding to the row portion of the position of each patch within the input matrix
@@ -99,9 +106,7 @@ class Convolve2D:
         return (row_indices, col_indices)
 
     @staticmethod
-    def forward(
-        mat, kernels, padding=None, stride=1
-    ):
+    def forward(mat, kernels, padding=None, stride=1):
         orig_shape = mat.shape
         batch_size, orig_height, orig_width, _ = orig_shape
         n_kernels, kernel_height, kernel_width, kernel_channels = kernels.shape
@@ -138,13 +143,19 @@ class Convolve2D:
         return reshaped
 
     @staticmethod
-    def compute_grad_wrt_x(layer_input: md.Tensor, kernels: md.Tensor, grad: md.Tensor, padding=None, stride=1):
+    def compute_grad_wrt_x(
+        layer_input: md.Tensor,
+        kernels: md.Tensor,
+        grad: md.Tensor,
+        padding=None,
+        stride=1,
+    ):
         # rotate kernels, then swap axes to match up correctly
         kernels_np = kernels._tensor
         grad_np = grad._tensor
         flipped_kernels = np.flip(np.flip(kernels_np, axis=1), axis=2)
         flipped_kernels = np.swapaxes(flipped_kernels, -1, 0)
-        
+
         vertical_full_padding = (kernels_np.shape[1] - 1) // 2
         horizontal_full_padding = (kernels_np.shape[2] - 1) // 2
         full_padding = (
@@ -154,10 +165,7 @@ class Convolve2D:
             horizontal_full_padding,
         )
         grad_wrt_x = Convolve2D.forward(
-            grad_np,
-            flipped_kernels,
-            padding=full_padding,
-            stride=1
+            grad_np, flipped_kernels, padding=full_padding, stride=1
         )
         return md.Tensor(grad_wrt_x, is_leaf=False)
 
@@ -166,7 +174,13 @@ class Convolve2D:
     # changes to each individual element of the kernel
     # the overall computation boils down to convolving each channel of the previous outputs by each channel of the gradient
     @staticmethod
-    def compute_grad_wrt_w(layer_input: md.Tensor, kernels: md.Tensor, grad: md.Tensor, padding=None, stride=1):
+    def compute_grad_wrt_w(
+        layer_input: md.Tensor,
+        kernels: md.Tensor,
+        grad: md.Tensor,
+        padding=None,
+        stride=1,
+    ):
         # normally, computing grad_wrt_w requires you to do convolutions for each slice of the previous outputs
         # and each slice of the gradient. But we can take advantage of batching to instead treat each slice of
         # output as a separate entry to the batch, and each slice of the gradient as a separate "kernel"
@@ -176,10 +190,7 @@ class Convolve2D:
         swapped_prev_outputs = np.swapaxes(layer_input_np, 0, -1)
         swapped_grad = np.swapaxes(grad_np, 0, -1)
         convolved = Convolve2D.forward(
-            swapped_prev_outputs,
-            swapped_grad,
-            padding=padding,
-            stride=stride
+            swapped_prev_outputs, swapped_grad, padding=padding, stride=stride
         )
         grad_wrt_w = np.swapaxes(convolved, 0, -1)
 
@@ -198,7 +209,7 @@ class CrossEntropyLoss:
         # compute the one hot loss, reshape to match
         loss = -md.sum(y_true * md.log(y_pred), axis=-1, keepdims=True)
         return loss
-    
+
     @staticmethod
     def loss(y_true: md.Tensor, y_pred: md.Tensor, grad, precompute_grad=False):
         y_pred = y_pred.clip(a_min=1e-8, a_max=1 - 1e-8)
@@ -207,11 +218,26 @@ class CrossEntropyLoss:
             return (y_pred - y_true) / len(y_true)
         return grad * -y_true / y_pred
 
-convolve2d = md._generate_binary_op_func(forward_func=Convolve2D.forward, grad_a=Convolve2D.compute_grad_wrt_x, grad_b=Convolve2D.compute_grad_wrt_w, tensor_only=True, backend_op=True, propagate_kwargs=True)
-cross_entropy_loss = md._generate_binary_op_func(forward_func=CrossEntropyLoss.forward, grad_a=None, grad_b=CrossEntropyLoss.loss, tensor_only=True, propagate_kwargs=True)
+
+convolve2d = md._generate_binary_op_func(
+    forward_func=Convolve2D.forward,
+    grad_a=Convolve2D.compute_grad_wrt_x,
+    grad_b=Convolve2D.compute_grad_wrt_w,
+    tensor_only=True,
+    backend_op=True,
+    propagate_kwargs=True,
+)
+cross_entropy_loss = md._generate_binary_op_func(
+    forward_func=CrossEntropyLoss.forward,
+    grad_a=None,
+    grad_b=CrossEntropyLoss.loss,
+    tensor_only=True,
+    propagate_kwargs=True,
+)
 
 if __name__ == "__main__":
     import minidiff as md
+
     inputs = md.Tensor(
         [
             [
@@ -227,7 +253,7 @@ if __name__ == "__main__":
                 [[1, 1, 1], [1, 1, 1], [1, 1, 1], [1, 1, 1]],
             ],
         ],
-        allow_grad=True
+        allow_grad=True,
     )
     # kernels need another dimension for channels
     kernels = md.Tensor(
@@ -235,7 +261,7 @@ if __name__ == "__main__":
             [[[1, 0, 1], [1, 0, 1]], [[2, 0, 1], [2, 0, 1]]],
             [[[0, 1, 1], [0, 1, 1]], [[0, 1, 1], [0, 1, 1]]],
         ],
-        allow_grad=True
+        allow_grad=True,
     )
     y_pred = convolve2d(inputs, kernels, padding=1, stride=1)
     y_pred.backward()
