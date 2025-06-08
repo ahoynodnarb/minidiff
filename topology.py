@@ -29,7 +29,7 @@ class UnaryNode(FuncNode):
     def update_grads(self, grad):
         a = self.inputs[0]
         with md.no_grad():
-            if self.grad_a is not None and a.allow_grad:
+            if isinstance(a, md.Tensor) and self.grad_a is not None and a.allow_grad:
                 a.grad += self.grad_a(a, grad, **self.kwargs)
 
 
@@ -47,7 +47,7 @@ class BinaryNode(FuncNode):
         a = self.inputs[0]
         b = self.inputs[1]
         with md.no_grad():
-            if self.grad_a is not None and a.allow_grad:
+            if isinstance(a, md.Tensor) and self.grad_a is not None and a.allow_grad:
                 a.grad += self.grad_a(a, b, grad, **self.kwargs)
-            if self.grad_b is not None and b.allow_grad:
+            if isinstance(b, md.Tensor) and self.grad_b is not None and b.allow_grad:
                 b.grad += self.grad_b(a, b, grad, **self.kwargs)

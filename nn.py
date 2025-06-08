@@ -199,7 +199,7 @@ class Convolve2D:
 
 class CrossEntropyLoss:
     @staticmethod
-    def forward(y_true: md.Tensor, y_pred: md.Tensor, precompute_grad=False):
+    def loss(y_true: md.Tensor, y_pred: md.Tensor, precompute_grad=False):
         if y_true is None:
             raise ValueError("Empty ground truth array")
         if y_true.shape != y_pred.shape:
@@ -211,11 +211,13 @@ class CrossEntropyLoss:
         return loss
 
     @staticmethod
-    def loss(y_true: md.Tensor, y_pred: md.Tensor, grad, precompute_grad=False):
+    def loss_gradient(
+        y_true: md.Tensor, y_pred: md.Tensor, grad, precompute_grad=False
+    ):
         y_pred = y_pred.clip(a_min=1e-8, a_max=1 - 1e-8)
         # more numerically stable than -y_true / y_pred
         if precompute_grad:
-            return (y_pred - y_true) / len(y_true)
+            return grad * (y_pred - y_true)
         return grad * -y_true / y_pred
 
 
@@ -228,9 +230,9 @@ convolve2d = md._generate_binary_op_func(
     propagate_kwargs=True,
 )
 cross_entropy_loss = md._generate_binary_op_func(
-    forward_func=CrossEntropyLoss.forward,
+    forward_func=CrossEntropyLoss.loss,
     grad_a=None,
-    grad_b=CrossEntropyLoss.loss,
+    grad_b=CrossEntropyLoss.loss_gradient,
     tensor_only=True,
     propagate_kwargs=True,
 )
@@ -263,7 +265,21 @@ if __name__ == "__main__":
         ],
         allow_grad=True,
     )
-    y_pred = convolve2d(inputs, kernels, padding=1, stride=1)
-    y_pred.backward()
+    y_true = md.ones_like(inputs)
+    loss = cross_entropy_loss(y_true, inputs, precompute_grad=True)
+    loss_orig = CrossEntropyLoss.loss(y_true, inputs, precompute_grad=True)
+    # print(loss_orig.allow_grad)
+    # print(loss.allow_grad)
+    # print(loss_orig.grad)
+    # print(loss.grad)
+    # this breaks, probably because I've implemented sum incorrectly? I think the kwargs might be the problem too
+    loss_orig.backward()
+    # loss.backward()
+    # print(loss_orig.grad)
     print(inputs.grad)
-    print(kernels.grad)
+    # print(loss)
+    # print(CrossEntropyLoss.loss(y_true, inputs, precompute_grad=True))
+    # y_pred = convolve2d(inputs, kernels, padding=1, stride=1)
+    # y_pred.backward()
+    # print(inputs.grad)
+    # print(kernels.grad)

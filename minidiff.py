@@ -52,8 +52,7 @@ def leafs_allowed():
 # dy/dw2 would just be the loss gradient
 
 # all tensors by default should not allow grad
-# everything created in no_grad maintains that no gradient state even when exiting unless updated
-# everything created outside no_grad becomes no gradient within the scope, but reverts outside
+# all tensors keep their allow_grad state whether in no_grad() or not, no_grad() just prevents any graph creation
 
 
 class Tensor:
@@ -66,11 +65,11 @@ class Tensor:
             else:
                 self._tensor = np.array(tensor, dtype=dtype)
 
-        # tensors not created by ops are leafs. this property is immutable
-        self._is_leaf = is_leaf and leafs_allowed()
         self.func_node = None
         self.graphed = False
         self._allow_grad = allow_grad
+        # tensors not created by ops are leafs. this property is immutable
+        self._is_leaf = is_leaf and leafs_allowed()
         # don't store gradients unless we are user-created.
         self.grad = (
             zeros_like(self, allow_grad=False) if allow_grad and is_leaf else None
@@ -402,27 +401,30 @@ def _generate_binary_op_func(
     backend_op=False,
     propagate_kwargs=False,
 ):
+    # if the function is not differentiable, we still want to propagate the gradient to avoid breaking the
+    # graph, but it is smarter to just zero out the gradients.
     if not differentiable:
         grad_a = lambda a, b, grad: zeros_like(grad)
         grad_b = lambda a, b, grad: zeros_like(grad)
 
     def minidiff_func(a, b, **kwargs):
-        a_not_tensor = not isinstance(a, Tensor)
-        b_not_tensor = not isinstance(b, Tensor)
+        a_is_tensor = isinstance(a, Tensor)
+        b_is_tensor = isinstance(b, Tensor)
         if tensor_only:
-            assert isinstance(a, Tensor), "this function only supports minidiff Tensors"
-            assert isinstance(b, Tensor), "this function only supports minidiff Tensors"
+            assert a_is_tensor, "this function only supports minidiff Tensors"
+            assert b_is_tensor, "this function only supports minidiff Tensors"
         else:
-            assert not (
-                a_not_tensor and b_not_tensor
+            assert (
+                a_is_tensor or b_is_tensor
             ), "minidiff functions only work when at least one argument is a minidiff Tensor"
 
-        allow_grad = (a_not_tensor or a.allow_grad) or (b_not_tensor or b.allow_grad)
+        # allow gradient if at least one of input allows a gradient
+        allow_grad = (a_is_tensor and a.allow_grad) or (b_is_tensor and b.allow_grad)
         can_track_grad = grad_allowed() and allow_grad
 
         if backend_op:
-            first_param = a if a_not_tensor else a._tensor
-            second_param = b if b_not_tensor else b._tensor
+            first_param = a._tensor if a_is_tensor else a
+            second_param = b._tensor if b_is_tensor else b
             output = Tensor(
                 forward_func(first_param, second_param, **kwargs),
                 allow_grad=allow_grad,
@@ -433,8 +435,8 @@ def _generate_binary_op_func(
                 output = forward_func(a, b, **kwargs)
 
         if can_track_grad:
-            first_grad = None if a_not_tensor or not a.allow_grad else grad_a
-            second_grad = None if b_not_tensor or not b.allow_grad else grad_b
+            first_grad = None if a_is_tensor and not a.allow_grad else grad_a
+            second_grad = None if b_is_tensor and not b.allow_grad else grad_b
             func_node = topology.BinaryNode(a, b, first_grad, second_grad)
             if propagate_kwargs:
                 func_node.kwargs = kwargs
