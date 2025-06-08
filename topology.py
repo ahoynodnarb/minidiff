@@ -1,8 +1,7 @@
 # IMPLEMENT INHERITABLE NODE TYPES (UNARY, BINARY, etc.)
 # just force user to specify derivative
 
-from tensor import Tensor
-import minidiff
+import minidiff as md
 
 try:
     import cupy as np  # type: ignore
@@ -13,7 +12,7 @@ except ImportError:
 class FuncNode:
     def __init__(self, *inputs):
         self.inputs = inputs
-        self.input_tensors = [x for x in inputs if isinstance(x, Tensor)]
+        self.input_tensors = [x for x in inputs if isinstance(x, md.Tensor)]
         self.input_nodes = [x.func_node for x in self.input_tensors]
 
     def update_grads(self, grad):
@@ -31,7 +30,7 @@ class UnaryNode(FuncNode):
 
     def update_grads(self, grad):
         a = self.inputs[0]
-        with minidiff.no_grad():
+        with md.no_grad():
             if self.grad_a is not None and a.allow_grad:
                 a.grad += self.grad_a(a, grad)
 
@@ -39,9 +38,9 @@ class UnaryNode(FuncNode):
 class BinaryNode(FuncNode):
     def __init__(self, a, b, grad_a, grad_b):
         super().__init__(a, b)
-        if isinstance(a, Tensor):
+        if isinstance(a, md.Tensor):
             a.graphed = True
-        if isinstance(b, Tensor):
+        if isinstance(b, md.Tensor):
             b.graphed = True
         self.grad_a = grad_a
         self.grad_b = grad_b
@@ -49,7 +48,7 @@ class BinaryNode(FuncNode):
     def update_grads(self, grad):
         a = self.inputs[0]
         b = self.inputs[1]
-        with minidiff.no_grad():
+        with md.no_grad():
             if self.grad_a is not None and a.allow_grad:
                 a.grad += self.grad_a(a, b, grad)
             if self.grad_b is not None and b.allow_grad:
