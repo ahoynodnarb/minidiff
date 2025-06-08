@@ -305,7 +305,7 @@ def full_like(a: Tensor, x, allow_grad=False, **kwargs):
     )
 
 
-def _generate_unary_op_func(backend_func, grad_a=None, differentiable=True):
+def _generate_unary_op_func(forward_func, grad_a=None, differentiable=True, backend_op=False):
     if not differentiable:
         grad_a = lambda a, b, grad: 0
 
@@ -314,7 +314,7 @@ def _generate_unary_op_func(backend_func, grad_a=None, differentiable=True):
 
         can_allow_grad = grad_allowed() and a.allow_grad
         output = Tensor(
-            backend_func(a._tensor, **kwargs), allow_grad=a.allow_grad, is_leaf=False
+            forward_func(a._tensor if backend_op else a, **kwargs), allow_grad=a.allow_grad, is_leaf=False
         )
 
         if can_allow_grad:
@@ -328,7 +328,7 @@ def _generate_unary_op_func(backend_func, grad_a=None, differentiable=True):
 
 
 def _generate_binary_op_func(
-    backend_func, grad_a=None, grad_b=None, differentiable=True, tensor_only=False
+    forward_func, grad_a=None, grad_b=None, differentiable=True, tensor_only=False, backend_op=False
 ):
     if not differentiable:
         grad_a = lambda a, b, grad: 0
@@ -343,7 +343,7 @@ def _generate_binary_op_func(
             allow_grad = a.allow_grad or b.allow_grad
             can_allow_grad = grad_allowed() and allow_grad
             output = Tensor(
-                backend_func(a._tensor, b._tensor, **kwargs),
+                forward_func(a._tensor if backend_op else a, b._tensor if backend_op else a, **kwargs),
                 allow_grad=allow_grad,
                 is_leaf=False,
             )
@@ -371,21 +371,27 @@ def _generate_binary_op_func(
 
             allow_grad = (a_is_scalar or a.allow_grad) or (b_is_scalar or b.allow_grad)
             can_track_grad = grad_allowed() and allow_grad
-            if a_is_scalar:
+            if not backend_op:
                 output = Tensor(
-                    backend_func(a, b._tensor, **kwargs),
+                    forward_func(a, b, **kwargs),
+                    allow_grad=allow_grad,
+                    is_leaf=False,
+                )
+            elif a_is_scalar:
+                output = Tensor(
+                    forward_func(a, b._tensor, **kwargs),
                     allow_grad=allow_grad,
                     is_leaf=False,
                 )
             elif b_is_scalar:
                 output = Tensor(
-                    backend_func(a._tensor, b, **kwargs),
+                    forward_func(a._tensor, b, **kwargs),
                     allow_grad=allow_grad,
                     is_leaf=False,
                 )
             else:
                 output = Tensor(
-                    backend_func(a._tensor, b._tensor, **kwargs),
+                    forward_func(a._tensor, b._tensor, **kwargs),
                     allow_grad=allow_grad,
                     is_leaf=False,
                 )
@@ -426,36 +432,41 @@ def reshape(a: Tensor, shape: tuple, **kwargs):
 
 
 matmul = _generate_binary_op_func(
-    backend_func=np.matmul,
+    forward_func=np.matmul,
     grad_a=lambda a, b, grad: matmul(grad, b.t),
     grad_b=lambda a, b, grad: matmul(a.t, grad),
     tensor_only=True,
+    backend_op=True
 )
 add = _generate_binary_op_func(
-    backend_func=np.add, grad_a=lambda a, b, grad: grad, grad_b=lambda a, b, grad: grad
+    forward_func=np.add, grad_a=lambda a, b, grad: grad, grad_b=lambda a, b, grad: grad, backend_op=True
 )
 subtract = _generate_binary_op_func(
-    backend_func=np.subtract,
+    forward_func=np.subtract,
     grad_a=lambda a, b, grad: grad,
     grad_b=lambda a, b, grad: -grad,
+    backend_op=True
 )
 multiply = _generate_binary_op_func(
-    backend_func=np.multiply,
+    forward_func=np.multiply,
     grad_a=lambda a, b, grad: grad * b,
     grad_b=lambda a, b, grad: grad * a,
+    backend_op=True
 )
 true_divide = _generate_binary_op_func(
-    backend_func=np.true_divide,
+    forward_func=np.true_divide,
     grad_a=lambda a, b, grad: grad / b,
     grad_b=lambda a, b, grad: (-grad * a) / (b**2),
+    backend_op=True
 )
 floor_divide = _generate_binary_op_func(
-    backend_func=np.floor_divide, differentiable=False
+    forward_func=np.floor_divide, differentiable=False, backend_op=True
 )
 power = _generate_binary_op_func(
-    backend_func=np.power,
+    forward_func=np.power,
     grad_a=lambda a, b, grad: grad * b * (a ** (b - 1)),
     grad_b=lambda a, b, grad: grad * np.log(a) * a**b,
+    backend_op=True
 )
 
 
@@ -463,27 +474,27 @@ def sqrt(x, **kwargs):
     return power(x, 0.5, **kwargs)
 
 
-floor = _generate_unary_op_func(backend_func=np.floor, differentiable=False)
-ceil = _generate_unary_op_func(backend_func=np.ceil, differentiable=False)
+floor = _generate_unary_op_func(forward_func=np.floor, differentiable=False, backend_op=True)
+ceil = _generate_unary_op_func(forward_func=np.ceil, differentiable=False, backend_op=True)
 cos = _generate_unary_op_func(
-    backend_func=np.cos, grad_a=lambda a, grad: grad * -sin(a)
+    forward_func=np.cos, grad_a=lambda a, grad: grad * -sin(a), backend_op=True
 )
-sin = _generate_unary_op_func(backend_func=np.sin, grad_a=lambda a, grad: grad * cos(a))
+sin = _generate_unary_op_func(forward_func=np.sin, grad_a=lambda a, grad: grad * cos(a), backend_op=True)
 tan = _generate_unary_op_func(
-    backend_func=np.tan, grad_a=lambda a, grad: grad * (1 / cos(a) ** 2)
+    forward_func=np.tan, grad_a=lambda a, grad: grad * (1 / cos(a) ** 2), backend_op=True
 )
 cosh = _generate_unary_op_func(
-    backend_func=np.cosh, grad_a=lambda a, grad: grad * sinh(a)
+    forward_func=np.cosh, grad_a=lambda a, grad: grad * sinh(a), backend_op=True
 )
 sinh = _generate_unary_op_func(
-    backend_func=np.sinh, grad_a=lambda a, grad: grad * cosh(a)
+    forward_func=np.sinh, grad_a=lambda a, grad: grad * cosh(a), backend_op=True
 )
 tanh = _generate_unary_op_func(
-    backend_func=np.sinh, grad_a=lambda a, grad: grad * (1 / cosh(a) ** 2)
+    forward_func=np.sinh, grad_a=lambda a, grad: grad * (1 / cosh(a) ** 2), backend_op=True
 )
-exp = _generate_unary_op_func(backend_func=np.exp, grad_a=lambda a, grad: grad * exp(a))
-log = _generate_unary_op_func(backend_func=np.log, grad_a=lambda a, grad: grad / a)
-sum = _generate_unary_op_func(backend_func=np.log, grad_a=lambda a, grad: grad)
+exp = _generate_unary_op_func(forward_func=np.exp, grad_a=lambda a, grad: grad * exp(a), backend_op=True)
+log = _generate_unary_op_func(forward_func=np.log, grad_a=lambda a, grad: grad / a, backend_op=True)
+sum = _generate_unary_op_func(forward_func=np.log, grad_a=lambda a, grad: grad, backend_op=True)
 mean = _generate_unary_op_func(
-    backend_func=np.log, grad_a=lambda a, grad: grad / a.size
+    forward_func=np.log, grad_a=lambda a, grad: grad / a.size, backend_op=True
 )
