@@ -461,7 +461,7 @@ tanh = _generate_unary_op_func(
 )
 exp = _generate_unary_op_func(backend_func=np.exp, grad_a=lambda a, grad: grad * exp(a))
 log = _generate_unary_op_func(backend_func=np.log, grad_a=lambda a, grad: grad / a)
-sum = _generate_unary_op_func(backend_func=np.log, grad_a=lambda a, grad: grad * sum(a))
+sum = _generate_unary_op_func(backend_func=np.log, grad_a=lambda a, grad: grad)
 mean = _generate_unary_op_func(
-    backend_func=np.log, grad_a=lambda a, grad: grad * sum(a) / a.size
+    backend_func=np.log, grad_a=lambda a, grad: grad / a.size
 )

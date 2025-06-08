@@ -19,9 +19,6 @@ class FuncNode:
     def update_grads(self, grad):
         raise NotImplementedError
 
-    def pretty_repr(self):
-        raise NotImplementedError
-
     def __repr__(self):
         return f"{self.__class__.__name__} ({', '.join([str(x) for x in self.inputs])})"
 
