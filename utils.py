@@ -3,7 +3,7 @@ import graphviz
 import minidiff as md
 
 
-def draw_tensor_op_graph(root, tensor_names=None, graph=None, insert_intermediates=False):
+def draw_tensor_op_graph(root, tensor_names=None, graph=None, insert_intermediates=False, **kwargs):
     def find_nested_tensor_name(tensor):
         node = tensor.func_node
         input_names = []
@@ -64,7 +64,7 @@ def draw_tensor_op_graph(root, tensor_names=None, graph=None, insert_intermediat
         if not tensor.is_leaf and (is_named or insert_intermediates):
             tensor_name = f"{tensor_name} = {find_nested_tensor_name(tensor)}"
             
-        graph.node(str(tensor_id), tensor_name)
+        graph.node(str(tensor_id), tensor_name, shape="box")
 
         if tensor.is_leaf:
             return
@@ -79,7 +79,7 @@ def draw_tensor_op_graph(root, tensor_names=None, graph=None, insert_intermediat
     n_anonymous_tensors = 0
 
     if graph is None:
-        graph = graphviz.Digraph()
+        graph = graphviz.Digraph(**kwargs)
         
     if not names_provided:
         tensor_names = {}
@@ -112,5 +112,5 @@ if __name__ == "__main__":
         id(e): "e",
         id(f): "f",
     }
-    graph = draw_tensor_op_graph(f, tensor_names=tensor_names)
+    graph = draw_tensor_op_graph(f, tensor_names=tensor_names, graph_attr={"splines": "ortho"})
     graph.render("graph", view=True)
