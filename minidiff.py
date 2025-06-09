@@ -15,7 +15,6 @@ import topology
 import contextvars
 
 _allow_grad = contextvars.ContextVar("allow_grad", default=True)
-_allow_leafs = contextvars.ContextVar("allow_leafs", default=True)
 
 
 class no_grad:
@@ -27,29 +26,12 @@ class no_grad:
         set_allow_grad(self.prev)
 
 
-class no_leafs:
-    def __enter__(self):
-        self.prev = _allow_leafs.get()
-        set_allow_leafs(False)
-
-    def __exit__(self, type, value, traceback):
-        set_allow_leafs(self.prev)
-
-
 def set_allow_grad(allow):
     _allow_grad.set(allow)
 
 
-def grad_allowed():
+def grad_allowed_():
     return _allow_grad.get()
-
-
-def set_allow_leafs(allow):
-    _allow_leafs.set(allow)
-
-
-def leafs_allowed():
-    return _allow_leafs.get()
 
 
 # compute from left to right, dy/dw2 then dw2/dw1 to get dy/dw1 and finally dw1/dx to get dy/dx
@@ -60,7 +42,7 @@ def leafs_allowed():
 
 
 class Tensor:
-    def __init__(self, data, allow_grad=False, dtype=np.float32, is_leaf=True):
+    def __init__(self, data, allow_grad=False, dtype=None, func_node=None):
         if isinstance(data, np.ndarray):
             self._data = data
         else:
@@ -71,12 +53,11 @@ class Tensor:
 
         self._allow_grad = allow_grad
         # tensors not created by ops are leafs. this property is immutable
-        self._func_node = None
-        self._is_leaf = isinstance(data, Number) or (is_leaf and leafs_allowed())
+        self._func_node = func_node
         # don't store gradients unless we are user-created.
         self.graphed = False
         self.grad = (
-            zeros_like(self, allow_grad=False) if allow_grad and is_leaf else None
+            zeros_like(self, allow_grad=False) if self.is_leaf and allow_grad else None
         )
 
     @property
@@ -85,14 +66,22 @@ class Tensor:
 
     @func_node.setter
     def func_node(self, func_node):
-        if self.is_leaf and func_node is not None:
+        # if we're on a graph, and we're a leaf that's trying to assign itself a node,
+        # then fail because leafs, by definition, have no gradient history and therefore
+        # cannot possess nodes
+        if self.graphed and (self.is_leaf and func_node is not None):
             raise ValueError("leaf tensors cannot possess func_nodes")
 
         self._func_node = func_node
 
+    # we're a leaf if we have no gradient history and we are tracking gradients
     @property
     def is_leaf(self):
-        return self._is_leaf
+        return self.is_graph_source and self.allow_grad
+
+    @property
+    def is_graph_source(self):
+        return self.func_node is None
 
     @property
     def allow_grad(self):
@@ -108,7 +97,9 @@ class Tensor:
         if self._allow_grad == allow_grad:
             return
 
-        if not self.is_leaf or not allow_grad:
+        # any tensors who don't allow gradient-tracking don't track their gradients
+        # intermediate non-leaf tensors do not have gradients because we don't care
+        if not allow_grad or not self.is_leaf:
             self.grad = None
         else:
             self.grad = zeros_like(self, allow_grad=False)
@@ -131,11 +122,11 @@ class Tensor:
     def dtype(self):
         return self._data.dtype
 
-    def backward(self, retain_graph=False):
+    def backward(self, retain_graph=False, retain_grads=False):
         if not self.allow_grad:
             return
 
-        if self.func_node is None:
+        if self.is_leaf:
             return
 
         seen = set()
@@ -164,7 +155,7 @@ class Tensor:
             n.update_grads(n_grad)
             # we're only temporarily storing grads, so we need to remove any references when
             # we're done for the sake of memory
-            if not tensor.is_leaf:
+            if not tensor.is_leaf and not retain_grads:
                 tensor.grad = None
             if not retain_graph:
                 tensor.func_node = None
@@ -217,9 +208,9 @@ class Tensor:
             )
 
         if isinstance(other, Tensor):
-            self._data += other._data
+            self._data = np.add(self._data, other._data, casting="safe")
         else:
-            self._data += other
+            self._data = np.add(self._data, other, casting="safe")
 
         return self
 
@@ -236,9 +227,9 @@ class Tensor:
             )
 
         if isinstance(other, Tensor):
-            self._data = self._data - other._data
+            self._data = np.subtract(self._data, other._data, casting="safe")
         else:
-            self._data = self._data - other
+            self._data = np.subtract(self._data, other, casting="safe")
 
         return self
 
@@ -255,9 +246,9 @@ class Tensor:
             )
 
         if isinstance(other, Tensor):
-            self._data = self._data * other._data
+            self._data = np.multiply(self._data, other._data, casting="safe")
         else:
-            self._data = self._data * other
+            self._data = np.multiply(self._data, other, casting="safe")
 
         return self
 
@@ -316,9 +307,7 @@ class Tensor:
         return self
 
     def __neg__(self):
-        # this should be an op actually
-        ret = Tensor(-self._data, allow_grad=self.allow_grad, is_leaf=False)
-        return ret
+        return -1 * self
 
     def __repr__(self):
         return self._data.__repr__()
@@ -328,7 +317,7 @@ class Tensor:
 
     def __getitem__(self, key):
         # this should be an op actually
-        return Tensor(self._data[key], allow_grad=self.allow_grad, is_leaf=False)
+        return s_(self, key)
 
     def __setitem__(self, key, val):
         if self.allow_grad:
@@ -345,13 +334,13 @@ class Tensor:
     def __gt__(self, value):
         return greater(self, value)
 
-    def __gte__(self, value):
+    def __ge__(self, value):
         return greater_equal(self, value)
 
     def __lt__(self, value):
         return less(self, value)
 
-    def __lte__(self, value):
+    def __le__(self, value):
         return less_equal(self, value)
 
     def __eq__(self, value):
@@ -374,9 +363,7 @@ class Tensor:
 
 
 def ones_like(a: Tensor, allow_grad=False, **kwargs):
-    return Tensor(
-        np.ones_like(a._data, dtype=a.dtype, **kwargs), allow_grad=allow_grad
-    )
+    return Tensor(np.ones_like(a._data, dtype=a.dtype, **kwargs), allow_grad=allow_grad)
 
 
 def zeros_like(a: Tensor, allow_grad=False, **kwargs):
@@ -391,240 +378,253 @@ def full_like(a: Tensor, x, allow_grad=False, **kwargs):
     )
 
 
-def _generate_unary_op_func(
+def generate_arbitrary_op_func(
     forward_func,
-    grad_a=None,
-    differentiable=True,
-    backend_op=False,
+    grad_funcs,
+    is_differentiable=True,
+    tensor_only=False,
+    is_backend_op=False,
     propagate_kwargs=False,
     op_name=None,
+    casting="safe",
 ):
-    if not differentiable:
-        grad_a = lambda a, b, grad: zeros_like(grad)
+    # if the function is not is_differentiable, we still want to propagate the gradient to avoid breaking the
+    # graph, but it is smarter to just zero out the gradients.
+    if not is_differentiable:
+        grad_funcs = [lambda a, b, grad: zeros_like(grad) for _ in grad_funcs]
 
-    def minidiff_func(a: Tensor, **kwargs):
-        if not isinstance(a, Tensor):
+    # maybe I should split this into multiple functions without if statements since those are probably clunky and generate overhead
+    def minidiff_func(*inputs, **kwargs):
+        # no leafs can ever be created by an op
+        inputs_are_tensors = [isinstance(x, Tensor) for x in inputs]
+
+        if not tensor_only and not any(inputs_are_tensors):
+            raise ValueError(
+                "minidiff functions only work when at least one argument is a minidiff Tensor"
+            )
+
+        if tensor_only and not all(inputs_are_tensors):
             raise ValueError("This function only supports minidiff Tensors")
 
-        with no_leafs():
-            can_allow_grad = grad_allowed() and a.allow_grad
+        as_tensors = [Tensor(x) if not isinstance(x, Tensor) else x for x in inputs]
 
-            if backend_op:
+        # allow gradient if at least one of the input tensors allows a gradient
+        allowed_grads = [x.allow_grad for x in as_tensors]
+        allow_grad = any(allowed_grads)
+        can_track_grad = grad_allowed_() and allow_grad
+
+        if is_backend_op:
+            if casting is None:
                 output = Tensor(
-                    forward_func(a._data, **kwargs),
-                    allow_grad=a.allow_grad,
-                    is_leaf=False,
+                    forward_func(*[x._data for x in as_tensors], **kwargs),
+                    allow_grad=allow_grad,
                 )
             else:
-                with no_grad(), no_leafs():
-                    output = forward_func(a, **kwargs)
-
-            if can_allow_grad:
-                func_node = topology.UnaryNode(a, grad_a)
-                func_node.op_name = (
-                    forward_func.__name__ if op_name is None else op_name
+                output = Tensor(
+                    forward_func(
+                        *[x._data for x in as_tensors], casting=casting, **kwargs
+                    ),
+                    allow_grad=allow_grad,
                 )
-                if propagate_kwargs:
-                    func_node.kwargs = kwargs
+        else:
+            if casting is None:
+                output = forward_func(*as_tensors, **kwargs)
+            else:
+                output = forward_func(*as_tensors, casting=casting, **kwargs)
+            output.allow_grad = allow_grad
 
-                output.func_node = func_node
-                output.graphed = True
+        if can_track_grad:
+            filtered_grad_funcs = [
+                grad_func if grad_allowed else None
+                for grad_func, grad_allowed in zip(grad_funcs, allowed_grads)
+            ]
+
+            func_node = topology.FuncNode(
+                output_tensor=output,
+                input_tensors=as_tensors,
+                grad_functions=filtered_grad_funcs,
+            )
+            func_node.op_name = forward_func.__name__ if op_name is None else op_name
+            if propagate_kwargs:
+                func_node.kwargs = kwargs
 
         return output
 
     return minidiff_func
 
 
-def _generate_binary_op_func(
+def generate_unary_op_func(
+    forward_func,
+    grad_a=None,
+    is_differentiable=True,
+    is_backend_op=False,
+    propagate_kwargs=False,
+    op_name=None,
+    casting=None,
+):
+    return generate_arbitrary_op_func(
+        forward_func,
+        grad_funcs=[grad_a],
+        is_differentiable=is_differentiable,
+        tensor_only=True,
+        is_backend_op=is_backend_op,
+        propagate_kwargs=propagate_kwargs,
+        op_name=op_name,
+        casting=casting,
+    )
+
+
+def generate_binary_op_func(
     forward_func,
     grad_a=None,
     grad_b=None,
-    differentiable=True,
+    is_differentiable=True,
     tensor_only=False,
-    backend_op=False,
+    is_backend_op=False,
     propagate_kwargs=False,
     op_name=None,
+    casting="safe",
 ):
-    # if the function is not differentiable, we still want to propagate the gradient to avoid breaking the
-    # graph, but it is smarter to just zero out the gradients.
-    if not differentiable:
-        grad_a = lambda a, b, grad: zeros_like(grad)
-        grad_b = lambda a, b, grad: zeros_like(grad)
-
-    # maybe I should split this into multiple functions without if statements since those are probably clunky and generate overhead
-    def minidiff_func(a, b, **kwargs):
-        # no leafs can ever be created by an op
-        a_is_tensor = isinstance(a, Tensor)
-        b_is_tensor = isinstance(b, Tensor)
-        if tensor_only:
-            if not (a_is_tensor and b_is_tensor):
-                raise ValueError("This function only supports minidiff Tensors")
-        else:
-            if not (a_is_tensor or b_is_tensor):
-                raise ValueError(
-                    "minidiff functions only work when at least one argument is a minidiff Tensor"
-                )
-
-        with no_leafs():
-
-            if not a_is_tensor:
-                a = Tensor(a)
-            if not b_is_tensor:
-                b = Tensor(b)
-
-            # allow gradient if at least one of the input tensors allows a gradient
-            allow_grad = a.allow_grad or b.allow_grad
-            can_track_grad = grad_allowed() and allow_grad
-
-            if backend_op:
-                output = Tensor(
-                    forward_func(a._data, b._data, **kwargs), allow_grad=allow_grad
-                )
-            else:
-                with no_grad():
-                    output = forward_func(a, b, **kwargs)
-
-            if can_track_grad:
-                first_grad = grad_a if a.allow_grad else None
-                second_grad = grad_b if b.allow_grad else None
-
-                func_node = topology.BinaryNode(a, b, first_grad, second_grad)
-                func_node.op_name = (
-                    forward_func.__name__ if op_name is None else op_name
-                )
-                if propagate_kwargs:
-                    func_node.kwargs = kwargs
-
-                output.func_node = func_node
-                output.graphed = True
-
-        return output
-
-    return minidiff_func
+    return generate_arbitrary_op_func(
+        forward_func,
+        grad_funcs=[grad_a, grad_b],
+        is_differentiable=is_differentiable,
+        tensor_only=tensor_only,
+        is_backend_op=is_backend_op,
+        propagate_kwargs=propagate_kwargs,
+        op_name=op_name,
+        casting=casting,
+    )
 
 
-clip = _generate_unary_op_func(
+s_ = generate_binary_op_func(
+    forward_func=lambda a, key, **kwargs: a[int(key)],
+    is_differentiable=False,
+    is_backend_op=True,
+)
+clip = generate_unary_op_func(
     forward_func=np.clip,
     grad_a=lambda a, grad, a_min=None, a_max=None: grad
-    * Tensor(np.asarray(a_min < a._data < a_max)),
+    * logical_and(
+        a > float("-inf") if a_min is None else a_min,
+        a < float("inf") if a_max is None else a_max,
+    ),
     propagate_kwargs=True,
-    backend_op=True,
+    is_backend_op=True,
 )
-# should technically be unary, but I like to preserve interoperability so it will take in two inputs instead of a shape kwarg
-reshape = _generate_unary_op_func(
+reshape = generate_unary_op_func(
     forward_func=np.reshape,
     grad_a=lambda a, grad: grad.reshape(a.shape),
-    backend_op=True,
+    is_backend_op=True,
 )
-
-matmul = _generate_binary_op_func(
+matmul = generate_binary_op_func(
     forward_func=np.matmul,
     grad_a=lambda a, b, grad: matmul(grad, b.t),
     grad_b=lambda a, b, grad: matmul(a.t, grad),
     tensor_only=True,
-    backend_op=True,
+    is_backend_op=True,
 )
-add = _generate_binary_op_func(
+add = generate_binary_op_func(
     forward_func=np.add,
     grad_a=lambda a, b, grad: grad,
     grad_b=lambda a, b, grad: grad,
-    backend_op=True,
+    is_backend_op=True,
 )
-subtract = _generate_binary_op_func(
+subtract = generate_binary_op_func(
     forward_func=np.subtract,
     grad_a=lambda a, b, grad: grad,
     grad_b=lambda a, b, grad: -grad,
-    backend_op=True,
+    is_backend_op=True,
 )
-multiply = _generate_binary_op_func(
+multiply = generate_binary_op_func(
     forward_func=np.multiply,
     grad_a=lambda a, b, grad: grad * b,
     grad_b=lambda a, b, grad: grad * a,
-    backend_op=True,
+    is_backend_op=True,
 )
-true_divide = _generate_binary_op_func(
+true_divide = generate_binary_op_func(
     forward_func=np.true_divide,
     grad_a=lambda a, b, grad: grad / b,
     grad_b=lambda a, b, grad: (-grad * a) / (b**2),
-    backend_op=True,
+    is_backend_op=True,
 )
-floor_divide = _generate_binary_op_func(
-    forward_func=np.floor_divide, differentiable=False, backend_op=True
+floor_divide = generate_binary_op_func(
+    forward_func=np.floor_divide, is_differentiable=False, is_backend_op=True
 )
-power = _generate_binary_op_func(
+power = generate_binary_op_func(
     forward_func=np.power,
-    grad_a=lambda a, b, grad: grad * b * (a**(b - 1)),
+    grad_a=lambda a, b, grad: grad * b * (a ** (b - 1)),
     grad_b=lambda a, b, grad: grad * np.log(a) * a**b,
-    backend_op=True,
+    is_backend_op=True,
 )
 sqrt = lambda a, b, **kwargs: power(a, b, **kwargs)
-floor = _generate_unary_op_func(
-    forward_func=np.floor, differentiable=False, backend_op=True
+floor = generate_unary_op_func(
+    forward_func=np.floor, is_differentiable=False, is_backend_op=True
 )
-ceil = _generate_unary_op_func(
-    forward_func=np.ceil, differentiable=False, backend_op=True
+ceil = generate_unary_op_func(
+    forward_func=np.ceil, is_differentiable=False, is_backend_op=True
 )
-cos = _generate_unary_op_func(
-    forward_func=np.cos, grad_a=lambda a, grad: grad * -sin(a), backend_op=True
+cos = generate_unary_op_func(
+    forward_func=np.cos, grad_a=lambda a, grad: grad * -sin(a), is_backend_op=True
 )
-sin = _generate_unary_op_func(
-    forward_func=np.sin, grad_a=lambda a, grad: grad * cos(a), backend_op=True
+sin = generate_unary_op_func(
+    forward_func=np.sin, grad_a=lambda a, grad: grad * cos(a), is_backend_op=True
 )
-tan = _generate_unary_op_func(
+tan = generate_unary_op_func(
     forward_func=np.tan,
-    grad_a=lambda a, grad: grad * (1 / cos(a)**2),
-    backend_op=True,
+    grad_a=lambda a, grad: grad * (1 / cos(a) ** 2),
+    is_backend_op=True,
 )
-cosh = _generate_unary_op_func(
-    forward_func=np.cosh, grad_a=lambda a, grad: grad * sinh(a), backend_op=True
+cosh = generate_unary_op_func(
+    forward_func=np.cosh, grad_a=lambda a, grad: grad * sinh(a), is_backend_op=True
 )
-sinh = _generate_unary_op_func(
-    forward_func=np.sinh, grad_a=lambda a, grad: grad * cosh(a), backend_op=True
+sinh = generate_unary_op_func(
+    forward_func=np.sinh, grad_a=lambda a, grad: grad * cosh(a), is_backend_op=True
 )
-tanh = _generate_unary_op_func(
+tanh = generate_unary_op_func(
     forward_func=np.sinh,
-    grad_a=lambda a, grad: grad * (1 / cosh(a)**2),
-    backend_op=True,
+    grad_a=lambda a, grad: grad * (1 / cosh(a) ** 2),
+    is_backend_op=True,
 )
-exp = _generate_unary_op_func(
-    forward_func=np.exp, grad_a=lambda a, grad: grad * exp(a), backend_op=True
+exp = generate_unary_op_func(
+    forward_func=np.exp, grad_a=lambda a, grad: grad * exp(a), is_backend_op=True
 )
-log = _generate_unary_op_func(
-    forward_func=np.log, grad_a=lambda a, grad: grad / a, backend_op=True
+log = generate_unary_op_func(
+    forward_func=np.log, grad_a=lambda a, grad: grad / a, is_backend_op=True
 )
-sum = _generate_unary_op_func(
-    forward_func=np.sum, grad_a=lambda a, grad: grad, backend_op=True
+sum = generate_unary_op_func(
+    forward_func=np.sum, grad_a=lambda a, grad: grad, is_backend_op=True
 )
-mean = _generate_unary_op_func(
-    forward_func=np.mean, grad_a=lambda a, grad: grad / a.size, backend_op=True
+mean = generate_unary_op_func(
+    forward_func=np.mean, grad_a=lambda a, grad: grad / a.size, is_backend_op=True
 )
-greater = _generate_binary_op_func(
-    forward_func=np.greater, differentiable=False, backend_op=True
+greater = generate_binary_op_func(
+    forward_func=np.greater, is_differentiable=False, is_backend_op=True
 )
-greater_equal = _generate_binary_op_func(
-    forward_func=np.greater_equal, differentiable=False, backend_op=True
+greater_equal = generate_binary_op_func(
+    forward_func=np.greater_equal, is_differentiable=False, is_backend_op=True
 )
-less = _generate_binary_op_func(
-    forward_func=np.less, differentiable=False, backend_op=True
+less = generate_binary_op_func(
+    forward_func=np.less, is_differentiable=False, is_backend_op=True
 )
-less_equal = _generate_binary_op_func(
-    forward_func=np.less_equal, differentiable=False, backend_op=True
+less_equal = generate_binary_op_func(
+    forward_func=np.less_equal, is_differentiable=False, is_backend_op=True
 )
-equal = _generate_binary_op_func(
-    forward_func=np.equal, differentiable=False, backend_op=True
+equal = generate_binary_op_func(
+    forward_func=np.equal, is_differentiable=False, is_backend_op=True
 )
-not_equal = _generate_binary_op_func(
-    forward_func=np.not_equal, differentiable=False, backend_op=True
+not_equal = generate_binary_op_func(
+    forward_func=np.not_equal, is_differentiable=False, is_backend_op=True
 )
-logical_and = _generate_binary_op_func(
-    forward_func=np.logical_and, differentiable=False, backend_op=True
+logical_and = generate_binary_op_func(
+    forward_func=np.logical_and, is_differentiable=False, is_backend_op=True
 )
-logical_or = _generate_binary_op_func(
-    forward_func=np.logical_or, differentiable=False, backend_op=True
+logical_or = generate_binary_op_func(
+    forward_func=np.logical_or, is_differentiable=False, is_backend_op=True
 )
-logical_not = _generate_binary_op_func(
-    forward_func=np.logical_not, differentiable=False, backend_op=True
+logical_not = generate_binary_op_func(
+    forward_func=np.logical_not, is_differentiable=False, is_backend_op=True
 )
-logical_xor = _generate_binary_op_func(
-    forward_func=np.logical_xor, differentiable=False, backend_op=True
+logical_xor = generate_binary_op_func(
+    forward_func=np.logical_xor, is_differentiable=False, is_backend_op=True
 )

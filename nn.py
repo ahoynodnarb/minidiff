@@ -167,7 +167,7 @@ class Convolve2D:
         grad_wrt_x = Convolve2D.forward(
             grad_np, flipped_kernels, padding=full_padding, stride=1
         )
-        return md.Tensor(grad_wrt_x, is_leaf=False)
+        return md.Tensor(grad_wrt_x)
 
     # https://deeplearning.cs.cmu.edu/F21/document/recitation/Recitation5/CNN_Backprop_Recitation_5_F21.pdf
     # the gradient with respect to the weights (kernel) tells us how the loss function changes relative to
@@ -194,7 +194,7 @@ class Convolve2D:
         )
         grad_wrt_w = np.swapaxes(convolved, 0, -1)
 
-        return md.Tensor(grad_wrt_w, is_leaf=False)
+        return md.Tensor(grad_wrt_w)
 
 
 class CrossEntropyLoss:
@@ -205,7 +205,7 @@ class CrossEntropyLoss:
         if y_true.shape != y_pred.shape:
             raise ValueError("y_true and y_pred must have the same shape")
         # avoid division by 0
-        y_pred = y_pred.clip(a_min=1e-8, a_max=1 - 1e-8)
+        y_pred = y_pred.clip(a_min=1e-8, a_max=None)
         # compute the one hot loss, reshape to match
         loss = -md.sum(y_true * md.log(y_pred), axis=-1, keepdims=True)
         return loss
@@ -214,22 +214,23 @@ class CrossEntropyLoss:
     def loss_gradient(
         y_true: md.Tensor, y_pred: md.Tensor, grad, precompute_grad=False
     ):
-        y_pred = y_pred.clip(a_min=1e-8, a_max=1 - 1e-8)
+        y_pred = y_pred.clip(a_min=1e-8, a_max=None)
         # more numerically stable than -y_true / y_pred
         if precompute_grad:
             return grad * (y_pred - y_true)
         return grad * -y_true / y_pred
 
 
-convolve2d = md._generate_binary_op_func(
+convolve2d = md.generate_binary_op_func(
     forward_func=Convolve2D.forward,
     grad_a=Convolve2D.compute_grad_wrt_x,
     grad_b=Convolve2D.compute_grad_wrt_w,
     tensor_only=True,
-    backend_op=True,
+    is_backend_op=True,
     propagate_kwargs=True,
 )
-cross_entropy_loss = md._generate_binary_op_func(
+# this has to be an op itself because it has a custom gradient function
+cross_entropy_loss = md.generate_binary_op_func(
     forward_func=CrossEntropyLoss.loss,
     grad_a=None,
     grad_b=CrossEntropyLoss.loss_gradient,
@@ -239,6 +240,7 @@ cross_entropy_loss = md._generate_binary_op_func(
 
 if __name__ == "__main__":
     import minidiff as md
+    from utils import draw_tensor_op_graph
 
     inputs = md.Tensor(
         [
@@ -266,20 +268,18 @@ if __name__ == "__main__":
         allow_grad=True,
     )
     y_true = md.ones_like(inputs)
-    loss = cross_entropy_loss(y_true, inputs, precompute_grad=True)
-    loss_orig = CrossEntropyLoss.loss(y_true, inputs, precompute_grad=True)
-    # print(loss_orig.allow_grad)
-    # print(loss.allow_grad)
-    # print(loss_orig.grad)
-    # print(loss.grad)
-    # this breaks, probably because I've implemented sum incorrectly? I think the kwargs might be the problem too
-    loss_orig.backward()
+    loss = CrossEntropyLoss.loss(y_true, inputs, precompute_grad=True)
+    tensor_names = {
+        id(loss): "loss",
+        id(inputs): "inputs",
+        id(y_true): "y_true",
+    }
+    graph = draw_tensor_op_graph(
+        loss,
+        tensor_names=tensor_names,
+        graph_attr={"splines": "ortho"},
+        node_attr={"shape": "box"},
+    )
+    graph.render("graph", view=True)
     # loss.backward()
-    # print(loss_orig.grad)
-    print(inputs.grad)
-    # print(loss)
-    # print(CrossEntropyLoss.loss(y_true, inputs, precompute_grad=True))
-    # y_pred = convolve2d(inputs, kernels, padding=1, stride=1)
-    # y_pred.backward()
     # print(inputs.grad)
-    # print(kernels.grad)
