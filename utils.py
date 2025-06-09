@@ -64,7 +64,7 @@ def draw_tensor_op_graph(root, tensor_names=None, graph=None, insert_intermediat
         if not tensor.is_leaf and (is_named or insert_intermediates):
             tensor_name = f"{tensor_name} = {find_nested_tensor_name(tensor)}"
             
-        graph.node(str(tensor_id), tensor_name, shape="box")
+        graph.node(str(tensor_id), tensor_name)
 
         if tensor.is_leaf:
             return
@@ -112,5 +112,5 @@ if __name__ == "__main__":
         id(e): "e",
         id(f): "f",
     }
-    graph = draw_tensor_op_graph(f, tensor_names=tensor_names, graph_attr={"splines": "ortho"})
+    graph = draw_tensor_op_graph(f, tensor_names=tensor_names, graph_attr={"splines": "ortho"}, node_attr={"shape": "box"})
     graph.render("graph", view=True)
