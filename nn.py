@@ -151,8 +151,8 @@ class Convolve2D:
         stride=1,
     ):
         # rotate kernels, then swap axes to match up correctly
-        kernels_np = kernels._tensor
-        grad_np = grad._tensor
+        kernels_np = kernels._data
+        grad_np = grad._data
         flipped_kernels = np.flip(np.flip(kernels_np, axis=1), axis=2)
         flipped_kernels = np.swapaxes(flipped_kernels, -1, 0)
 
@@ -185,8 +185,8 @@ class Convolve2D:
         # and each slice of the gradient. But we can take advantage of batching to instead treat each slice of
         # output as a separate entry to the batch, and each slice of the gradient as a separate "kernel"
         # this results in us having the same final convolution, just the slices end up as the channels instead
-        layer_input_np = layer_input._tensor
-        grad_np = grad._tensor
+        layer_input_np = layer_input._data
+        grad_np = grad._data
         swapped_prev_outputs = np.swapaxes(layer_input_np, 0, -1)
         swapped_grad = np.swapaxes(grad_np, 0, -1)
         convolved = Convolve2D.forward(

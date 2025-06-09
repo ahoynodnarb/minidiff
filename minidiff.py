@@ -1,3 +1,5 @@
+from numbers import Number
+
 try:
     import cupy as np  # type: ignore
 
@@ -6,6 +8,8 @@ except ImportError:
     import numpy as np
 
     BACKEND = "numpy"
+
+DEBUG = True
 
 import topology
 import contextvars
@@ -56,32 +60,34 @@ def leafs_allowed():
 
 
 class Tensor:
-    def __init__(self, tensor, allow_grad=False, dtype=np.float32, is_leaf=True):
-        if isinstance(tensor, np.ndarray):
-            self._tensor = tensor
+    def __init__(self, data, allow_grad=False, dtype=np.float32, is_leaf=True):
+        if isinstance(data, np.ndarray):
+            self._data = data
         else:
             if dtype is None:
-                self._tensor = np.array(tensor)
+                self._data = np.array(data)
             else:
-                self._tensor = np.array(tensor, dtype=dtype)
+                self._data = np.array(data, dtype=dtype)
 
-        self.graphed = False
         self._allow_grad = allow_grad
         # tensors not created by ops are leafs. this property is immutable
         self._func_node = None
-        self._is_leaf = is_leaf and leafs_allowed()
+        self._is_leaf = isinstance(data, Number) or (is_leaf and leafs_allowed())
         # don't store gradients unless we are user-created.
+        self.graphed = False
         self.grad = (
             zeros_like(self, allow_grad=False) if allow_grad and is_leaf else None
         )
-        
+
     @property
     def func_node(self):
         return self._func_node
-    
+
     @func_node.setter
     def func_node(self, func_node):
-        assert not self.is_leaf or func_node is None, "leaf tensors cannot possess func_nodes"
+        if self.is_leaf and func_node is not None:
+            raise ValueError("leaf tensors cannot possess func_nodes")
+
         self._func_node = func_node
 
     @property
@@ -94,32 +100,36 @@ class Tensor:
 
     @allow_grad.setter
     def allow_grad(self, allow_grad):
-        assert not (
-            not allow_grad and self.graphed
-        ), "Tensors can only stop tracking gradients if they are not part of a computational graph"
+        if not allow_grad and self.graphed:
+            raise ValueError(
+                "Tensors can only stop tracking gradients if they are not part of a computational graph"
+            )
+
         if self._allow_grad == allow_grad:
             return
+
         if not self.is_leaf or not allow_grad:
             self.grad = None
         else:
             self.grad = zeros_like(self, allow_grad=False)
+
         self._allow_grad = allow_grad
 
     @property
     def t(self):
-        return self._tensor.t
+        return self._data.t
 
     @property
     def shape(self):
-        return self._tensor.shape
+        return self._data.shape
 
     @property
     def size(self):
-        return self._tensor.size
+        return self._data.size
 
     @property
     def dtype(self):
-        return self._tensor.dtype
+        return self._data.dtype
 
     def backward(self, retain_graph=False):
         if not self.allow_grad:
@@ -160,10 +170,12 @@ class Tensor:
                 tensor.func_node = None
 
     def item(self):
-        assert (
-            len(self) == 1
-        ), "only Tensors with a single element can be reduced to a Python scalar"
-        return self._tensor[0].item()
+        if self.size != 1:
+            raise ValueError(
+                "only Tensors with a single element can be reduced to a Python scalar"
+            )
+
+        return self._data.item()
 
     def clip(self, a_min=None, a_max=None):
         return clip(self, a_min=a_min, a_max=a_max)
@@ -181,15 +193,15 @@ class Tensor:
         return multiply(self, other, **kwargs)
 
     def __matmul__(self, other):
-        assert isinstance(other, Tensor), "can only matrix multiply between two Tensors"
         return matmul(self, other)
 
     def __imatmul__(self, other):
-        assert isinstance(other, Tensor), "can only matrix multiply between two Tensors"
-        assert (
-            not self.allow_grad
-        ), "in-place operations are not allowed while tracking gradients"
-        self._tensor = self._tensor @ other._tensor
+        if self.allow_grad:
+            raise ValueError(
+                "in-place operations are not allowed while tracking gradients"
+            )
+
+        self._data = self._data @ other._data
         return self
 
     def __add__(self, other):
@@ -199,13 +211,15 @@ class Tensor:
         return add(other, self)
 
     def __iadd__(self, other):
-        assert (
-            not self.allow_grad
-        ), "in-place operations are not allowed while tracking gradients"
+        if self.allow_grad:
+            raise ValueError(
+                "in-place operations are not allowed while tracking gradients"
+            )
+
         if isinstance(other, Tensor):
-            self._tensor += other._tensor
+            self._data += other._data
         else:
-            self._tensor += other
+            self._data += other
 
         return self
 
@@ -216,13 +230,15 @@ class Tensor:
         return subtract(other, self)
 
     def __isub__(self, other):
-        assert (
-            not self.allow_grad
-        ), "in-place operations are not allowed while tracking gradients"
+        if self.allow_grad:
+            raise ValueError(
+                "in-place operations are not allowed while tracking gradients"
+            )
+
         if isinstance(other, Tensor):
-            self._tensor = self._tensor - other._tensor
+            self._data = self._data - other._data
         else:
-            self._tensor = self._tensor - other
+            self._data = self._data - other
 
         return self
 
@@ -233,13 +249,15 @@ class Tensor:
         return multiply(other, self)
 
     def __imul__(self, other):
-        assert (
-            not self.allow_grad
-        ), "in-place operations are not allowed while tracking gradients"
+        if self.allow_grad:
+            raise ValueError(
+                "in-place operations are not allowed while tracking gradients"
+            )
+
         if isinstance(other, Tensor):
-            self._tensor = self._tensor * other._tensor
+            self._data = self._data * other._data
         else:
-            self._tensor = self._tensor * other
+            self._data = self._data * other
 
         return self
 
@@ -250,13 +268,15 @@ class Tensor:
         return true_divide(other, self)
 
     def __itruediv__(self, other):
-        assert (
-            not self.allow_grad
-        ), "in-place operations are not allowed while tracking gradients"
+        if self.allow_grad:
+            raise ValueError(
+                "in-place operations are not allowed while tracking gradients"
+            )
+
         if isinstance(other, Tensor):
-            self._tensor = self._tensor / other._tensor
+            self._data = self._data / other._data
         else:
-            self._tensor = self._tensor / other
+            self._data = self._data / other
 
         return self
 
@@ -267,13 +287,15 @@ class Tensor:
         return floor_divide(other, self)
 
     def __ifloordiv__(self, other):
-        assert (
-            not self.allow_grad
-        ), "in-place operations are not allowed while tracking gradients"
+        if self.allow_grad:
+            raise ValueError(
+                "in-place operations are not allowed while tracking gradients"
+            )
+
         if isinstance(other, Tensor):
-            self._tensor = self._tensor // other._tensor
+            self._data = self._data // other._data
         else:
-            self._tensor = self._tensor // other
+            self._data = self._data // other
 
         return self
 
@@ -284,36 +306,41 @@ class Tensor:
         return power(other, self)
 
     def __ipow__(self, other):
-        assert (
-            not self.allow_grad
-        ), "in-place operations are not allowed while tracking gradients"
-        self._tensor = self._tensor**other
+        if self.allow_grad:
+            raise ValueError(
+                "in-place operations are not allowed while tracking gradients"
+            )
+
+        self._data = self._data**other
 
         return self
 
     def __neg__(self):
-        ret = Tensor(-self._tensor, allow_grad=self.allow_grad, is_leaf=self.is_leaf)
+        # this should be an op actually
+        ret = Tensor(-self._data, allow_grad=self.allow_grad, is_leaf=False)
         return ret
 
     def __repr__(self):
-        return self._tensor.__repr__()
+        return self._data.__repr__()
 
     def __len__(self):
-        return self._tensor.__len__()
+        return self._data.__len__()
 
     def __getitem__(self, key):
-        return Tensor(
-            self._tensor[key], allow_grad=self.allow_grad, is_leaf=self.is_leaf
-        )
+        # this should be an op actually
+        return Tensor(self._data[key], allow_grad=self.allow_grad, is_leaf=False)
 
     def __setitem__(self, key, val):
-        assert (
-            not self.allow_grad
-        ), "in-place operations are not allowed while tracking gradients"
-        assert (
-            not self.graphed
-        ), "mutating tensors is not allowed if the tensor is on a computational graph"
-        self._tensor[key] = val
+        if self.allow_grad:
+            raise ValueError(
+                "in-place operations are not allowed while tracking gradients"
+            )
+        if self.graphed:
+            raise ValueError(
+                "mutating tensors is not allowed if the tensor is on a computational graph"
+            )
+
+        self._data[key] = val
 
     def __gt__(self, value):
         return greater(self, value)
@@ -348,19 +375,19 @@ class Tensor:
 
 def ones_like(a: Tensor, allow_grad=False, **kwargs):
     return Tensor(
-        np.ones_like(a._tensor, dtype=a.dtype, **kwargs), allow_grad=allow_grad
+        np.ones_like(a._data, dtype=a.dtype, **kwargs), allow_grad=allow_grad
     )
 
 
 def zeros_like(a: Tensor, allow_grad=False, **kwargs):
     return Tensor(
-        np.zeros_like(a._tensor, dtype=a.dtype, **kwargs), allow_grad=allow_grad
+        np.zeros_like(a._data, dtype=a.dtype, **kwargs), allow_grad=allow_grad
     )
 
 
 def full_like(a: Tensor, x, allow_grad=False, **kwargs):
     return Tensor(
-        np.full_like(a._tensor, x, dtype=a.dtype, **kwargs), allow_grad=allow_grad
+        np.full_like(a._data, x, dtype=a.dtype, **kwargs), allow_grad=allow_grad
     )
 
 
@@ -370,31 +397,38 @@ def _generate_unary_op_func(
     differentiable=True,
     backend_op=False,
     propagate_kwargs=False,
+    op_name=None,
 ):
     if not differentiable:
-        grad_a = lambda a, b, grad: 0
+        grad_a = lambda a, b, grad: zeros_like(grad)
 
     def minidiff_func(a: Tensor, **kwargs):
-        assert isinstance(a, Tensor)
+        if not isinstance(a, Tensor):
+            raise ValueError("This function only supports minidiff Tensors")
 
-        can_allow_grad = grad_allowed() and a.allow_grad
+        with no_leafs():
+            can_allow_grad = grad_allowed() and a.allow_grad
 
-        if backend_op:
-            output = Tensor(
-                forward_func(a._tensor, **kwargs),
-                allow_grad=a.allow_grad,
-                is_leaf=False,
-            )
-        else:
-            with no_grad(), no_leafs():
-                output = forward_func(a, **kwargs)
+            if backend_op:
+                output = Tensor(
+                    forward_func(a._data, **kwargs),
+                    allow_grad=a.allow_grad,
+                    is_leaf=False,
+                )
+            else:
+                with no_grad(), no_leafs():
+                    output = forward_func(a, **kwargs)
 
-        if can_allow_grad:
-            func_node = topology.UnaryNode(a, grad_a)
-            if propagate_kwargs:
-                func_node.kwargs = kwargs
-            output.func_node = func_node
-            output.graphed = True
+            if can_allow_grad:
+                func_node = topology.UnaryNode(a, grad_a)
+                func_node.op_name = (
+                    forward_func.__name__ if op_name is None else op_name
+                )
+                if propagate_kwargs:
+                    func_node.kwargs = kwargs
+
+                output.func_node = func_node
+                output.graphed = True
 
         return output
 
@@ -409,6 +443,7 @@ def _generate_binary_op_func(
     tensor_only=False,
     backend_op=False,
     propagate_kwargs=False,
+    op_name=None,
 ):
     # if the function is not differentiable, we still want to propagate the gradient to avoid breaking the
     # graph, but it is smarter to just zero out the gradients.
@@ -416,42 +451,52 @@ def _generate_binary_op_func(
         grad_a = lambda a, b, grad: zeros_like(grad)
         grad_b = lambda a, b, grad: zeros_like(grad)
 
+    # maybe I should split this into multiple functions without if statements since those are probably clunky and generate overhead
     def minidiff_func(a, b, **kwargs):
+        # no leafs can ever be created by an op
         a_is_tensor = isinstance(a, Tensor)
         b_is_tensor = isinstance(b, Tensor)
         if tensor_only:
-            assert a_is_tensor, "this function only supports minidiff Tensors"
-            assert b_is_tensor, "this function only supports minidiff Tensors"
+            if not (a_is_tensor and b_is_tensor):
+                raise ValueError("This function only supports minidiff Tensors")
         else:
-            assert (
-                a_is_tensor or b_is_tensor
-            ), "minidiff functions only work when at least one argument is a minidiff Tensor"
+            if not (a_is_tensor or b_is_tensor):
+                raise ValueError(
+                    "minidiff functions only work when at least one argument is a minidiff Tensor"
+                )
 
-        # allow gradient if at least one of input allows a gradient
-        allow_grad = (a_is_tensor and a.allow_grad) or (b_is_tensor and b.allow_grad)
-        can_track_grad = grad_allowed() and allow_grad
+        with no_leafs():
 
-        if backend_op:
-            first_param = a._tensor if a_is_tensor else a
-            second_param = b._tensor if b_is_tensor else b
-            output = Tensor(
-                forward_func(first_param, second_param, **kwargs),
-                allow_grad=allow_grad,
-                is_leaf=False,
-            )
-        else:
-            with no_grad(), no_leafs():
-                output = forward_func(a, b, **kwargs)
+            if not a_is_tensor:
+                a = Tensor(a)
+            if not b_is_tensor:
+                b = Tensor(b)
 
-        if can_track_grad:
-            first_grad = None if a_is_tensor and not a.allow_grad else grad_a
-            second_grad = None if b_is_tensor and not b.allow_grad else grad_b
-            func_node = topology.BinaryNode(a, b, first_grad, second_grad)
-            if propagate_kwargs:
-                func_node.kwargs = kwargs
+            # allow gradient if at least one of the input tensors allows a gradient
+            allow_grad = a.allow_grad or b.allow_grad
+            can_track_grad = grad_allowed() and allow_grad
 
-            output.func_node = func_node
-            output.graphed = True
+            if backend_op:
+                output = Tensor(
+                    forward_func(a._data, b._data, **kwargs), allow_grad=allow_grad
+                )
+            else:
+                with no_grad():
+                    output = forward_func(a, b, **kwargs)
+
+            if can_track_grad:
+                first_grad = grad_a if a.allow_grad else None
+                second_grad = grad_b if b.allow_grad else None
+
+                func_node = topology.BinaryNode(a, b, first_grad, second_grad)
+                func_node.op_name = (
+                    forward_func.__name__ if op_name is None else op_name
+                )
+                if propagate_kwargs:
+                    func_node.kwargs = kwargs
+
+                output.func_node = func_node
+                output.graphed = True
 
         return output
 
@@ -461,7 +506,7 @@ def _generate_binary_op_func(
 clip = _generate_unary_op_func(
     forward_func=np.clip,
     grad_a=lambda a, grad, a_min=None, a_max=None: grad
-    * Tensor(np.asarray(a_min < a._tensor < a_max)),
+    * Tensor(np.asarray(a_min < a._data < a_max)),
     propagate_kwargs=True,
     backend_op=True,
 )
@@ -508,7 +553,7 @@ floor_divide = _generate_binary_op_func(
 )
 power = _generate_binary_op_func(
     forward_func=np.power,
-    grad_a=lambda a, b, grad: grad * b * (a ** (b - 1)),
+    grad_a=lambda a, b, grad: grad * b * (a**(b - 1)),
     grad_b=lambda a, b, grad: grad * np.log(a) * a**b,
     backend_op=True,
 )
@@ -527,7 +572,7 @@ sin = _generate_unary_op_func(
 )
 tan = _generate_unary_op_func(
     forward_func=np.tan,
-    grad_a=lambda a, grad: grad * (1 / cos(a) ** 2),
+    grad_a=lambda a, grad: grad * (1 / cos(a)**2),
     backend_op=True,
 )
 cosh = _generate_unary_op_func(
@@ -538,7 +583,7 @@ sinh = _generate_unary_op_func(
 )
 tanh = _generate_unary_op_func(
     forward_func=np.sinh,
-    grad_a=lambda a, grad: grad * (1 / cosh(a) ** 2),
+    grad_a=lambda a, grad: grad * (1 / cosh(a)**2),
     backend_op=True,
 )
 exp = _generate_unary_op_func(

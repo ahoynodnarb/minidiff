@@ -8,16 +8,20 @@ except ImportError:
 
 class FuncNode:
     def __init__(self, *inputs):
-        self.inputs = inputs
+        if not all([isinstance(x, md.Tensor) for x in inputs]):
+            raise ValueError("FuncNodes can only track tensors")
+
         self.input_tensors = [x for x in inputs if isinstance(x, md.Tensor)]
         self.input_nodes = [x.func_node for x in self.input_tensors]
+
         self.kwargs = {}
+        self.op_name = None
 
     def update_grads(self, grad):
         raise NotImplementedError
 
     def __repr__(self):
-        return f"{self.__class__.__name__} ({', '.join([str(x) for x in self.inputs])})"
+        return f"{self.__class__.__name__} ({', '.join([str(x) for x in self.input_tensors])})"
 
 
 class UnaryNode(FuncNode):
@@ -27,9 +31,9 @@ class UnaryNode(FuncNode):
         self.grad_a = grad_a
 
     def update_grads(self, grad):
-        a = self.inputs[0]
+        a = self.input_tensors[0]
         with md.no_grad():
-            if isinstance(a, md.Tensor) and self.grad_a is not None and a.allow_grad:
+            if a.allow_grad and self.grad_a is not None:
                 a.grad += self.grad_a(a, grad, **self.kwargs)
 
 
@@ -44,10 +48,10 @@ class BinaryNode(FuncNode):
         self.grad_b = grad_b
 
     def update_grads(self, grad):
-        a = self.inputs[0]
-        b = self.inputs[1]
+        a = self.input_tensors[0]
+        b = self.input_tensors[1]
         with md.no_grad():
-            if isinstance(a, md.Tensor) and self.grad_a is not None and a.allow_grad:
+            if a.allow_grad and self.grad_a:
                 a.grad += self.grad_a(a, b, grad, **self.kwargs)
-            if isinstance(b, md.Tensor) and self.grad_b is not None and b.allow_grad:
+            if b.allow_grad and self.grad_b:
                 b.grad += self.grad_b(a, b, grad, **self.kwargs)
