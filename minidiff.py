@@ -65,15 +65,24 @@ class Tensor:
             else:
                 self._tensor = np.array(tensor, dtype=dtype)
 
-        self.func_node = None
         self.graphed = False
         self._allow_grad = allow_grad
         # tensors not created by ops are leafs. this property is immutable
+        self._func_node = None
         self._is_leaf = is_leaf and leafs_allowed()
         # don't store gradients unless we are user-created.
         self.grad = (
             zeros_like(self, allow_grad=False) if allow_grad and is_leaf else None
         )
+        
+    @property
+    def func_node(self):
+        return self._func_node
+    
+    @func_node.setter
+    def func_node(self, func_node):
+        assert not self.is_leaf or func_node is None, "leaf tensors cannot possess func_nodes"
+        self._func_node = func_node
 
     @property
     def is_leaf(self):
@@ -503,12 +512,7 @@ power = _generate_binary_op_func(
     grad_b=lambda a, b, grad: grad * np.log(a) * a**b,
     backend_op=True,
 )
-
-
-def sqrt(x, **kwargs):
-    return power(x, 0.5, **kwargs)
-
-
+sqrt = lambda a, b, **kwargs: power(a, b, **kwargs)
 floor = _generate_unary_op_func(
     forward_func=np.floor, differentiable=False, backend_op=True
 )
