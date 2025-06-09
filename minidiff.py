@@ -1,5 +1,3 @@
-from numbers import Number
-
 try:
     import cupy as np  # type: ignore
 
@@ -8,8 +6,6 @@ except ImportError:
     import numpy as np
 
     BACKEND = "numpy"
-
-DEBUG = True
 
 import topology
 import contextvars
