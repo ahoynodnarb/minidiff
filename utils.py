@@ -95,11 +95,11 @@ def draw_tensor_op_graph(
     return graph
 
 
-def calculate_finite_differences(*input_tensors, func, h=1e-6):
+def calculate_finite_differences(*input_tensors, func, h=1e-8):
     manual_gradients = [0] * len(input_tensors)
     with md.no_grad():
         for i, input_tensor in enumerate(input_tensors):
-            # this just computes the partial derivatives from first principles
+            # this just computes the gradients from first principles
             left = input_tensors[:i]
             right = input_tensors[i + 1 :]
             first_term = func(*left, input_tensor + h, *right)
@@ -111,24 +111,9 @@ def calculate_finite_differences(*input_tensors, func, h=1e-6):
     return manual_gradients
 
 
-if __name__ == "__main__":
-
-    func = lambda v, w, x, y, z: v * w - md.cos(3 * x**z + y) * v**2
-    input_tensors = [
-        md.Tensor(np.random.uniform(low=-4, high=4, size=(2, 1, 2)), allow_grad=True)
-        for _ in range(5)
-    ]
+def compute_grads(*input_tensors, func):
     manual_gradients = calculate_finite_differences(*input_tensors, func=func)
-    output = func(*input_tensors)
-    output.backward(retain_graph=True)
-    print("automatic")
-    print([t.grad for t in input_tensors])
-    print("manual")
-    print(manual_gradients)
-
-    graph = draw_tensor_op_graph(
-        output,
-        graph_attr={"splines": "ortho"},
-        node_attr={"shape": "box"},
-    )
-    graph.render("graph", view=True)
+    computed = func(*input_tensors)
+    computed.backward()
+    automatic_gradients = [t.grad for t in input_tensors]
+    return manual_gradients, automatic_gradients

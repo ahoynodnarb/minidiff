@@ -1,3 +1,5 @@
+from builtins import all as py_all, any as py_any
+
 try:
     import cupy as np  # type: ignore
 
@@ -163,9 +165,9 @@ class Tensor:
 
     def wipe(self):
         self.graphed = False
-        if func_node := self.func_node is None:
+        if (func_node := self.func_node) is None:
             return
-        for input_tensor in func_node:
+        for input_tensor in func_node.input_tensors:
             input_tensor.graphed = False
 
     def item(self):
@@ -336,8 +338,10 @@ class Tensor:
             raise ValueError(
                 "mutating tensors is not allowed if the tensor is on a computational graph"
             )
-
-        self._data[key] = val
+        if isinstance(val, Tensor):
+            self._data[key] = val._data
+        else:
+            self._data[key] = val
 
     def __gt__(self, value):
         return greater(self, value)
@@ -368,6 +372,19 @@ class Tensor:
 
     def __xor__(self, value):
         return logical_xor(self, value)
+
+    @property
+    def __array_interface__(self):
+        return self._data.__array_interface__
+
+    def __array__(self, dtype=None, copy=None):
+        if dtype is not None and dtype != self.dtype:
+            if copy == False:
+                raise ValueError("attempted cast, but copies are not permitted")
+            return self._data.astype(dtype=dtype)
+        if copy == True:
+            return self._data.copy()
+        return self._data
 
 
 def ones_like(a: Tensor, allow_grad=False, **kwargs):
@@ -406,42 +423,34 @@ def generate_arbitrary_op_func(
         # no leafs can ever be created by an op
         inputs_are_tensors = [isinstance(x, Tensor) for x in inputs]
 
-        if not tensor_only and not any(inputs_are_tensors):
+        if not tensor_only and not py_any(inputs_are_tensors):
             raise ValueError(
                 "minidiff functions only work when at least one argument is a minidiff Tensor"
             )
 
-        if tensor_only and not all(inputs_are_tensors):
+        if tensor_only and not py_all(inputs_are_tensors):
             raise ValueError("This function only supports minidiff Tensors")
 
         as_tensors = [Tensor(x) if not isinstance(x, Tensor) else x for x in inputs]
 
         # allow gradient if at least one of the input tensors allows a gradient
         allowed_grads = [x.allow_grad for x in as_tensors]
-        allow_grad = any(allowed_grads)
-        can_track_grad = grad_allowed_() and allow_grad
+        allow_grad = py_any(allowed_grads)
+
+        forward_args = [x._data for x in as_tensors] if is_backend_op else as_tensors
+
+        if casting is None:
+            output = forward_func(*forward_args, **kwargs)
+        else:
+            output = forward_func(*forward_args, casting=casting, **kwargs)
 
         if is_backend_op:
-            if casting is None:
-                output = Tensor(
-                    forward_func(*[x._data for x in as_tensors], **kwargs),
-                    allow_grad=allow_grad,
-                )
-            else:
-                output = Tensor(
-                    forward_func(
-                        *[x._data for x in as_tensors], casting=casting, **kwargs
-                    ),
-                    allow_grad=allow_grad,
-                )
-        else:
-            if casting is None:
-                output = forward_func(*as_tensors, **kwargs)
-            else:
-                output = forward_func(*as_tensors, casting=casting, **kwargs)
-            output.allow_grad = allow_grad
+            output = Tensor(output, allow_grad=allow_grad)
 
-        if can_track_grad:
+        # just in case
+        output.allow_grad = allow_grad
+
+        if grad_allowed_() and allow_grad:
             filtered_grad_funcs = [
                 grad_func if grad_allowed else None
                 for grad_func, grad_allowed in zip(grad_funcs, allowed_grads)
@@ -635,4 +644,13 @@ logical_not = generate_binary_op_func(
 )
 logical_xor = generate_binary_op_func(
     forward_func=np.logical_xor, is_differentiable=False, is_backend_op=True
+)
+absolute = generate_unary_op_func(
+    forward_func=np.absolute, grad_a=lambda a, grad: grad * (a != 0), is_backend_op=True
+)
+all = generate_unary_op_func(
+    forward_func=np.all, is_differentiable=False, is_backend_op=True
+)
+any = generate_unary_op_func(
+    forward_func=np.any, is_differentiable=False, is_backend_op=True
 )
