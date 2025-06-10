@@ -4,7 +4,6 @@ except ImportError:
     import numpy as np
 
 
-from topology import FuncNode
 import graphviz
 import minidiff as md
 

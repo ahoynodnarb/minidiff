@@ -2,14 +2,10 @@ from builtins import all as py_all, any as py_any
 
 try:
     import cupy as np  # type: ignore
-
-    BACKEND = "cupy"
 except ImportError:
     import numpy as np
 
-    BACKEND = "numpy"
-
-import topology
+from .topology import FuncNode
 import contextvars
 
 _allow_grad = contextvars.ContextVar("allow_grad", default=True)
@@ -456,7 +452,7 @@ def generate_arbitrary_op_func(
                 for grad_func, grad_allowed in zip(grad_funcs, allowed_grads)
             ]
 
-            func_node = topology.FuncNode(
+            func_node = FuncNode(
                 output_tensor=output,
                 input_tensors=as_tensors,
                 grad_functions=filtered_grad_funcs,

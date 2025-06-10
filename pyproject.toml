@@ -1,0 +1,11 @@
+[project]
+name = "minidiff"
+version = "0.0.1"
+dependencies = [
+    "numpy",
+]
+
+[project.optional-dependencies]
+GPU = [
+    "cupy",
+]
