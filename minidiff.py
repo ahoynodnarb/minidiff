@@ -118,13 +118,7 @@ class Tensor:
     def dtype(self):
         return self._data.dtype
 
-    def backward(self, retain_graph=False, retain_grads=False):
-        if not self.allow_grad:
-            return
-
-        if self.is_leaf:
-            return
-
+    def toposort(self):
         seen = set()
         traversal_path = []
 
@@ -143,6 +137,17 @@ class Tensor:
 
         dfs(self)
 
+        return traversal_path
+
+    def backward(self, retain_graph=False, retain_grads=False):
+        if not self.allow_grad:
+            return
+
+        if self.is_leaf:
+            return
+
+        traversal_path = self.toposort()
+
         self.grad = ones_like(self, allow_grad=False)
 
         for tensor in reversed(traversal_path):
@@ -154,7 +159,14 @@ class Tensor:
             if not tensor.is_leaf and not retain_grads:
                 tensor.grad = None
             if not retain_graph:
-                tensor.func_node = None
+                self.wipe()
+
+    def wipe(self):
+        self.graphed = False
+        if func_node := self.func_node is None:
+            return
+        for input_tensor in func_node:
+            input_tensor.graphed = False
 
     def item(self):
         if self.size != 1:
@@ -550,7 +562,7 @@ floor_divide = generate_binary_op_func(
 power = generate_binary_op_func(
     forward_func=np.power,
     grad_a=lambda a, b, grad: grad * b * (a ** (b - 1)),
-    grad_b=lambda a, b, grad: grad * np.log(a) * a**b,
+    grad_b=lambda a, b, grad: grad * log(a) * a**b,
     is_backend_op=True,
 )
 sqrt = lambda a, b, **kwargs: power(a, b, **kwargs)

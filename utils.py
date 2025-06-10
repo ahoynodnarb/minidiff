@@ -1,3 +1,9 @@
+try:
+    import cupy as np  # type: ignore
+except ImportError:
+    import numpy as np
+
+
 from topology import FuncNode
 import graphviz
 import minidiff as md
@@ -89,31 +95,39 @@ def draw_tensor_op_graph(
     return graph
 
 
-if __name__ == "__main__":
-    a = md.Tensor([[0, 2, -2, 1], [-1, -1, -2, -2]], allow_grad=True)
-    b = md.Tensor([[1, 2, 3, 4], [4, 3, 2, 1]], allow_grad=True)
-    c = md.Tensor([[0, 1, -1, 2], [1, 0, 1, 0]], allow_grad=True)
-    d = b + c - a**2
-    e = md.sin(d * c)
-    f = 2 * e - b * d
+def calculate_finite_differences(*input_tensors, func, h=1e-6):
+    manual_gradients = [0] * len(input_tensors)
+    with md.no_grad():
+        for i, input_tensor in enumerate(input_tensors):
+            # this just computes the partial derivatives from first principles
+            left = input_tensors[:i]
+            right = input_tensors[i + 1 :]
+            first_term = func(*left, input_tensor + h, *right)
+            second_term = func(*left, input_tensor, *right)
 
-    # f = 2 * e - b * d
-    # f = 2 * sin(d * c) - b * (b + c - a**2)
-    # f = 2 * sin((b + c - a**2) * c) - b**2 - b * c + b * a**2
-    # f = 2 * sin(b * c + c**2 - c * a**2) - b**2 - b * c + b * a**2
+            calculated_grad = (first_term - second_term) / h
+            manual_gradients[i] = calculated_grad
+
+    return manual_gradients
+
 
 if __name__ == "__main__":
-    tensor_names = {
-        id(a): "a",
-        id(b): "b",
-        id(c): "c",
-        id(d): "d",
-        id(e): "e",
-        id(f): "f",
-    }
+
+    func = lambda v, w, x, y, z: v * w - md.cos(3 * x**z + y) * v**2
+    input_tensors = [
+        md.Tensor(np.random.uniform(low=-4, high=4, size=(2, 1, 2)), allow_grad=True)
+        for _ in range(5)
+    ]
+    manual_gradients = calculate_finite_differences(*input_tensors, func=func)
+    output = func(*input_tensors)
+    output.backward(retain_graph=True)
+    print("automatic")
+    print([t.grad for t in input_tensors])
+    print("manual")
+    print(manual_gradients)
+
     graph = draw_tensor_op_graph(
-        f,
-        tensor_names=tensor_names,
+        output,
         graph_attr={"splines": "ortho"},
         node_attr={"shape": "box"},
     )
