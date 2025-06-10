@@ -103,8 +103,8 @@ class Tensor:
         self._allow_grad = allow_grad
 
     @property
-    def t(self):
-        return self._data.t
+    def T(self):
+        return self._data.T
 
     @property
     def shape(self):
