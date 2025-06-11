@@ -169,9 +169,6 @@ class Tensor:
 
         return self._data.item()
 
-    # def flatten(self, **kwargs):
-    #     return Tensor(self._data.flatten(**kwargs), allow_grad=self.allow_grad)
-
     def copy(self, **kwargs):
         return md.copy(self, **kwargs)
 
