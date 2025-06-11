@@ -8,8 +8,7 @@ except ImportError:
 import minidiff as md
 from .topology import FuncNode
 
-
-class StatefulOp:
+class Op:
     def create_forward(self):
         raise NotImplementedError
 
@@ -17,9 +16,8 @@ class StatefulOp:
         raise NotImplementedError
 
 
-def generate_arbitrary_op_func(
-    forward_func,
-    grad_funcs,
+def generate_op_func(
+    op_type,
     is_differentiable=True,
     tensor_only=False,
     is_backend_op=False,
@@ -27,6 +25,9 @@ def generate_arbitrary_op_func(
     op_name=None,
     casting="safe",
 ):
+    instance = op_type()
+    forward_func = instance.create_forward()
+    grad_funcs = instance.create_grads()
     # if the function is not differentiable, we still want to propagate the gradient to avoid breaking the
     # graph, but it is smarter to just zero out the gradients.
     if not is_differentiable:
@@ -93,19 +94,45 @@ def generate_arbitrary_op_func(
 
     return minidiff_func
 
+def generate_stateless_op_func(
+    forward_func,
+    grad_funcs,
+    is_differentiable=True,
+    tensor_only=False,
+    is_backend_op=False,
+    propagate_kwargs=False,
+    op_name=None,
+    casting="safe",
+):
+    class StatelessOp(Op):
+        def create_forward(self):
+            return forward_func
+        def create_grads(self):
+            return grad_funcs
+        
+    return generate_op_func(
+        op_type=StatelessOp,
+        is_differentiable=is_differentiable,
+        tensor_only=tensor_only,
+        is_backend_op=is_backend_op,
+        propagate_kwargs=propagate_kwargs,
+        op_name=op_name,
+        casting=casting
+    )
+
 
 def generate_unary_op_func(
     forward_func,
-    grad_a=None,
+    grad=None,
     is_differentiable=True,
     is_backend_op=False,
     propagate_kwargs=False,
     op_name=None,
     casting="safe",
 ):
-    return generate_arbitrary_op_func(
+    return generate_stateless_op_func(
         forward_func=forward_func,
-        grad_funcs=[grad_a],
+        grad_funcs=[grad],
         is_differentiable=is_differentiable,
         tensor_only=True,
         is_backend_op=is_backend_op,
@@ -126,7 +153,7 @@ def generate_binary_op_func(
     op_name=None,
     casting="safe",
 ):
-    return generate_arbitrary_op_func(
+    return generate_stateless_op_func(
         forward_func=forward_func,
         grad_funcs=[grad_a, grad_b],
         is_differentiable=is_differentiable,
@@ -150,7 +177,7 @@ def generate_ternary_op_func(
     op_name=None,
     casting="safe",
 ):
-    return generate_arbitrary_op_func(
+    return generate_stateless_op_func(
         forward_func=forward_func,
         grad_funcs=[grad_a, grad_b, grad_c],
         is_differentiable=is_differentiable,
@@ -158,31 +185,6 @@ def generate_ternary_op_func(
         is_backend_op=is_backend_op,
         propagate_kwargs=propagate_kwargs,
         op_name=op_name,
-        casting=casting,
-    )
-
-
-def generate_stateful_op_func(
-    stateful_op,
-    is_differentiable=True,
-    tensor_only=False,
-    is_backend_op=False,
-    propagate_kwargs=False,
-    op_name=None,
-    casting="safe",
-):
-    instance = stateful_op()
-    forward_func = instance.create_forward()
-    grad_funcs = instance.create_grads()
-    custom_op_name = f"{stateful_op.__name__}"
-    return generate_arbitrary_op_func(
-        forward_func=forward_func,
-        grad_funcs=grad_funcs,
-        is_differentiable=is_differentiable,
-        tensor_only=tensor_only,
-        is_backend_op=is_backend_op,
-        propagate_kwargs=propagate_kwargs,
-        op_name=custom_op_name if op_name is None else op_name,
         casting=casting,
     )
 
@@ -198,7 +200,7 @@ s_ = generate_binary_op_func(
 )
 clip = generate_unary_op_func(
     forward_func=np.clip,
-    grad_a=lambda a, grad, a_min=None, a_max=None: grad
+    grad=lambda a, grad, a_min=None, a_max=None: grad
     * logical_and(
         a > float("-inf") if a_min is None else a_min,
         a < float("inf") if a_max is None else a_max,
@@ -262,39 +264,39 @@ ceil = generate_unary_op_func(
     forward_func=np.ceil, is_differentiable=False, is_backend_op=True
 )
 cos = generate_unary_op_func(
-    forward_func=np.cos, grad_a=lambda a, grad: grad * -sin(a), is_backend_op=True
+    forward_func=np.cos, grad=lambda a, grad: grad * -sin(a), is_backend_op=True
 )
 sin = generate_unary_op_func(
-    forward_func=np.sin, grad_a=lambda a, grad: grad * cos(a), is_backend_op=True
+    forward_func=np.sin, grad=lambda a, grad: grad * cos(a), is_backend_op=True
 )
 tan = generate_unary_op_func(
     forward_func=np.tan,
-    grad_a=lambda a, grad: grad * (1 / cos(a) ** 2),
+    grad=lambda a, grad: grad * (1 / cos(a) ** 2),
     is_backend_op=True,
 )
 cosh = generate_unary_op_func(
-    forward_func=np.cosh, grad_a=lambda a, grad: grad * sinh(a), is_backend_op=True
+    forward_func=np.cosh, grad=lambda a, grad: grad * sinh(a), is_backend_op=True
 )
 sinh = generate_unary_op_func(
-    forward_func=np.sinh, grad_a=lambda a, grad: grad * cosh(a), is_backend_op=True
+    forward_func=np.sinh, grad=lambda a, grad: grad * cosh(a), is_backend_op=True
 )
 tanh = generate_unary_op_func(
     forward_func=np.sinh,
-    grad_a=lambda a, grad: grad * (1 / cosh(a) ** 2),
+    grad=lambda a, grad: grad * (1 / cosh(a) ** 2),
     is_backend_op=True,
 )
 exp = generate_unary_op_func(
-    forward_func=np.exp, grad_a=lambda a, grad: grad * exp(a), is_backend_op=True
+    forward_func=np.exp, grad=lambda a, grad: grad * exp(a), is_backend_op=True
 )
 log = generate_unary_op_func(
-    forward_func=np.log, grad_a=lambda a, grad: grad / a, is_backend_op=True
+    forward_func=np.log, grad=lambda a, grad: grad / a, is_backend_op=True
 )
 sum = generate_unary_op_func(
-    forward_func=np.sum, grad_a=lambda a, grad: grad, is_backend_op=True, casting=None
+    forward_func=np.sum, grad=lambda a, grad: grad, is_backend_op=True, casting=None
 )
 mean = generate_unary_op_func(
     forward_func=np.mean,
-    grad_a=lambda a, grad: grad / a.size,
+    grad=lambda a, grad: grad / a.size,
     is_backend_op=True,
     casting=None,
 )
@@ -335,7 +337,7 @@ logical_xor = generate_binary_op_func(
     forward_func=np.logical_xor, is_differentiable=False, is_backend_op=True
 )
 absolute = generate_unary_op_func(
-    forward_func=np.absolute, grad_a=lambda a, grad: grad * (a != 0), is_backend_op=True
+    forward_func=np.absolute, grad=lambda a, grad: grad * (a != 0), is_backend_op=True
 )
 all = generate_unary_op_func(
     forward_func=np.all, is_differentiable=False, is_backend_op=True, casting=None
