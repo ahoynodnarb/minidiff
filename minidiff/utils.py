@@ -31,7 +31,7 @@ def draw_tensor_op_graph(
             # this is just a scalar
             tensor_name = str(tensor.item())
             all_tensor_names[tensor_id] = tensor_name
-        elif not insert_intermediates and not tensor.is_leaf and names_provided:
+        elif not insert_intermediates and not tensor.is_graph_source and names_provided:
             tensor_name = find_nested_tensor_name(tensor)
             all_tensor_names[tensor_id] = tensor_name
         else:
@@ -94,18 +94,33 @@ def draw_tensor_op_graph(
     return graph
 
 
-def calculate_finite_differences(*input_tensors, func, h=1e-8):
-    manual_gradients = [0] * len(input_tensors)
+def calculate_finite_differences(*input_tensors, func, h=1e-5):
+    manual_gradients = []
     with md.no_grad():
         for i, input_tensor in enumerate(input_tensors):
             # this just computes the gradients from first principles
             left = input_tensors[:i]
             right = input_tensors[i + 1 :]
-            first_term = func(*left, input_tensor + h, *right)
-            second_term = func(*left, input_tensor, *right)
+            flattened_input_tensor = input_tensor.reshape(-1)
+            flattened_grad = md.zeros_like(flattened_input_tensor)
+            for x in range(input_tensor.size):
+                shifted_left = flattened_input_tensor.copy()
+                shifted_left.allow_grad = False
+                shifted_left[x] += h
+                shifted_left = shifted_left.reshape(input_tensor.shape)
 
-            calculated_grad = (first_term - second_term) / h
-            manual_gradients[i] = calculated_grad
+                shifted_right = flattened_input_tensor.copy()
+                shifted_right.allow_grad = False
+                shifted_right[x] -= h
+                shifted_right = shifted_right.reshape(input_tensor.shape)
+
+                first_term = func(*left, shifted_left, *right)
+                second_term = func(*left, shifted_right, *right)
+                calculated_grad = (first_term - second_term) / (2 * h)
+
+                flattened_grad[x] = calculated_grad
+
+            manual_gradients.append(flattened_grad.reshape(input_tensor.shape))
 
     return manual_gradients
 

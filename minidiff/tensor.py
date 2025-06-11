@@ -1,11 +1,9 @@
-from builtins import all as py_all, any as py_any
-
 try:
     import cupy as np  # type: ignore
 except ImportError:
     import numpy as np
 
-from .topology import FuncNode
+import minidiff as md
 import contextvars
 
 _allow_grad = contextvars.ContextVar("allow_grad", default=True)
@@ -38,12 +36,9 @@ def grad_allowed_():
 class Tensor:
     def __init__(self, data, allow_grad=False, dtype=None, func_node=None):
         if isinstance(data, np.ndarray):
-            self._data = data
+            self._data = data.astype(dtype)
         else:
-            if dtype is None:
-                self._data = np.array(data)
-            else:
-                self._data = np.array(data, dtype=dtype)
+            self._data = np.array(data, dtype=dtype)
 
         self._allow_grad = allow_grad
         # tensors not created by ops are leafs. this property is immutable
@@ -174,23 +169,29 @@ class Tensor:
 
         return self._data.item()
 
+    # def flatten(self, **kwargs):
+    #     return Tensor(self._data.flatten(**kwargs), allow_grad=self.allow_grad)
+
+    def copy(self, **kwargs):
+        return md.copy(self, **kwargs)
+
     def clip(self, a_min=None, a_max=None):
-        return clip(self, a_min=a_min, a_max=a_max)
+        return md.clip(self, a_min=a_min, a_max=a_max)
 
     def reshape(self, shape, **kwargs):
-        return reshape(self, shape, **kwargs)
+        return md.reshape(self, shape, **kwargs)
 
     def dot(self, other, **kwargs):
-        return matmul(self, other, **kwargs)
+        return md.matmul(self, other, **kwargs)
 
     def add(self, other, **kwargs):
-        return add(self, other, **kwargs)
+        return md.add(self, other, **kwargs)
 
     def multiply(self, other, **kwargs):
-        return multiply(self, other, **kwargs)
+        return md.multiply(self, other, **kwargs)
 
     def __matmul__(self, other):
-        return matmul(self, other)
+        return md.matmul(self, other)
 
     def __imatmul__(self, other):
         if self.allow_grad:
@@ -202,10 +203,10 @@ class Tensor:
         return self
 
     def __add__(self, other):
-        return add(self, other)
+        return md.add(self, other)
 
     def __radd__(self, other):
-        return add(other, self)
+        return md.add(other, self)
 
     def __iadd__(self, other):
         if self.allow_grad:
@@ -221,10 +222,10 @@ class Tensor:
         return self
 
     def __sub__(self, other):
-        return subtract(self, other)
+        return md.subtract(self, other)
 
     def __rsub__(self, other):
-        return subtract(other, self)
+        return md.subtract(other, self)
 
     def __isub__(self, other):
         if self.allow_grad:
@@ -240,10 +241,10 @@ class Tensor:
         return self
 
     def __mul__(self, other):
-        return multiply(self, other)
+        return md.multiply(self, other)
 
     def __rmul__(self, other):
-        return multiply(other, self)
+        return md.multiply(other, self)
 
     def __imul__(self, other):
         if self.allow_grad:
@@ -259,10 +260,10 @@ class Tensor:
         return self
 
     def __truediv__(self, other):
-        return true_divide(self, other)
+        return md.true_divide(self, other)
 
     def __rtruediv__(self, other):
-        return true_divide(other, self)
+        return md.true_divide(other, self)
 
     def __itruediv__(self, other):
         if self.allow_grad:
@@ -271,17 +272,17 @@ class Tensor:
             )
 
         if isinstance(other, Tensor):
-            self._data = self._data / other._data
+            self._data = np.true_divide(self._data, other._data, casting="safe")
         else:
-            self._data = self._data / other
+            self._data = np.true_divide(self._data, other, casting="safe")
 
         return self
 
     def __floordiv__(self, other):
-        return floor_divide(self, other)
+        return md.floor_divide(self, other)
 
     def __rfloordiv__(self, other):
-        return floor_divide(other, self)
+        return md.floor_divide(other, self)
 
     def __ifloordiv__(self, other):
         if self.allow_grad:
@@ -290,17 +291,17 @@ class Tensor:
             )
 
         if isinstance(other, Tensor):
-            self._data = self._data // other._data
+            self._data = np.floor_divide(self._data, other._data, casting="safe")
         else:
-            self._data = self._data // other
+            self._data = np.floor_divide(self._data, other, casting="safe")
 
         return self
 
     def __pow__(self, other):
-        return power(self, other)
+        return md.power(self, other)
 
     def __rpow__(self, other):
-        return power(other, self)
+        return md.power(other, self)
 
     def __ipow__(self, other):
         if self.allow_grad:
@@ -308,7 +309,10 @@ class Tensor:
                 "in-place operations are not allowed while tracking gradients"
             )
 
-        self._data = self._data**other
+        if isinstance(other, Tensor):
+            self._data = np.power(self._data, other._data, casting="safe")
+        else:
+            self._data = np.power(self._data, other, casting="safe")
 
         return self
 
@@ -323,7 +327,7 @@ class Tensor:
 
     def __getitem__(self, key):
         # this should be an op actually
-        return s_(self, key)
+        return md.s_(self, key)
 
     def __setitem__(self, key, val):
         if self.allow_grad:
@@ -340,34 +344,34 @@ class Tensor:
             self._data[key] = val
 
     def __gt__(self, value):
-        return greater(self, value)
+        return md.greater(self, value)
 
     def __ge__(self, value):
-        return greater_equal(self, value)
+        return md.greater_equal(self, value)
 
     def __lt__(self, value):
-        return less(self, value)
+        return md.less(self, value)
 
     def __le__(self, value):
-        return less_equal(self, value)
+        return md.less_equal(self, value)
 
     def __eq__(self, value):
-        return equal(self, value)
+        return md.equal(self, value)
 
     def __ne__(self, value):
-        return not equal(self, value)
+        return md.not_equal(self, value)
 
     def __and__(self, value):
-        return logical_and(self, value)
+        return md.logical_and(self, value)
 
     def __or__(self, value):
-        return logical_or(self, value)
+        return md.logical_or(self, value)
 
     def __not__(self, value):
-        return logical_not(self, value)
+        return md.logical_not(self, value)
 
     def __xor__(self, value):
-        return logical_xor(self, value)
+        return md.logical_xor(self, value)
 
     @property
     def __array_interface__(self):
@@ -384,269 +388,12 @@ class Tensor:
 
 
 def ones_like(a: Tensor, allow_grad=False, **kwargs):
-    return Tensor(np.ones_like(a._data, dtype=a.dtype, **kwargs), allow_grad=allow_grad)
+    return Tensor(np.ones_like(a._data, **kwargs), allow_grad=allow_grad)
 
 
 def zeros_like(a: Tensor, allow_grad=False, **kwargs):
-    return Tensor(
-        np.zeros_like(a._data, dtype=a.dtype, **kwargs), allow_grad=allow_grad
-    )
+    return Tensor(np.zeros_like(a._data, **kwargs), allow_grad=allow_grad)
 
 
 def full_like(a: Tensor, x, allow_grad=False, **kwargs):
-    return Tensor(
-        np.full_like(a._data, x, dtype=a.dtype, **kwargs), allow_grad=allow_grad
-    )
-
-
-def generate_arbitrary_op_func(
-    forward_func,
-    grad_funcs,
-    is_differentiable=True,
-    tensor_only=False,
-    is_backend_op=False,
-    propagate_kwargs=False,
-    op_name=None,
-    casting="safe",
-):
-    # if the function is not is_differentiable, we still want to propagate the gradient to avoid breaking the
-    # graph, but it is smarter to just zero out the gradients.
-    if not is_differentiable:
-        grad_funcs = [lambda a, b, grad: zeros_like(grad) for _ in grad_funcs]
-
-    # maybe I should split this into multiple functions without if statements since those are probably clunky and generate overhead
-    def minidiff_func(*inputs, **kwargs):
-        # no leafs can ever be created by an op
-        inputs_are_tensors = [isinstance(x, Tensor) for x in inputs]
-
-        if not tensor_only and not py_any(inputs_are_tensors):
-            raise ValueError(
-                "minidiff functions only work when at least one argument is a minidiff Tensor"
-            )
-
-        if tensor_only and not py_all(inputs_are_tensors):
-            raise ValueError("This function only supports minidiff Tensors")
-
-        as_tensors = [Tensor(x) if not isinstance(x, Tensor) else x for x in inputs]
-
-        # allow gradient if at least one of the input tensors allows a gradient
-        allowed_grads = [x.allow_grad for x in as_tensors]
-        allow_grad = py_any(allowed_grads)
-
-        forward_args = [x._data for x in as_tensors] if is_backend_op else as_tensors
-
-        if casting is None:
-            output = forward_func(*forward_args, **kwargs)
-        else:
-            output = forward_func(*forward_args, casting=casting, **kwargs)
-
-        if is_backend_op:
-            output = Tensor(output, allow_grad=allow_grad)
-
-        # just in case
-        output.allow_grad = allow_grad
-
-        if grad_allowed_() and allow_grad:
-            filtered_grad_funcs = [
-                grad_func if grad_allowed else None
-                for grad_func, grad_allowed in zip(grad_funcs, allowed_grads)
-            ]
-
-            func_node = FuncNode(
-                output_tensor=output,
-                input_tensors=as_tensors,
-                grad_functions=filtered_grad_funcs,
-            )
-            func_node.op_name = forward_func.__name__ if op_name is None else op_name
-            if propagate_kwargs:
-                func_node.kwargs = kwargs
-
-        return output
-
-    return minidiff_func
-
-
-def generate_unary_op_func(
-    forward_func,
-    grad_a=None,
-    is_differentiable=True,
-    is_backend_op=False,
-    propagate_kwargs=False,
-    op_name=None,
-    casting=None,
-):
-    return generate_arbitrary_op_func(
-        forward_func,
-        grad_funcs=[grad_a],
-        is_differentiable=is_differentiable,
-        tensor_only=True,
-        is_backend_op=is_backend_op,
-        propagate_kwargs=propagate_kwargs,
-        op_name=op_name,
-        casting=casting,
-    )
-
-
-def generate_binary_op_func(
-    forward_func,
-    grad_a=None,
-    grad_b=None,
-    is_differentiable=True,
-    tensor_only=False,
-    is_backend_op=False,
-    propagate_kwargs=False,
-    op_name=None,
-    casting="safe",
-):
-    return generate_arbitrary_op_func(
-        forward_func,
-        grad_funcs=[grad_a, grad_b],
-        is_differentiable=is_differentiable,
-        tensor_only=tensor_only,
-        is_backend_op=is_backend_op,
-        propagate_kwargs=propagate_kwargs,
-        op_name=op_name,
-        casting=casting,
-    )
-
-
-s_ = generate_binary_op_func(
-    forward_func=lambda a, key, **kwargs: a[int(key)],
-    is_differentiable=False,
-    is_backend_op=True,
-)
-clip = generate_unary_op_func(
-    forward_func=np.clip,
-    grad_a=lambda a, grad, a_min=None, a_max=None: grad
-    * logical_and(
-        a > float("-inf") if a_min is None else a_min,
-        a < float("inf") if a_max is None else a_max,
-    ),
-    propagate_kwargs=True,
-    is_backend_op=True,
-)
-reshape = generate_unary_op_func(
-    forward_func=np.reshape,
-    grad_a=lambda a, grad: grad.reshape(a.shape),
-    is_backend_op=True,
-)
-matmul = generate_binary_op_func(
-    forward_func=np.matmul,
-    grad_a=lambda a, b, grad: matmul(grad, b.t),
-    grad_b=lambda a, b, grad: matmul(a.t, grad),
-    tensor_only=True,
-    is_backend_op=True,
-)
-add = generate_binary_op_func(
-    forward_func=np.add,
-    grad_a=lambda a, b, grad: grad,
-    grad_b=lambda a, b, grad: grad,
-    is_backend_op=True,
-)
-subtract = generate_binary_op_func(
-    forward_func=np.subtract,
-    grad_a=lambda a, b, grad: grad,
-    grad_b=lambda a, b, grad: -grad,
-    is_backend_op=True,
-)
-multiply = generate_binary_op_func(
-    forward_func=np.multiply,
-    grad_a=lambda a, b, grad: grad * b,
-    grad_b=lambda a, b, grad: grad * a,
-    is_backend_op=True,
-)
-true_divide = generate_binary_op_func(
-    forward_func=np.true_divide,
-    grad_a=lambda a, b, grad: grad / b,
-    grad_b=lambda a, b, grad: (-grad * a) / (b**2),
-    is_backend_op=True,
-)
-floor_divide = generate_binary_op_func(
-    forward_func=np.floor_divide, is_differentiable=False, is_backend_op=True
-)
-power = generate_binary_op_func(
-    forward_func=np.power,
-    grad_a=lambda a, b, grad: grad * b * (a ** (b - 1)),
-    grad_b=lambda a, b, grad: grad * log(a) * a**b,
-    is_backend_op=True,
-)
-sqrt = lambda a, b, **kwargs: power(a, b, **kwargs)
-floor = generate_unary_op_func(
-    forward_func=np.floor, is_differentiable=False, is_backend_op=True
-)
-ceil = generate_unary_op_func(
-    forward_func=np.ceil, is_differentiable=False, is_backend_op=True
-)
-cos = generate_unary_op_func(
-    forward_func=np.cos, grad_a=lambda a, grad: grad * -sin(a), is_backend_op=True
-)
-sin = generate_unary_op_func(
-    forward_func=np.sin, grad_a=lambda a, grad: grad * cos(a), is_backend_op=True
-)
-tan = generate_unary_op_func(
-    forward_func=np.tan,
-    grad_a=lambda a, grad: grad * (1 / cos(a) ** 2),
-    is_backend_op=True,
-)
-cosh = generate_unary_op_func(
-    forward_func=np.cosh, grad_a=lambda a, grad: grad * sinh(a), is_backend_op=True
-)
-sinh = generate_unary_op_func(
-    forward_func=np.sinh, grad_a=lambda a, grad: grad * cosh(a), is_backend_op=True
-)
-tanh = generate_unary_op_func(
-    forward_func=np.sinh,
-    grad_a=lambda a, grad: grad * (1 / cosh(a) ** 2),
-    is_backend_op=True,
-)
-exp = generate_unary_op_func(
-    forward_func=np.exp, grad_a=lambda a, grad: grad * exp(a), is_backend_op=True
-)
-log = generate_unary_op_func(
-    forward_func=np.log, grad_a=lambda a, grad: grad / a, is_backend_op=True
-)
-sum = generate_unary_op_func(
-    forward_func=np.sum, grad_a=lambda a, grad: grad, is_backend_op=True
-)
-mean = generate_unary_op_func(
-    forward_func=np.mean, grad_a=lambda a, grad: grad / a.size, is_backend_op=True
-)
-greater = generate_binary_op_func(
-    forward_func=np.greater, is_differentiable=False, is_backend_op=True
-)
-greater_equal = generate_binary_op_func(
-    forward_func=np.greater_equal, is_differentiable=False, is_backend_op=True
-)
-less = generate_binary_op_func(
-    forward_func=np.less, is_differentiable=False, is_backend_op=True
-)
-less_equal = generate_binary_op_func(
-    forward_func=np.less_equal, is_differentiable=False, is_backend_op=True
-)
-equal = generate_binary_op_func(
-    forward_func=np.equal, is_differentiable=False, is_backend_op=True
-)
-not_equal = generate_binary_op_func(
-    forward_func=np.not_equal, is_differentiable=False, is_backend_op=True
-)
-logical_and = generate_binary_op_func(
-    forward_func=np.logical_and, is_differentiable=False, is_backend_op=True
-)
-logical_or = generate_binary_op_func(
-    forward_func=np.logical_or, is_differentiable=False, is_backend_op=True
-)
-logical_not = generate_binary_op_func(
-    forward_func=np.logical_not, is_differentiable=False, is_backend_op=True
-)
-logical_xor = generate_binary_op_func(
-    forward_func=np.logical_xor, is_differentiable=False, is_backend_op=True
-)
-absolute = generate_unary_op_func(
-    forward_func=np.absolute, grad_a=lambda a, grad: grad * (a != 0), is_backend_op=True
-)
-all = generate_unary_op_func(
-    forward_func=np.all, is_differentiable=False, is_backend_op=True
-)
-any = generate_unary_op_func(
-    forward_func=np.any, is_differentiable=False, is_backend_op=True
-)
+    return Tensor(np.full_like(a._data, x, **kwargs), allow_grad=allow_grad)
