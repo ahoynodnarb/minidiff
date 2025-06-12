@@ -40,7 +40,7 @@ class FuncNode:
             stretched_axes = tuple(
                 i
                 for i in range(len(target_shape))
-                if target_shape[i] == 1 and target_shape[i] > 1
+                if target_shape[i] == 1 and grad.shape[i] > 1
             )
             if len(stretched_axes) != 0:
                 grad = grad.sum(axis=stretched_axes, keepdims=True)
