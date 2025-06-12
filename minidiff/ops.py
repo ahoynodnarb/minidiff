@@ -190,19 +190,31 @@ def generate_ternary_op_func(
         op_name=op_name,
         casting=casting,
     )
-    
+
 
 broadcast_to = generate_binary_op_func(
-    forward_func=np.broadcast_to, grad_a=lambda a, grad: md.collect_gradients(grad=grad, target_shape=a.shape), is_backend_op=True, casting=None
+    forward_func=np.broadcast_to,
+    grad_a=lambda a, grad: md.collect_gradients(grad=grad, target_shape=a.shape),
+    is_backend_op=True,
+    casting=None,
 )
 atleast_1d = generate_unary_op_func(
-    forward_func=np.atleast_1d, grad=lambda a, grad: grad, is_backend_op=True, casting=None
+    forward_func=np.atleast_1d,
+    grad=lambda a, grad: grad,
+    is_backend_op=True,
+    casting=None,
 )
 atleast_2d = generate_unary_op_func(
-    forward_func=np.atleast_2d, grad=lambda a, grad: grad, is_backend_op=True, casting=None
+    forward_func=np.atleast_2d,
+    grad=lambda a, grad: grad,
+    is_backend_op=True,
+    casting=None,
 )
 atleast_3d = generate_unary_op_func(
-    forward_func=np.atleast_3d, grad=lambda a, grad: grad, is_backend_op=True, casting=None
+    forward_func=np.atleast_3d,
+    grad=lambda a, grad: grad,
+    is_backend_op=True,
+    casting=None,
 )
 copy = generate_binary_op_func(
     forward_func=np.copy, grad_a=lambda a, grad: grad, is_backend_op=True, casting=None
