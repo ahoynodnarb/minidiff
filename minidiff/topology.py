@@ -1,10 +1,5 @@
 import minidiff as md
 
-try:
-    import cupy as np  # type: ignore
-except ImportError:
-    import numpy as np
-
 
 class FuncNode:
     def __init__(self, output_tensor, input_tensors, grad_functions):

@@ -192,6 +192,22 @@ def generate_ternary_op_func(
     )
 
 
+swapaxes = generate_ternary_op_func(
+    forward_func=np.swapaxes,
+    grad_a=lambda a, axis1, axis2, grad, **kwargs: swapaxes(
+        grad, axis1, axis2, **kwargs
+    ),
+    is_backend_op=True,
+    propagate_kwargs=True,
+    casting=None,
+)
+flip = generate_unary_op_func(
+    forward_func=np.flip,
+    grad=lambda a, grad, **kwargs: flip(grad, **kwargs),
+    is_backend_op=True,
+    propagate_kwargs=True,
+    casting=None,
+)
 broadcast_to = generate_binary_op_func(
     forward_func=np.broadcast_to,
     grad_a=lambda a, grad: md.collect_gradients(grad=grad, target_shape=a.shape),
@@ -375,48 +391,3 @@ all = generate_unary_op_func(
 any = generate_unary_op_func(
     forward_func=np.any, is_differentiable=False, is_backend_op=True, casting=None
 )
-
-__all__ = [
-    "broadcast_to",
-    "atleast_1d",
-    "atleast_2d",
-    "atleast_3d",
-    "copy",
-    "s_",
-    "clip",
-    "reshape",
-    "matmul",
-    "add",
-    "subtract",
-    "multiply",
-    "true_divide",
-    "floor_divide",
-    "power",
-    "sqrt",
-    "floor",
-    "ceil",
-    "cos",
-    "sin",
-    "tan",
-    "cosh",
-    "sinh",
-    "tanh",
-    "exp",
-    "log",
-    "sum",
-    "mean",
-    "greater",
-    "greater_equal",
-    "less",
-    "less_equal",
-    "equal",
-    "not_equal",
-    "logical_and",
-    "logical_or",
-    "logical_not",
-    "logical_xor",
-    "sign",
-    "absolute",
-    "all",
-    "any",
-]

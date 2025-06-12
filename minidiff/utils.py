@@ -1,9 +1,3 @@
-try:
-    import cupy as np  # type: ignore
-except ImportError:
-    import numpy as np
-
-
 import graphviz
 import minidiff as md
 
