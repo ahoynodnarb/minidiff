@@ -32,19 +32,16 @@ class FuncNode:
 
     def update_grads(self, grad):
         def collect_gradients(grad, target_shape):
-            was_stretched = (
-                lambda grad_dim, target_dim: target_dim == 1 and grad_dim > 1
-            )
-
+            
             broadcasted_axes = tuple(range(grad.ndim - len(target_shape)))
+            if len(broadcasted_axes) != 0:
+                grad = grad.sum(axis=broadcasted_axes)
+                
             stretched_axes = tuple(
                 i
                 for i in range(len(target_shape))
-                if was_stretched(grad.shape[i], target_shape[i])
+                if target_shape[i] == 1 and target_shape[i] > 1
             )
-
-            if len(broadcasted_axes) != 0:
-                grad = grad.sum(axis=broadcasted_axes)
             if len(stretched_axes) != 0:
                 grad = grad.sum(axis=stretched_axes, keepdims=True)
 
