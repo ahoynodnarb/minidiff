@@ -98,13 +98,11 @@ def calculate_finite_differences(*input_tensors, func, h=1e-5):
             flattened_input_tensor = input_tensor.reshape(-1)
             flattened_grad = md.zeros_like(flattened_input_tensor)
             for x in range(input_tensor.size):
-                shifted_left = flattened_input_tensor.copy()
-                shifted_left.allow_grad = False
+                shifted_left = flattened_input_tensor.detach()
                 shifted_left[x] += h
                 shifted_left = shifted_left.reshape(input_tensor.shape)
 
-                shifted_right = flattened_input_tensor.copy()
-                shifted_right.allow_grad = False
+                shifted_right = flattened_input_tensor.detach()
                 shifted_right[x] -= h
                 shifted_right = shifted_right.reshape(input_tensor.shape)
 

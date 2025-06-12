@@ -156,7 +156,7 @@ class Tensor:
         self.func_node = None
 
     def detach(self):
-        detached = Tensor(self._data)
+        detached = Tensor(self._data.copy())
         return detached
 
     def item(self):
