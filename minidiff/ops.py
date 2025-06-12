@@ -256,7 +256,7 @@ power = generate_binary_op_func(
     grad_b=lambda a, b, grad: grad * log(a) * a**b,
     is_backend_op=True,
 )
-sqrt = lambda a, b, **kwargs: power(a, b, **kwargs)
+sqrt = lambda a, b, **kwargs: power(a, 0.5, **kwargs)
 floor = generate_unary_op_func(
     forward_func=np.floor, is_differentiable=False, is_backend_op=True
 )
@@ -281,7 +281,7 @@ sinh = generate_unary_op_func(
     forward_func=np.sinh, grad=lambda a, grad: grad * cosh(a), is_backend_op=True
 )
 tanh = generate_unary_op_func(
-    forward_func=np.sinh,
+    forward_func=np.tanh,
     grad=lambda a, grad: grad * (1 / cosh(a) ** 2),
     is_backend_op=True,
 )
@@ -336,8 +336,11 @@ logical_not = generate_binary_op_func(
 logical_xor = generate_binary_op_func(
     forward_func=np.logical_xor, is_differentiable=False, is_backend_op=True
 )
+sign = generate_unary_op_func(
+    forward_func=np.sign, is_differentiable=False, is_backend_op=True
+)
 absolute = generate_unary_op_func(
-    forward_func=np.absolute, grad=lambda a, grad: grad * (a != 0), is_backend_op=True
+    forward_func=np.absolute, grad=lambda a, grad: grad * sign(a), is_backend_op=True
 )
 all = generate_unary_op_func(
     forward_func=np.all, is_differentiable=False, is_backend_op=True, casting=None

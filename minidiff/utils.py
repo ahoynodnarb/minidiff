@@ -31,7 +31,7 @@ def draw_tensor_op_graph(
             # this is just a scalar
             tensor_name = str(tensor.item())
             all_tensor_names[tensor_id] = tensor_name
-        elif not insert_intermediates and not tensor.is_graph_source and names_provided:
+        elif not insert_intermediates and not tensor.is_leaf and names_provided:
             tensor_name = find_nested_tensor_name(tensor)
             all_tensor_names[tensor_id] = tensor_name
         else:
@@ -44,7 +44,7 @@ def draw_tensor_op_graph(
     def add_edges(graph, tensor):
         if not isinstance(tensor, md.Tensor):
             return
-        if tensor.is_graph_source:
+        if tensor.is_leaf:
             return
         node = tensor.func_node
         tensor_id = id(tensor)
@@ -65,12 +65,12 @@ def draw_tensor_op_graph(
         # if names are not provided, all tensors are expanded
         # otherwise, the tensor must be explicitly named to be expanded
         is_named = not names_provided or tensor_id in tensor_names
-        if not tensor.is_graph_source and (is_named or insert_intermediates):
+        if not tensor.is_leaf and (is_named or insert_intermediates):
             tensor_name = f"{tensor_name} = {find_nested_tensor_name(tensor)}"
 
         graph.node(str(tensor_id), tensor_name)
 
-        if tensor.is_graph_source:
+        if tensor.is_leaf:
             return
 
         add_edges(graph, tensor)

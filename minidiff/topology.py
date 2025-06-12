@@ -31,12 +31,17 @@ class FuncNode:
             tensor.graphed = True
 
     def update_grads(self, grad):
+        # we also need to reshape/collect gradients in the case that inputs were broadcasted during the forward pass
         # don't use no_grad() here because we are assuming gradients already don't track their gradients,
         # and if they do, they may be doing higher-order partial derivatives
         for input_tensor, grad_function in zip(self.input_tensors, self.grad_functions):
-            if not input_tensor.allow_grad or grad_function is None:
+            if not input_tensor.allow_grad:
                 continue
-            input_tensor.grad += grad_function(*self.input_tensors, grad, **self.kwargs)
+            grad_computation = grad_function(*self.input_tensors, grad, **self.kwargs)
+            if input_tensor.grad is None:
+                input_tensor.grad = grad_computation
+            else:
+                input_tensor.grad += grad_computation
 
     def __repr__(self):
         return f"{self.op_name}({', '.join([str(x) for x in self.input_tensors])})"

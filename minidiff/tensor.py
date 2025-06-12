@@ -66,10 +66,6 @@ class Tensor:
     # we're a leaf if we have no gradient history and we are tracking gradients
     @property
     def is_leaf(self):
-        return self.is_graph_source and self.allow_grad
-
-    @property
-    def is_graph_source(self):
         return self.func_node is None
 
     @property
@@ -120,9 +116,6 @@ class Tensor:
             root = tensor.func_node
             if root is None or id(root) in seen:
                 return
-            # temporarily maintain gradients only during backward pass
-            if not tensor.is_leaf:
-                tensor.grad = zeros_like(tensor, allow_grad=False)
             seen.add(id(root))
             for input_tensor in root.input_tensors:
                 dfs(input_tensor)
@@ -152,14 +145,15 @@ class Tensor:
             if not tensor.is_leaf and not retain_grads:
                 tensor.grad = None
             if not retain_graph:
-                self.wipe()
+                tensor.wipe()
 
     def wipe(self):
         self.graphed = False
-        if (func_node := self.func_node) is None:
-            return
-        for input_tensor in func_node.input_tensors:
-            input_tensor.graphed = False
+        self.func_node = None
+        
+    def detach(self):
+        detached = Tensor(self._data)
+        return detached
 
     def item(self):
         if self.size != 1:
