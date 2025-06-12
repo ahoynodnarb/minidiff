@@ -31,17 +31,39 @@ class FuncNode:
             tensor.graphed = True
 
     def update_grads(self, grad):
-        # we also need to reshape/collect gradients in the case that inputs were broadcasted during the forward pass
+        def collect_gradients(grad, target_shape):
+            was_stretched = (
+                lambda grad_dim, target_dim: target_dim == 1 and grad_dim > 1
+            )
+
+            broadcasted_axes = tuple(range(grad.ndim - len(target_shape)))
+            stretched_axes = tuple(
+                i
+                for i in range(len(target_shape))
+                if was_stretched(grad.shape[i], target_shape[i])
+            )
+
+            if len(broadcasted_axes) != 0:
+                grad = grad.sum(axis=broadcasted_axes)
+            if len(stretched_axes) != 0:
+                grad = grad.sum(axis=stretched_axes, keepdims=True)
+
+            return grad
+
         # don't use no_grad() here because we are assuming gradients already don't track their gradients,
         # and if they do, they may be doing higher-order partial derivatives
         for input_tensor, grad_function in zip(self.input_tensors, self.grad_functions):
             if not input_tensor.allow_grad:
                 continue
             grad_computation = grad_function(*self.input_tensors, grad, **self.kwargs)
+            collected_grad = collect_gradients(
+                grad=grad_computation, target_shape=input_tensor.shape
+            )
+
             if input_tensor.grad is None:
-                input_tensor.grad = grad_computation
+                input_tensor.grad = collected_grad
             else:
-                input_tensor.grad += grad_computation
+                input_tensor.grad += collected_grad
 
     def __repr__(self):
         return f"{self.op_name}({', '.join([str(x) for x in self.input_tensors])})"

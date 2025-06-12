@@ -104,6 +104,10 @@ class Tensor:
         return self._data.size
 
     @property
+    def ndim(self):
+        return self._data.ndim
+
+    @property
     def dtype(self):
         return self._data.dtype
 
@@ -150,7 +154,7 @@ class Tensor:
     def wipe(self):
         self.graphed = False
         self.func_node = None
-        
+
     def detach(self):
         detached = Tensor(self._data)
         return detached
@@ -162,6 +166,9 @@ class Tensor:
             )
 
         return self._data.item()
+
+    def sum(self, **kwargs):
+        return md.sum(self, **kwargs)
 
     def copy(self, **kwargs):
         return md.copy(self, **kwargs)

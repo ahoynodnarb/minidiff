@@ -8,6 +8,7 @@ except ImportError:
 import minidiff as md
 from .topology import FuncNode
 
+
 class Op:
     def create_forward(self):
         raise NotImplementedError
@@ -94,6 +95,7 @@ def generate_op_func(
 
     return minidiff_func
 
+
 def generate_stateless_op_func(
     forward_func,
     grad_funcs,
@@ -107,9 +109,10 @@ def generate_stateless_op_func(
     class StatelessOp(Op):
         def create_forward(self):
             return forward_func
+
         def create_grads(self):
             return grad_funcs
-        
+
     return generate_op_func(
         op_type=StatelessOp,
         is_differentiable=is_differentiable,
@@ -117,7 +120,7 @@ def generate_stateless_op_func(
         is_backend_op=is_backend_op,
         propagate_kwargs=propagate_kwargs,
         op_name=op_name,
-        casting=casting
+        casting=casting,
     )
 
 
