@@ -395,3 +395,18 @@ def zeros_like(a: Tensor, allow_grad=False, **kwargs):
 
 def full_like(a: Tensor, x, allow_grad=False, **kwargs):
     return Tensor(np.full_like(a._data, x, **kwargs), allow_grad=allow_grad)
+
+def collect_gradients(grad, target_shape):    
+    broadcasted_axes = tuple(range(grad.ndim - len(target_shape)))
+    if len(broadcasted_axes) != 0:
+        grad = grad.sum(axis=broadcasted_axes)
+        
+    stretched_axes = tuple(
+        i
+        for i in range(min(len(target_shape), grad.ndim))
+        if grad.shape[i] > 1 and target_shape[i] == 1
+    )
+    if len(stretched_axes) != 0:
+        grad = grad.sum(axis=stretched_axes, keepdims=True)
+
+    return md.broadcast_to(grad, target_shape)

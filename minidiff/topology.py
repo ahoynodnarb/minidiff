@@ -31,29 +31,13 @@ class FuncNode:
             tensor.graphed = True
 
     def update_grads(self, grad):
-        def collect_gradients(grad, target_shape):
-            
-            broadcasted_axes = tuple(range(grad.ndim - len(target_shape)))
-            if len(broadcasted_axes) != 0:
-                grad = grad.sum(axis=broadcasted_axes)
-                
-            stretched_axes = tuple(
-                i
-                for i in range(len(target_shape))
-                if target_shape[i] == 1 and grad.shape[i] > 1
-            )
-            if len(stretched_axes) != 0:
-                grad = grad.sum(axis=stretched_axes, keepdims=True)
-
-            return grad
-
         # don't use no_grad() here because we are assuming gradients already don't track their gradients,
         # and if they do, they may be doing higher-order partial derivatives
         for input_tensor, grad_function in zip(self.input_tensors, self.grad_functions):
             if not input_tensor.allow_grad:
                 continue
             grad_computation = grad_function(*self.input_tensors, grad, **self.kwargs)
-            collected_grad = collect_gradients(
+            collected_grad = md.collect_gradients(
                 grad=grad_computation, target_shape=input_tensor.shape
             )
 
