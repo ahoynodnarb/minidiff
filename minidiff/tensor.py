@@ -74,9 +74,10 @@ class Tensor:
 
     @allow_grad.setter
     def allow_grad(self, allow_grad):
-        if not allow_grad and self.graphed:
+        # if we're trying to turn off gradient tracking while we're graphed and an intermediate tensor, then error
+        if not allow_grad and self.graphed and not self.is_leaf:
             raise ValueError(
-                "Tensors can only stop tracking gradients if they are not part of a computational graph"
+                "Tensors can only stop tracking gradients if they are not part of a computational graph or are a leaf"
             )
 
         if self._allow_grad == allow_grad:
@@ -117,12 +118,12 @@ class Tensor:
 
         # topologically sort
         def dfs(tensor):
-            root = tensor.func_node
-            if root is None or id(root) in seen:
+            if id(tensor) in seen:
                 return
-            seen.add(id(root))
-            for input_tensor in root.input_tensors:
-                dfs(input_tensor)
+            seen.add(id(tensor))
+            if (root:=tensor.func_node) is not None:
+                for input_tensor in root.input_tensors:
+                    dfs(input_tensor)
             traversal_path.append(tensor)
 
         dfs(self)
@@ -141,12 +142,14 @@ class Tensor:
         self.grad = ones_like(self, allow_grad=False)
 
         for tensor in reversed(traversal_path):
+            if tensor.is_leaf:
+                continue
             n = tensor.func_node
             n_grad = tensor.grad
             n.update_grads(n_grad)
             # we're only temporarily storing grads, so we need to remove any references when
             # we're done for the sake of memory
-            if not tensor.is_leaf and not retain_grads:
+            if not retain_grads:
                 tensor.grad = None
             if not retain_graph:
                 tensor.wipe()

@@ -46,33 +46,28 @@ def draw_tensor_op_graph(
             child_id = id(child)
             graph.edge(str(child_id), str(tensor_id))
 
-    def draw_tensor_graph(graph, tensor):
+    def draw_tensor_graph(graph, t):
         nonlocal names_provided
 
-        tensor_id = id(tensor)
-        if tensor_id in visited_tensors:
-            return
-        visited_tensors.add(tensor_id)
+        all_tensors = t.toposort()
+        for tensor in all_tensors:
+            tensor_id = id(tensor)
+            
+            tensor_name = lookup_tensor_name(tensor)
 
-        tensor_name = lookup_tensor_name(tensor)
+            # if names are not provided, all tensors are expanded
+            # otherwise, the tensor must be explicitly named to be expanded
+            should_name = not names_provided or tensor_id in tensor_names or insert_intermediates
+            if not tensor.is_leaf and should_name:
+                tensor_name = f"{tensor_name} = {find_nested_tensor_name(tensor)}"
 
-        # if names are not provided, all tensors are expanded
-        # otherwise, the tensor must be explicitly named to be expanded
-        is_named = not names_provided or tensor_id in tensor_names
-        if not tensor.is_leaf and (is_named or insert_intermediates):
-            tensor_name = f"{tensor_name} = {find_nested_tensor_name(tensor)}"
+            graph.node(str(tensor_id), tensor_name)
 
-        graph.node(str(tensor_id), tensor_name)
+            if tensor.is_leaf:
+                continue
 
-        if tensor.is_leaf:
-            return
+            add_edges(graph, tensor)
 
-        add_edges(graph, tensor)
-        node = tensor.func_node
-        for child in node.input_tensors:
-            draw_tensor_graph(graph, child)
-
-    visited_tensors = set()
     names_provided = tensor_names is not None
     n_anonymous_tensors = 0
 
