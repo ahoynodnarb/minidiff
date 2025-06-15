@@ -66,9 +66,9 @@ def generate_op_func(
 
         # traditional numpy functions of course return numpy objects, so we need to wrap in a Tensor
         if is_backend_op:
-            output = md.Tensor(output, allow_grad=allow_grad)
+            output = md.Tensor(output)
 
-        # just in case
+        # ensure gradient tracking rules do not break
         output.allow_grad = allow_grad
 
         # only attach a node if we're allowed to track gradients right now, and the tensor wants to track its gradient
@@ -79,6 +79,7 @@ def generate_op_func(
                 for grad_func, grad_allowed in zip(grad_funcs, allowed_grads)
             ]
 
+            # FuncNodes can only track tensors, so we have to make everything a tensor.
             func_node = FuncNode(
                 output_tensor=output,
                 input_tensors=[

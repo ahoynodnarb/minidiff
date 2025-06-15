@@ -8,12 +8,8 @@ class FuncNode:
         ):
             raise ValueError("FuncNodes can only track tensors")
 
-        self.input_tensors = (
-            input_tensors if isinstance(input_tensors, list) else [input_tensors]
-        )
-        self.grad_functions = (
-            grad_functions if isinstance(grad_functions, list) else [grad_functions]
-        )
+        self.input_tensors = input_tensors
+        self.grad_functions = grad_functions
         self.input_nodes = [x.func_node for x in self.input_tensors]
 
         self.kwargs = {}
@@ -32,10 +28,11 @@ class FuncNode:
             if not input_tensor.allow_grad:
                 continue
             grad_computation = grad_function(*self.input_tensors, grad, **self.kwargs)
+            # if broadcasting occured during the forward pass, we need to collect gradients
+            # back in the backward pass so that the gradients are correctly distributed
             collected_grad = md.collect_gradients(
                 grad=grad_computation, target_shape=input_tensor.shape
             )
-
             if input_tensor.grad is None:
                 input_tensor.grad = collected_grad
             else:

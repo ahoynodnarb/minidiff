@@ -83,7 +83,7 @@ class Tensor:
         if self._allow_grad == allow_grad:
             return
 
-        # any tensors who don't allow gradient-tracking don't track their gradients
+        # any tensors who don't allow gradient-tracking don't track their gradients.
         # intermediate non-leaf tensors do not have gradients because we don't care
         if not allow_grad or not self.is_leaf:
             self.grad = None
@@ -131,6 +131,7 @@ class Tensor:
         return traversal_path
 
     def backward(self, retain_graph=False, retain_grads=False):
+        # can't call backward if we're not tracking gradients or we have no gradient history
         if not self.allow_grad:
             return
 
@@ -154,10 +155,12 @@ class Tensor:
             if not retain_graph:
                 tensor.wipe()
 
+    # destroy our portion of the graph
     def wipe(self):
         self.graphed = False
         self.func_node = None
 
+    # returns a copy that does not track gradients
     def detach(self):
         detached = Tensor(self._data.copy())
         return detached
@@ -401,10 +404,12 @@ def full_like(a: Tensor, x, allow_grad=False, **kwargs):
 
 
 def collect_gradients(grad, target_shape):
+    # this collects the prepended axes
     broadcasted_axes = tuple(range(grad.ndim - len(target_shape)))
     if len(broadcasted_axes) != 0:
         grad = grad.sum(axis=broadcasted_axes)
-
+        
+    # this collects the axes that were stretched to span a greater dim
     stretched_axes = tuple(
         i
         for i in range(min(len(target_shape), grad.ndim))

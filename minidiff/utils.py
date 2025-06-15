@@ -6,6 +6,8 @@ def draw_tensor_op_graph(
     root, tensor_names=None, graph=None, insert_intermediates=False, **kwargs
 ):
     def find_nested_tensor_name(tensor):
+        # this essentially just finds the name of every input tensor,
+        # and lists them as arguments to the function which produced tensor
         node = tensor.func_node
         input_names = []
         for input_tensor in node.input_tensors:
@@ -19,25 +21,27 @@ def draw_tensor_op_graph(
         nonlocal n_anonymous_tensors
 
         tensor_id = id(tensor)
+        # already has a name
         if tensor_id in all_tensor_names:
-            return all_tensor_names[tensor_id]
+            tensor_name = all_tensor_names[tensor_id]
+        # this is just a scalar
         elif tensor.size == 1:
-            # this is just a scalar
             tensor_name = str(tensor.item())
             all_tensor_names[tensor_id] = tensor_name
-        elif not insert_intermediates and not tensor.is_leaf and names_provided:
-            tensor_name = find_nested_tensor_name(tensor)
-            all_tensor_names[tensor_id] = tensor_name
-        else:
+        # if we're either giving everything a name, or we haven't found its name and it's a leaf
+        elif insert_intermediates or tensor.is_leaf:
             tensor_name = f"t{n_anonymous_tensors}"
             n_anonymous_tensors += 1
+            all_tensor_names[tensor_id] = tensor_name
+        # default to just the explicit definition
+        else:
+            tensor_name = find_nested_tensor_name(tensor)
             all_tensor_names[tensor_id] = tensor_name
 
         return tensor_name
 
     def add_edges(graph, tensor):
-        if not isinstance(tensor, md.Tensor):
-            return
+        # self-explanatory: just connect every tensor to the tensors which created it
         if tensor.is_leaf:
             return
         node = tensor.func_node
@@ -47,36 +51,31 @@ def draw_tensor_op_graph(
             graph.edge(str(child_id), str(tensor_id))
 
     def draw_tensor_graph(graph, t):
-        nonlocal names_provided
-
+        # iterate through every tensor starting from leaf tensors
         all_tensors = t.toposort()
         for tensor in all_tensors:
             tensor_id = id(tensor)
             
             tensor_name = lookup_tensor_name(tensor)
 
-            # if names are not provided, all tensors are expanded
+            # if we're naming everything, then all tensors are expanded
             # otherwise, the tensor must be explicitly named to be expanded
-            should_name = not names_provided or tensor_id in tensor_names or insert_intermediates
-            if not tensor.is_leaf and should_name:
+            should_expand = tensor_id in tensor_names or insert_intermediates
+            if not tensor.is_leaf and should_expand:
                 tensor_name = f"{tensor_name} = {find_nested_tensor_name(tensor)}"
 
             graph.node(str(tensor_id), tensor_name)
-
-            if tensor.is_leaf:
-                continue
-
             add_edges(graph, tensor)
 
-    names_provided = tensor_names is not None
-    n_anonymous_tensors = 0
 
     if graph is None:
         graph = graphviz.Digraph(**kwargs)
-
-    if not names_provided:
+    
+    if tensor_names is None:
+        insert_intermediates = True
         tensor_names = {}
 
+    n_anonymous_tensors = 0
     all_tensor_names = tensor_names.copy()
 
     draw_tensor_graph(graph, root)
