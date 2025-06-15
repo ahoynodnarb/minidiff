@@ -395,12 +395,24 @@ def ones_like(a: Tensor, allow_grad=False, **kwargs):
     return Tensor(np.ones_like(a._data, **kwargs), allow_grad=allow_grad)
 
 
+def ones(shape: tuple, allow_grad=False, **kwargs):
+    return Tensor(np.ones(shape, **kwargs), allow_grad=allow_grad)
+
+
 def zeros_like(a: Tensor, allow_grad=False, **kwargs):
     return Tensor(np.zeros_like(a._data, **kwargs), allow_grad=allow_grad)
 
 
+def zeros(shape: tuple, allow_grad=False, **kwargs):
+    return Tensor(np.zeros(shape, **kwargs), allow_grad=allow_grad)
+
+
 def full_like(a: Tensor, x, allow_grad=False, **kwargs):
     return Tensor(np.full_like(a._data, x, **kwargs), allow_grad=allow_grad)
+
+
+def full(shape: tuple, allow_grad=False, **kwargs):
+    return Tensor(np.full(shape, **kwargs), allow_grad=allow_grad)
 
 
 def collect_gradients(grad, target_shape):
