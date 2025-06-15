@@ -338,10 +338,7 @@ class Tensor:
             raise ValueError(
                 "in-place operations are not allowed while tracking gradients"
             )
-        if self.graphed:
-            raise ValueError(
-                "mutating tensors is not allowed if the tensor is on a computational graph"
-            )
+            
         if isinstance(val, Tensor):
             self._data[key] = val._data
         else:
