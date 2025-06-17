@@ -349,7 +349,7 @@ class CrossEntropyLoss:
 # maybe make a custom conv2d function generator which outputs a forward and both grad functions. this way we can keep optimizations like
 # im2col working for forward and backward passes without explicitly managing state in generate_binary_op_func.
 # maybe implement a generate_*_op_func_from_factory function which takes in an OpFactory
-convolve2d = ops.generate_op_func(op_type=Convolve2D, tensor_only=True)
+convolve2d = ops.generate_op_func(op_class=Convolve2D, tensor_only=True)
 # this has to be an op itself because it has a custom gradient function
 cross_entropy_loss = ops.generate_binary_op_func(
     forward_func=CrossEntropyLoss.loss,

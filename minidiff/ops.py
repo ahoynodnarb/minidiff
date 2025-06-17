@@ -39,7 +39,7 @@ def binary_op_func(**kwargs):
 
 
 def generate_op_func(
-    op_type,
+    op_class,
     is_differentiable=True,
     tensor_only=False,
     is_backend_op=False,
@@ -47,7 +47,7 @@ def generate_op_func(
     op_name=None,
     casting="safe",
 ):
-    instance = op_type()
+    instance = op_class()
     forward_func = instance.create_forward()
     grad_funcs = instance.create_grads()
     # if the function is not differentiable, we still want to propagate the gradient to avoid breaking the
@@ -135,7 +135,7 @@ def generate_stateless_op_func(
             return grad_funcs
 
     return generate_op_func(
-        op_type=StatelessOp,
+        op_class=StatelessOp,
         is_differentiable=is_differentiable,
         tensor_only=tensor_only,
         is_backend_op=is_backend_op,
@@ -307,69 +307,73 @@ matmul = generate_binary_op_func(
 )
 
 
-def grad_a(a, b, grad, axes=2):
-    if isinstance(axes, int):
-        axes_a = tuple(range(a.ndim - axes, a.ndim))
-        axes_b = tuple(range(axes))
-        axes = (axes_a, axes_b)
-    # indices of all dims in b not originally contracted in the forward tensordot
-    uncontracted_a = tuple(i for i in range(a.ndim) if i not in axes[0])
-    uncontracted_b = tuple(i for i in range(b.ndim) if i not in axes[1])
-    # indices of all dims in grad that align with uncontracted_b
-    grad_aligned = tuple(range(grad.ndim - len(uncontracted_b), grad.ndim))
-    new_axes = (grad_aligned, uncontracted_b)
-    result = tensordot(grad, b, axes=new_axes)
-    # first few indices will be uncontracted in a, last few will be contracted in a (original forward pass)
-    # need to transpose such that the first few take up the uncontracted a indices, and the last few take up the contracted a indices
-    permutation_indices = [0] * a.ndim
-    n_uncontracted_a = len(uncontracted_a)
-    uncontracted_idx = 0
-    contracted_idx = 0
-    for i in range(a.ndim):
-        if i < n_uncontracted_a:
-            permutation_indices[uncontracted_a[uncontracted_idx]] = i
-            uncontracted_idx += 1
-        else:
-            permutation_indices[axes[0][contracted_idx]] = i
-            contracted_idx += 1
+class TensorDot(Op):
+    def create_forward(self):
+        return np.tensordot
 
-    reshaped = md.transpose(result, permutation_indices)
-    return reshaped
+    def create_grads(self):
+        def grad_a(a, b, grad, axes=2):
+            if isinstance(axes, int):
+                axes_a = tuple(range(a.ndim - axes, a.ndim))
+                axes_b = tuple(range(axes))
+                axes = (axes_a, axes_b)
+            # indices of all dims in b not originally contracted in the forward tensordot
+            uncontracted_a = tuple(i for i in range(a.ndim) if i not in axes[0])
+            uncontracted_b = tuple(i for i in range(b.ndim) if i not in axes[1])
+            # indices of all dims in grad that align with uncontracted_b
+            grad_aligned = tuple(range(grad.ndim - len(uncontracted_b), grad.ndim))
+            new_axes = (grad_aligned, uncontracted_b)
+            result = tensordot(grad, b, axes=new_axes)
+            # first few indices will be uncontracted in a, last few will be contracted in a (original forward pass)
+            # need to transpose such that the first few take up the uncontracted a indices, and the last few take up the contracted a indices
+            permutation_indices = [0] * a.ndim
+            n_uncontracted_a = len(uncontracted_a)
+            uncontracted_idx = 0
+            contracted_idx = 0
+            for i in range(a.ndim):
+                if i < n_uncontracted_a:
+                    permutation_indices[uncontracted_a[uncontracted_idx]] = i
+                    uncontracted_idx += 1
+                else:
+                    permutation_indices[axes[0][contracted_idx]] = i
+                    contracted_idx += 1
+
+            reshaped = md.transpose(result, permutation_indices)
+            return reshaped
+
+        def grad_b(a, b, grad, axes=2):
+            if isinstance(axes, int):
+                axes_a = tuple(range(a.ndim - axes, a.ndim))
+                axes_b = tuple(range(axes))
+                axes = (axes_a, axes_b)
+            # indices of all dims in a not originally contracted in the forward tensordot
+            uncontracted_a = tuple(i for i in range(a.ndim) if i not in axes[0])
+            uncontracted_b = tuple(i for i in range(b.ndim) if i not in axes[1])
+            # indices of all dims in grad that align with uncontracted_a
+            grad_aligned = tuple(range(len(uncontracted_a)))
+            new_axes = (uncontracted_a, grad_aligned)
+            result = tensordot(a, grad, axes=new_axes)
+            # first few indices of result will be contracted in a, last few will be uncontracted in b (original forward pass
+            # need to transpose so that the last few take up the uncontracted b indices, and the first few take up the original contracted indices
+            n_contracted_a = len(axes[0])
+            contracted_idx = 0
+            uncontracted_idx = 0
+            permutation_indices = [0] * b.ndim
+            for i in range(b.ndim):
+                if i < n_contracted_a:
+                    permutation_indices[axes[1][contracted_idx]] = i
+                    contracted_idx += 1
+                else:
+                    permutation_indices[uncontracted_b[uncontracted_idx]] = i
+                    uncontracted_idx += 1
+            reshaped = md.transpose(result, permutation_indices)
+            return reshaped
+
+        return (grad_a, grad_b)
 
 
-def grad_b(a, b, grad, axes=2):
-    if isinstance(axes, int):
-        axes_a = tuple(range(a.ndim - axes, a.ndim))
-        axes_b = tuple(range(axes))
-        axes = (axes_a, axes_b)
-    # indices of all dims in a not originally contracted in the forward tensordot
-    uncontracted_a = tuple(i for i in range(a.ndim) if i not in axes[0])
-    uncontracted_b = tuple(i for i in range(b.ndim) if i not in axes[1])
-    # indices of all dims in grad that align with uncontracted_a
-    grad_aligned = tuple(range(len(uncontracted_a)))
-    new_axes = (uncontracted_a, grad_aligned)
-    result = tensordot(a, grad, axes=new_axes)
-    # first few indices of result will be contracted in a, last few will be uncontracted in b (original forward pass
-    # need to transpose so that the last few take up the uncontracted b indices, and the first few take up the original contracted indices
-    n_contracted_a = len(axes[0])
-    contracted_idx = 0
-    uncontracted_idx = 0
-    permutation_indices = [0] * b.ndim
-    for i in range(b.ndim):
-        if i < n_contracted_a:
-            permutation_indices[axes[1][contracted_idx]] = i
-            contracted_idx += 1
-        else:
-            permutation_indices[uncontracted_b[uncontracted_idx]] = i
-            uncontracted_idx += 1
-    reshaped = md.transpose(result, permutation_indices)
-    return reshaped
-
-
-tensordot = generate_binary_op_func(
-    forward_func=np.tensordot,
-    grad_a=grad_a,
-    grad_b=grad_b,
+tensordot = generate_op_func(
+    op_class=TensorDot,
     tensor_only=True,
     is_backend_op=True,
     propagate_kwargs=True,
