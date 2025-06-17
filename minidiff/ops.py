@@ -366,6 +366,7 @@ class TensorDot(Op):
                 else:
                     permutation_indices[uncontracted_b[uncontracted_idx]] = i
                     uncontracted_idx += 1
+
             reshaped = md.transpose(result, permutation_indices)
             return reshaped
 

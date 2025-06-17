@@ -55,7 +55,7 @@ def draw_tensor_op_graph(
         all_tensors = t.toposort()
         for tensor in all_tensors:
             tensor_id = id(tensor)
-            
+
             tensor_name = lookup_tensor_name(tensor)
 
             # if we're naming everything, then all tensors are expanded
@@ -67,10 +67,9 @@ def draw_tensor_op_graph(
             graph.node(str(tensor_id), tensor_name)
             add_edges(graph, tensor)
 
-
     if graph is None:
         graph = graphviz.Digraph(**kwargs)
-    
+
     if tensor_names is None:
         insert_intermediates = True
         tensor_names = {}
