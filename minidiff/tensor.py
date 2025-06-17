@@ -3,7 +3,6 @@ try:
 except ImportError:
     import numpy as np
 
-import minidiff.ops as ops
 import minidiff as md
 import contextvars
 

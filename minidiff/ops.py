@@ -277,6 +277,7 @@ s_ = generate_binary_op_func(
     grad_b=None,
     is_backend_op=True,
     casting=None,
+    op_name="index",
 )
 clip = generate_unary_op_func(
     forward_func=np.clip,
