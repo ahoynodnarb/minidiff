@@ -17,6 +17,27 @@ class Op:
         raise NotImplementedError
 
 
+def stateless_op_func(**kwargs):
+    def wrapper(func):
+        return generate_stateless_op_func(forward_func=func, **kwargs)
+
+    return wrapper
+
+
+def unary_op_func(**kwargs):
+    def wrapper(func):
+        return generate_unary_op_func(forward_func=func, **kwargs)
+
+    return wrapper
+
+
+def binary_op_func(**kwargs):
+    def wrapper(func):
+        return generate_binary_op_func(forward_func=func, **kwargs)
+
+    return wrapper
+
+
 def generate_op_func(
     op_type,
     is_differentiable=True,
@@ -32,7 +53,9 @@ def generate_op_func(
     # if the function is not differentiable, we still want to propagate the gradient to avoid breaking the
     # graph, but it is smarter to just zero out the gradients.
     if not is_differentiable:
-        grad_funcs = [lambda a, b, grad: md.zeros_like(grad) for _ in grad_funcs]
+        grad_funcs = [
+            lambda a, b, grad: md.zeros_like(grad) for _ in range(len(grad_funcs))
+        ]
 
     def minidiff_func(*func_inputs, **kwargs):
         tensor_inputs = [isinstance(x, md.Tensor) for x in func_inputs]
@@ -81,11 +104,8 @@ def generate_op_func(
 
             # FuncNodes can only track tensors, so we have to make everything a tensor.
             func_node = FuncNode(
-                output_tensor=output,
-                input_tensors=[
-                    md.Tensor(x) if not isinstance(x, md.Tensor) else x
-                    for x in func_inputs
-                ],
+                op_output=output,
+                op_inputs=func_inputs,
                 grad_functions=filtered_grad_funcs,
             )
             func_node.op_name = forward_func.__name__ if op_name is None else op_name
@@ -193,6 +213,13 @@ def generate_ternary_op_func(
     )
 
 
+transpose = generate_binary_op_func(
+    forward_func=np.transpose,
+    grad_a=lambda a, grad, axes=None: transpose(grad, axes=axes),
+    is_backend_op=True,
+    propagate_kwargs=True,
+    casting=None,
+)
 swapaxes = generate_ternary_op_func(
     forward_func=np.swapaxes,
     grad_a=lambda a, axis1, axis2, grad, **kwargs: swapaxes(
@@ -236,9 +263,18 @@ atleast_3d = generate_unary_op_func(
 copy = generate_binary_op_func(
     forward_func=np.copy, grad_a=lambda a, grad: grad, is_backend_op=True, casting=None
 )
+
+
+def s__grad(a, key, grad):
+    ret = md.zeros_like(a)
+    np.add.at(ret._data, key, grad._data)
+    return ret
+
+
 s_ = generate_binary_op_func(
-    forward_func=lambda a, key: a[int(key)],
-    is_differentiable=False,
+    forward_func=lambda a, key: a[key],
+    grad_a=s__grad,
+    grad_b=None,
     is_backend_op=True,
     casting=None,
 )
@@ -255,7 +291,7 @@ clip = generate_unary_op_func(
 )
 reshape = generate_binary_op_func(
     forward_func=np.reshape,
-    grad_a=lambda a, grad: grad.reshape(a.shape),
+    grad_a=lambda a, b, grad: grad.reshape(a.shape),
     grad_b=None,
     is_backend_op=True,
     casting=None,
@@ -266,6 +302,77 @@ matmul = generate_binary_op_func(
     grad_b=lambda a, b, grad: matmul(a.t, grad),
     tensor_only=True,
     is_backend_op=True,
+    casting=None,
+)
+
+
+def grad_a(a, b, grad, axes=2):
+    if isinstance(axes, int):
+        axes_a = tuple(range(a.ndim - axes, a.ndim))
+        axes_b = tuple(range(axes))
+        axes = (axes_a, axes_b)
+    # indices of all dims in b not originally contracted in the forward tensordot
+    uncontracted_a = tuple(i for i in range(a.ndim) if i not in axes[0])
+    uncontracted_b = tuple(i for i in range(b.ndim) if i not in axes[1])
+    # indices of all dims in grad that align with uncontracted_b
+    grad_aligned = tuple(range(grad.ndim - len(uncontracted_b), grad.ndim))
+    new_axes = (grad_aligned, uncontracted_b)
+    result = tensordot(grad, b, axes=new_axes)
+    # first few indices will be uncontracted in a, last few will be contracted in a (original forward pass)
+    # need to transpose such that the first few take up the uncontracted a indices, and the last few take up the contracted a indices
+    permutation_indices = [0] * a.ndim
+    n_uncontracted_a = len(uncontracted_a)
+    uncontracted_idx = 0
+    contracted_idx = 0
+    for i in range(a.ndim):
+        if i < n_uncontracted_a:
+            permutation_indices[uncontracted_a[uncontracted_idx]] = i
+            uncontracted_idx += 1
+        else:
+            permutation_indices[axes[0][contracted_idx]] = i
+            contracted_idx += 1
+
+    reshaped = md.transpose(result, permutation_indices)
+    return reshaped
+
+
+def grad_b(a, b, grad, axes=2):
+    if isinstance(axes, int):
+        axes_a = tuple(range(a.ndim - axes, a.ndim))
+        axes_b = tuple(range(axes))
+        axes = (axes_a, axes_b)
+    # indices of all dims in a not originally contracted in the forward tensordot
+    uncontracted_a = tuple(i for i in range(a.ndim) if i not in axes[0])
+    uncontracted_b = tuple(i for i in range(b.ndim) if i not in axes[1])
+    # indices of all dims in grad that align with uncontracted_a
+    grad_aligned = tuple(range(len(uncontracted_a)))
+    new_axes = (uncontracted_a, grad_aligned)
+    result = tensordot(a, grad, axes=new_axes)
+    # first few indices of result will be contracted in a, last few will be uncontracted in b (original forward pass
+    # need to transpose so that the last few take up the uncontracted b indices, and the first few take up the original contracted indices
+    n_contracted_a = len(axes[0])
+    contracted_idx = 0
+    uncontracted_idx = 0
+    permutation_indices = [0] * b.ndim
+    for i in range(b.ndim):
+        if i < n_contracted_a:
+            permutation_indices[axes[1][contracted_idx]] = i
+            contracted_idx += 1
+        else:
+            permutation_indices[uncontracted_b[uncontracted_idx]] = i
+            uncontracted_idx += 1
+    reshaped = md.transpose(result, permutation_indices)
+    return reshaped
+
+
+tensordot = generate_binary_op_func(
+    forward_func=np.tensordot,
+    grad_a=grad_a,
+    grad_b=grad_b,
+    tensor_only=True,
+    is_backend_op=True,
+    propagate_kwargs=True,
+    casting=None,
 )
 add = generate_binary_op_func(
     forward_func=np.add,

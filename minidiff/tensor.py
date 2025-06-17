@@ -3,6 +3,7 @@ try:
 except ImportError:
     import numpy as np
 
+import minidiff.ops as ops
 import minidiff as md
 import contextvars
 
@@ -94,7 +95,7 @@ class Tensor:
 
     @property
     def T(self):
-        return self._data.T
+        return md.transpose(self)
 
     @property
     def shape(self):
@@ -121,7 +122,7 @@ class Tensor:
             if id(tensor) in seen:
                 return
             seen.add(id(tensor))
-            if (root:=tensor.func_node) is not None:
+            if (root := tensor.func_node) is not None:
                 for input_tensor in root.input_tensors:
                     dfs(input_tensor)
             traversal_path.append(tensor)
@@ -161,8 +162,8 @@ class Tensor:
         self.func_node = None
 
     # returns a copy that does not track gradients
-    def detach(self):
-        detached = Tensor(self._data.copy())
+    def detach(self, allow_grad=False):
+        detached = Tensor(self._data.copy(), allow_grad=allow_grad)
         return detached
 
     def item(self):
@@ -330,7 +331,6 @@ class Tensor:
         return self._data.__len__()
 
     def __getitem__(self, key):
-        # this should be an op actually
         return md.s_(self, key)
 
     def __setitem__(self, key, val):
@@ -338,7 +338,7 @@ class Tensor:
             raise ValueError(
                 "in-place operations are not allowed while tracking gradients"
             )
-            
+
         if isinstance(val, Tensor):
             self._data[key] = val._data
         else:
@@ -417,7 +417,7 @@ def collect_gradients(grad, target_shape):
     broadcasted_axes = tuple(range(grad.ndim - len(target_shape)))
     if len(broadcasted_axes) != 0:
         grad = grad.sum(axis=broadcasted_axes)
-        
+
     # this collects the axes that were stretched to span a greater dim
     stretched_axes = tuple(
         i
