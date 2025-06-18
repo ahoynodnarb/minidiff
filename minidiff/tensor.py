@@ -54,8 +54,9 @@ class Tensor:
         self._allow_grad = allow_grad
         # tensors not created by ops are leafs. this property is immutable
         self._func_node = func_node
-        # don't store gradients unless we are user-created.
+        # graphed means we are used in a gradient-tracked computation.
         self.graphed = False
+        # don't store gradients unless we are user-created.
         self.grad = (
             zeros_like(self, allow_grad=False) if self.is_leaf and allow_grad else None
         )
@@ -74,7 +75,8 @@ class Tensor:
 
         self._func_node = func_node
 
-    # we're a leaf if we have no gradient history and we are tracking gradients
+    # we're a leaf if we have no gradient history
+    # whether we're part of a gradient-tracked computation or not. 
     @property
     def is_leaf(self) -> bool:
         return self.func_node is None
