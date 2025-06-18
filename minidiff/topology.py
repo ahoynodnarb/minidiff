@@ -1,8 +1,16 @@
+from typing import List, Any
+
 import minidiff as md
+import minidiff.typing as mdt
 
 
 class FuncNode:
-    def __init__(self, op_output, op_inputs, grad_functions):
+    def __init__(
+        self,
+        op_output: md.Tensor,
+        op_inputs: List[Any],
+        grad_functions: List[mdt.GenericOpGrad],
+    ):
         if not isinstance(op_output, md.Tensor):
             raise ValueError("FuncNodes can only track tensors")
 
@@ -22,7 +30,7 @@ class FuncNode:
             if isinstance(op_input, md.Tensor):
                 op_input.graphed = True
 
-    def update_grads(self, grad):
+    def update_grads(self, grad: md.Tensor):
         # don't use no_grad() here because we are assuming gradients already don't track their gradients,
         # and if they do, they may be doing higher-order partial derivatives
         for op_input, grad_function in zip(self.op_inputs, self.grad_functions):
@@ -41,5 +49,5 @@ class FuncNode:
             else:
                 op_input.grad += collected_grad
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"{self.op_name}({', '.join([str(x) for x in self.op_inputs])})"

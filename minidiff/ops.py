@@ -1,4 +1,5 @@
 from builtins import all as py_all, any as py_any
+from typing import Tuple, Optional, Type, Sequence, Union
 
 try:
     import cupy as np  # type: ignore
@@ -6,47 +7,79 @@ except ImportError:
     import numpy as np
 
 import minidiff as md
-from .topology import FuncNode
+import minidiff.typing as mdt
+from minidiff.topology import FuncNode
 
 
-class Op:
-    def create_forward(self):
+class OpClass:
+    def create_forward(self) -> mdt.GenericFunc:
         raise NotImplementedError
 
-    def create_grads(self):
+    def create_grads(self) -> Sequence[Optional[mdt.GenericOpGrad]]:
         raise NotImplementedError
 
 
-def stateless_op_func(**kwargs):
+class UnaryOpClass(OpClass):
+    def create_forward(self) -> mdt.UnaryFunc:
+        raise NotImplementedError
+
+    def create_grads(self) -> Sequence[Optional[mdt.UnaryOpGrad]]:
+        raise NotImplementedError
+
+
+class BinaryOpClass(OpClass):
+    def create_forward(self) -> mdt.BinaryFunc:
+        raise NotImplementedError
+
+    def create_grads(self) -> Sequence[Optional[mdt.BinaryOpGrad]]:
+        raise NotImplementedError
+
+
+class TernaryOpClass(OpClass):
+    def create_forward(self) -> mdt.TernaryFunc:
+        raise NotImplementedError
+
+    def create_grads(self) -> Sequence[Optional[mdt.TernaryOpGrad]]:
+        raise NotImplementedError
+
+
+def stateless_op_func(**kwargs) -> mdt.GenericOp:
     def wrapper(func):
         return generate_stateless_op_func(forward_func=func, **kwargs)
 
     return wrapper
 
 
-def unary_op_func(**kwargs):
+def unary_op_func(**kwargs) -> mdt.UnaryOp:
     def wrapper(func):
         return generate_unary_op_func(forward_func=func, **kwargs)
 
     return wrapper
 
 
-def binary_op_func(**kwargs):
+def binary_op_func(**kwargs) -> mdt.BinaryOp:
     def wrapper(func):
         return generate_binary_op_func(forward_func=func, **kwargs)
 
     return wrapper
 
 
+def ternary_op_func(**kwargs) -> mdt.TernaryOp:
+    def wrapper(func):
+        return generate_ternary_op_func(forward_func=func, **kwargs)
+
+    return wrapper
+
+
 def generate_op_func(
-    op_class,
-    is_differentiable=True,
-    tensor_only=False,
-    is_backend_op=False,
-    propagate_kwargs=False,
-    op_name=None,
-    casting="safe",
-):
+    op_class: Type[OpClass],
+    is_differentiable: bool = True,
+    tensor_only: bool = False,
+    is_backend_op: bool = False,
+    propagate_kwargs: bool = False,
+    op_name: Optional[str] = None,
+    casting: Optional[str] = "safe",
+) -> mdt.GenericOp:
     instance = op_class()
     forward_func = instance.create_forward()
     grad_funcs = instance.create_grads()
@@ -118,24 +151,24 @@ def generate_op_func(
 
 
 def generate_stateless_op_func(
-    forward_func,
-    grad_funcs,
-    is_differentiable=True,
-    tensor_only=False,
-    is_backend_op=False,
-    propagate_kwargs=False,
-    op_name=None,
-    casting="safe",
-):
-    class StatelessOp(Op):
-        def create_forward(self):
+    forward_func: mdt.GenericFunc,
+    grad_funcs: Sequence[Optional[mdt.GenericOpGrad]],
+    is_differentiable: bool = True,
+    tensor_only: bool = False,
+    is_backend_op: bool = False,
+    propagate_kwargs: bool = False,
+    op_name: Optional[str] = None,
+    casting: Optional[str] = "safe",
+) -> mdt.GenericOp:
+    class StatelessOpClass(OpClass):
+        def create_forward(self) -> mdt.GenericFunc:
             return forward_func
 
-        def create_grads(self):
+        def create_grads(self) -> Sequence[Optional[mdt.GenericOpGrad]]:
             return grad_funcs
 
     return generate_op_func(
-        op_class=StatelessOp,
+        op_class=StatelessOpClass,
         is_differentiable=is_differentiable,
         tensor_only=tensor_only,
         is_backend_op=is_backend_op,
@@ -146,14 +179,14 @@ def generate_stateless_op_func(
 
 
 def generate_unary_op_func(
-    forward_func,
-    grad=None,
-    is_differentiable=True,
-    is_backend_op=False,
-    propagate_kwargs=False,
-    op_name=None,
-    casting="safe",
-):
+    forward_func: mdt.UnaryFunc,
+    grad: Optional[mdt.UnaryOpGrad] = None,
+    is_differentiable: bool = True,
+    is_backend_op: bool = False,
+    propagate_kwargs: bool = False,
+    op_name: Optional[str] = None,
+    casting: Optional[str] = "safe",
+) -> mdt.UnaryOp:
     return generate_stateless_op_func(
         forward_func=forward_func,
         grad_funcs=[grad],
@@ -167,16 +200,16 @@ def generate_unary_op_func(
 
 
 def generate_binary_op_func(
-    forward_func,
-    grad_a=None,
-    grad_b=None,
-    is_differentiable=True,
-    tensor_only=False,
-    is_backend_op=False,
-    propagate_kwargs=False,
-    op_name=None,
-    casting="safe",
-):
+    forward_func: mdt.BinaryFunc,
+    grad_a: Optional[mdt.BinaryOpGrad] = None,
+    grad_b: Optional[mdt.BinaryOpGrad] = None,
+    is_differentiable: bool = True,
+    tensor_only: bool = False,
+    is_backend_op: bool = False,
+    propagate_kwargs: bool = False,
+    op_name: Optional[str] = None,
+    casting: Optional[str] = "safe",
+) -> mdt.BinaryOp:
     return generate_stateless_op_func(
         forward_func=forward_func,
         grad_funcs=[grad_a, grad_b],
@@ -190,17 +223,17 @@ def generate_binary_op_func(
 
 
 def generate_ternary_op_func(
-    forward_func,
-    grad_a=None,
-    grad_b=None,
-    grad_c=None,
-    is_differentiable=True,
-    tensor_only=False,
-    is_backend_op=False,
-    propagate_kwargs=False,
-    op_name=None,
-    casting="safe",
-):
+    forward_func: mdt.TernaryFunc,
+    grad_a: Optional[mdt.TernaryOpGrad] = None,
+    grad_b: Optional[mdt.TernaryOpGrad] = None,
+    grad_c: Optional[mdt.TernaryOpGrad] = None,
+    is_differentiable: bool = True,
+    tensor_only: bool = False,
+    is_backend_op: bool = False,
+    propagate_kwargs: bool = False,
+    op_name: Optional[str] = None,
+    casting: Optional[str] = "safe",
+) -> mdt.TernaryOp:
     return generate_stateless_op_func(
         forward_func=forward_func,
         grad_funcs=[grad_a, grad_b, grad_c],
@@ -213,106 +246,17 @@ def generate_ternary_op_func(
     )
 
 
-transpose = generate_binary_op_func(
-    forward_func=np.transpose,
-    grad_a=lambda a, grad, axes=None: transpose(grad, axes=axes),
-    is_backend_op=True,
-    propagate_kwargs=True,
-    casting=None,
-)
-swapaxes = generate_ternary_op_func(
-    forward_func=np.swapaxes,
-    grad_a=lambda a, axis1, axis2, grad, **kwargs: swapaxes(
-        grad, axis1, axis2, **kwargs
-    ),
-    is_backend_op=True,
-    propagate_kwargs=True,
-    casting=None,
-)
-flip = generate_unary_op_func(
-    forward_func=np.flip,
-    grad=lambda a, grad, **kwargs: flip(grad, **kwargs),
-    is_backend_op=True,
-    propagate_kwargs=True,
-    casting=None,
-)
-broadcast_to = generate_binary_op_func(
-    forward_func=np.broadcast_to,
-    grad_a=lambda a, grad: md.collect_gradients(grad=grad, target_shape=a.shape),
-    is_backend_op=True,
-    casting=None,
-)
-atleast_1d = generate_unary_op_func(
-    forward_func=np.atleast_1d,
-    grad=lambda a, grad: grad,
-    is_backend_op=True,
-    casting=None,
-)
-atleast_2d = generate_unary_op_func(
-    forward_func=np.atleast_2d,
-    grad=lambda a, grad: grad,
-    is_backend_op=True,
-    casting=None,
-)
-atleast_3d = generate_unary_op_func(
-    forward_func=np.atleast_3d,
-    grad=lambda a, grad: grad,
-    is_backend_op=True,
-    casting=None,
-)
-copy = generate_binary_op_func(
-    forward_func=np.copy, grad_a=lambda a, grad: grad, is_backend_op=True, casting=None
-)
-
-
-def s__grad(a, key, grad):
-    ret = md.zeros_like(a)
-    np.add.at(ret._data, key, grad._data)
-    return ret
-
-
-s_ = generate_binary_op_func(
-    forward_func=lambda a, key: a[key],
-    grad_a=s__grad,
-    grad_b=None,
-    is_backend_op=True,
-    casting=None,
-    op_name="index",
-)
-clip = generate_unary_op_func(
-    forward_func=np.clip,
-    grad=lambda a, grad, a_min=None, a_max=None: grad
-    * logical_and(
-        a > float("-inf") if a_min is None else a_min,
-        a < float("inf") if a_max is None else a_max,
-    ),
-    propagate_kwargs=True,
-    is_backend_op=True,
-    casting=None,
-)
-reshape = generate_binary_op_func(
-    forward_func=np.reshape,
-    grad_a=lambda a, b, grad: grad.reshape(a.shape),
-    grad_b=None,
-    is_backend_op=True,
-    casting=None,
-)
-matmul = generate_binary_op_func(
-    forward_func=np.matmul,
-    grad_a=lambda a, b, grad: matmul(grad, b.t),
-    grad_b=lambda a, b, grad: matmul(a.t, grad),
-    tensor_only=True,
-    is_backend_op=True,
-    casting=None,
-)
-
-
-class TensorDot(Op):
-    def create_forward(self):
+class TensorDot(BinaryOpClass):
+    def create_forward(self) -> mdt.BinaryOp:
         return np.tensordot
 
-    def create_grads(self):
-        def grad_a(a, b, grad, axes=2):
+    def create_grads(self) -> Tuple[mdt.BinaryOpGrad, mdt.BinaryOpGrad]:
+        def grad_a(
+            a: md.Tensor,
+            b: md.Tensor,
+            grad: md.Tensor,
+            axes: Union[int, mdt.NestedSequence[int]] = 2,
+        ) -> md.Tensor:
             if isinstance(axes, int):
                 axes_a = tuple(range(a.ndim - axes, a.ndim))
                 axes_b = tuple(range(axes))
@@ -341,7 +285,12 @@ class TensorDot(Op):
             reshaped = md.transpose(result, permutation_indices)
             return reshaped
 
-        def grad_b(a, b, grad, axes=2):
+        def grad_b(
+            a: md.Tensor,
+            b: md.Tensor,
+            grad: md.Tensor,
+            axes: Union[int, mdt.NestedSequence[int]] = 2,
+        ) -> md.Tensor:
             if isinstance(axes, int):
                 axes_a = tuple(range(a.ndim - axes, a.ndim))
                 axes_b = tuple(range(axes))
@@ -373,135 +322,250 @@ class TensorDot(Op):
         return (grad_a, grad_b)
 
 
-tensordot = generate_op_func(
-    op_class=TensorDot,
-    tensor_only=True,
-    is_backend_op=True,
-    propagate_kwargs=True,
-    casting=None,
-)
-add = generate_binary_op_func(
-    forward_func=np.add,
-    grad_a=lambda a, b, grad: grad,
-    grad_b=lambda a, b, grad: grad,
-    is_backend_op=True,
-)
-subtract = generate_binary_op_func(
-    forward_func=np.subtract,
-    grad_a=lambda a, b, grad: grad,
-    grad_b=lambda a, b, grad: -grad,
-    is_backend_op=True,
-)
-multiply = generate_binary_op_func(
-    forward_func=np.multiply,
-    grad_a=lambda a, b, grad: grad * b,
-    grad_b=lambda a, b, grad: grad * a,
-    is_backend_op=True,
-)
-true_divide = generate_binary_op_func(
-    forward_func=np.true_divide,
-    grad_a=lambda a, b, grad: grad / b,
-    grad_b=lambda a, b, grad: (-grad * a) / (b**2),
-    is_backend_op=True,
-)
-floor_divide = generate_binary_op_func(
-    forward_func=np.floor_divide, is_differentiable=False, is_backend_op=True
-)
-power = generate_binary_op_func(
-    forward_func=np.power,
-    grad_a=lambda a, b, grad: grad * b * (a ** (b - 1)),
-    grad_b=lambda a, b, grad: grad * log(a) * a**b,
-    is_backend_op=True,
-)
-sqrt = lambda a, b, **kwargs: power(a, 0.5, **kwargs)
-floor = generate_unary_op_func(
-    forward_func=np.floor, is_differentiable=False, is_backend_op=True
-)
-ceil = generate_unary_op_func(
-    forward_func=np.ceil, is_differentiable=False, is_backend_op=True
-)
-cos = generate_unary_op_func(
-    forward_func=np.cos, grad=lambda a, grad: grad * -sin(a), is_backend_op=True
-)
-sin = generate_unary_op_func(
-    forward_func=np.sin, grad=lambda a, grad: grad * cos(a), is_backend_op=True
-)
-tan = generate_unary_op_func(
-    forward_func=np.tan,
-    grad=lambda a, grad: grad * (1 / cos(a) ** 2),
-    is_backend_op=True,
-)
-cosh = generate_unary_op_func(
-    forward_func=np.cosh, grad=lambda a, grad: grad * sinh(a), is_backend_op=True
-)
-sinh = generate_unary_op_func(
-    forward_func=np.sinh, grad=lambda a, grad: grad * cosh(a), is_backend_op=True
-)
-tanh = generate_unary_op_func(
-    forward_func=np.tanh,
-    grad=lambda a, grad: grad * (1 / cosh(a) ** 2),
-    is_backend_op=True,
-)
-exp = generate_unary_op_func(
-    forward_func=np.exp, grad=lambda a, grad: grad * exp(a), is_backend_op=True
-)
-log = generate_unary_op_func(
-    forward_func=np.log, grad=lambda a, grad: grad / a, is_backend_op=True
-)
-sum = generate_unary_op_func(
-    forward_func=np.sum, grad=lambda a, grad: grad, is_backend_op=True, casting=None
-)
-mean = generate_unary_op_func(
-    forward_func=np.mean,
-    grad=lambda a, grad: grad / a.size,
-    is_backend_op=True,
-    casting=None,
-)
-greater = generate_binary_op_func(
-    forward_func=np.greater, is_differentiable=False, is_backend_op=True, casting=None
-)
-greater_equal = generate_binary_op_func(
-    forward_func=np.greater_equal,
-    is_differentiable=False,
-    is_backend_op=True,
-    casting=None,
-)
-less = generate_binary_op_func(
-    forward_func=np.less, is_differentiable=False, is_backend_op=True, casting=None
-)
-less_equal = generate_binary_op_func(
-    forward_func=np.less_equal,
-    is_differentiable=False,
-    is_backend_op=True,
-    casting=None,
-)
-equal = generate_binary_op_func(
-    forward_func=np.equal, is_differentiable=False, is_backend_op=True, casting=None
-)
-not_equal = generate_binary_op_func(
-    forward_func=np.not_equal, is_differentiable=False, is_backend_op=True, casting=None
-)
-logical_and = generate_binary_op_func(
-    forward_func=np.logical_and, is_differentiable=False, is_backend_op=True
-)
-logical_or = generate_binary_op_func(
-    forward_func=np.logical_or, is_differentiable=False, is_backend_op=True
-)
-logical_not = generate_binary_op_func(
-    forward_func=np.logical_not, is_differentiable=False, is_backend_op=True
-)
-logical_xor = generate_binary_op_func(
-    forward_func=np.logical_xor, is_differentiable=False, is_backend_op=True
-)
-sign = generate_unary_op_func(
-    forward_func=np.sign, is_differentiable=False, is_backend_op=True
-)
-absolute = generate_unary_op_func(
-    forward_func=np.absolute, grad=lambda a, grad: grad * sign(a), is_backend_op=True
-)
-all = generate_unary_op_func(
-    forward_func=np.all, is_differentiable=False, is_backend_op=True, casting=None
-)
-any = generate_unary_op_func(
-    forward_func=np.any, is_differentiable=False, is_backend_op=True, casting=None
-)
+def s__grad(a, key, grad):
+    ret = md.zeros_like(a)
+    np.add.at(ret._data, key, grad._data)
+    return ret
+
+
+exported_ops = [
+    transpose := generate_binary_op_func(
+        forward_func=np.transpose,
+        grad_a=lambda a, grad, axes=None: transpose(grad, axes=axes),
+        is_backend_op=True,
+        propagate_kwargs=True,
+        casting=None,
+    ),
+    swapaxes := generate_ternary_op_func(
+        forward_func=np.swapaxes,
+        grad_a=lambda a, axis1, axis2, grad, **kwargs: swapaxes(
+            grad, axis1, axis2, **kwargs
+        ),
+        is_backend_op=True,
+        propagate_kwargs=True,
+        casting=None,
+    ),
+    flip := generate_unary_op_func(
+        forward_func=np.flip,
+        grad=lambda a, grad, **kwargs: flip(grad, **kwargs),
+        is_backend_op=True,
+        propagate_kwargs=True,
+        casting=None,
+    ),
+    broadcast_to := generate_binary_op_func(
+        forward_func=np.broadcast_to,
+        grad_a=lambda a, grad: md.collect_gradients(grad=grad, target_shape=a.shape),
+        is_backend_op=True,
+        casting=None,
+    ),
+    atleast_1d := generate_unary_op_func(
+        forward_func=np.atleast_1d,
+        grad=lambda a, grad: grad,
+        is_backend_op=True,
+        casting=None,
+    ),
+    atleast_2d := generate_unary_op_func(
+        forward_func=np.atleast_2d,
+        grad=lambda a, grad: grad,
+        is_backend_op=True,
+        casting=None,
+    ),
+    atleast_3d := generate_unary_op_func(
+        forward_func=np.atleast_3d,
+        grad=lambda a, grad: grad,
+        is_backend_op=True,
+        casting=None,
+    ),
+    copy := generate_binary_op_func(
+        forward_func=np.copy,
+        grad_a=lambda a, grad: grad,
+        is_backend_op=True,
+        casting=None,
+    ),
+    s_ := generate_binary_op_func(
+        forward_func=lambda a, key: a[key],
+        grad_a=s__grad,
+        grad_b=None,
+        is_backend_op=True,
+        casting=None,
+        op_name="index",
+    ),
+    clip := generate_unary_op_func(
+        forward_func=np.clip,
+        grad=lambda a, grad, a_min=None, a_max=None: grad
+        * logical_and(
+            a > float("-inf") if a_min is None else a_min,
+            a < float("inf") if a_max is None else a_max,
+        ),
+        propagate_kwargs=True,
+        is_backend_op=True,
+        casting=None,
+    ),
+    reshape := generate_binary_op_func(
+        forward_func=np.reshape,
+        grad_a=lambda a, b, grad: grad.reshape(a.shape),
+        grad_b=None,
+        is_backend_op=True,
+        casting=None,
+    ),
+    matmul := generate_binary_op_func(
+        forward_func=np.matmul,
+        grad_a=lambda a, b, grad: matmul(grad, b.t),
+        grad_b=lambda a, b, grad: matmul(a.t, grad),
+        tensor_only=True,
+        is_backend_op=True,
+        casting=None,
+    ),
+    tensordot := generate_op_func(
+        op_class=TensorDot,
+        tensor_only=True,
+        is_backend_op=True,
+        propagate_kwargs=True,
+        casting=None,
+    ),
+    add := generate_binary_op_func(
+        forward_func=np.add,
+        grad_a=lambda a, b, grad: grad,
+        grad_b=lambda a, b, grad: grad,
+        is_backend_op=True,
+    ),
+    subtract := generate_binary_op_func(
+        forward_func=np.subtract,
+        grad_a=lambda a, b, grad: grad,
+        grad_b=lambda a, b, grad: -grad,
+        is_backend_op=True,
+    ),
+    multiply := generate_binary_op_func(
+        forward_func=np.multiply,
+        grad_a=lambda a, b, grad: grad * b,
+        grad_b=lambda a, b, grad: grad * a,
+        is_backend_op=True,
+    ),
+    true_divide := generate_binary_op_func(
+        forward_func=np.true_divide,
+        grad_a=lambda a, b, grad: grad / b,
+        grad_b=lambda a, b, grad: (-grad * a) / (b**2),
+        is_backend_op=True,
+    ),
+    floor_divide := generate_binary_op_func(
+        forward_func=np.floor_divide, is_differentiable=False, is_backend_op=True
+    ),
+    power := generate_binary_op_func(
+        forward_func=np.power,
+        grad_a=lambda a, b, grad: grad * b * (a ** (b - 1)),
+        grad_b=lambda a, b, grad: grad * log(a) * a**b,
+        is_backend_op=True,
+    ),
+    sqrt := lambda a, b, **kwargs: power(a, 0.5, **kwargs),
+    floor := generate_unary_op_func(
+        forward_func=np.floor, is_differentiable=False, is_backend_op=True
+    ),
+    ceil := generate_unary_op_func(
+        forward_func=np.ceil, is_differentiable=False, is_backend_op=True
+    ),
+    cos := generate_unary_op_func(
+        forward_func=np.cos, grad=lambda a, grad: grad * -sin(a), is_backend_op=True
+    ),
+    sin := generate_unary_op_func(
+        forward_func=np.sin, grad=lambda a, grad: grad * cos(a), is_backend_op=True
+    ),
+    tan := generate_unary_op_func(
+        forward_func=np.tan,
+        grad=lambda a, grad: grad * (1 / cos(a) ** 2),
+        is_backend_op=True,
+    ),
+    cosh := generate_unary_op_func(
+        forward_func=np.cosh, grad=lambda a, grad: grad * sinh(a), is_backend_op=True
+    ),
+    sinh := generate_unary_op_func(
+        forward_func=np.sinh, grad=lambda a, grad: grad * cosh(a), is_backend_op=True
+    ),
+    tanh := generate_unary_op_func(
+        forward_func=np.tanh,
+        grad=lambda a, grad: grad * (1 / cosh(a) ** 2),
+        is_backend_op=True,
+    ),
+    exp := generate_unary_op_func(
+        forward_func=np.exp, grad=lambda a, grad: grad * exp(a), is_backend_op=True
+    ),
+    log := generate_unary_op_func(
+        forward_func=np.log, grad=lambda a, grad: grad / a, is_backend_op=True
+    ),
+    sum := generate_unary_op_func(
+        forward_func=np.sum, grad=lambda a, grad: grad, is_backend_op=True, casting=None
+    ),
+    mean := generate_unary_op_func(
+        forward_func=np.mean,
+        grad=lambda a, grad: grad / a.size,
+        is_backend_op=True,
+        casting=None,
+    ),
+    greater := generate_binary_op_func(
+        forward_func=np.greater,
+        is_differentiable=False,
+        is_backend_op=True,
+        casting=None,
+    ),
+    greater_equal := generate_binary_op_func(
+        forward_func=np.greater_equal,
+        is_differentiable=False,
+        is_backend_op=True,
+        casting=None,
+    ),
+    less := generate_binary_op_func(
+        forward_func=np.less, is_differentiable=False, is_backend_op=True, casting=None
+    ),
+    less_equal := generate_binary_op_func(
+        forward_func=np.less_equal,
+        is_differentiable=False,
+        is_backend_op=True,
+        casting=None,
+    ),
+    equal := generate_binary_op_func(
+        forward_func=np.equal, is_differentiable=False, is_backend_op=True, casting=None
+    ),
+    not_equal := generate_binary_op_func(
+        forward_func=np.not_equal,
+        is_differentiable=False,
+        is_backend_op=True,
+        casting=None,
+    ),
+    logical_and := generate_binary_op_func(
+        forward_func=np.logical_and, is_differentiable=False, is_backend_op=True
+    ),
+    logical_or := generate_binary_op_func(
+        forward_func=np.logical_or, is_differentiable=False, is_backend_op=True
+    ),
+    logical_not := generate_binary_op_func(
+        forward_func=np.logical_not, is_differentiable=False, is_backend_op=True
+    ),
+    logical_xor := generate_binary_op_func(
+        forward_func=np.logical_xor, is_differentiable=False, is_backend_op=True
+    ),
+    sign := generate_unary_op_func(
+        forward_func=np.sign, is_differentiable=False, is_backend_op=True
+    ),
+    absolute := generate_unary_op_func(
+        forward_func=np.absolute,
+        grad=lambda a, grad: grad * sign(a),
+        is_backend_op=True,
+    ),
+    all := generate_unary_op_func(
+        forward_func=np.all, is_differentiable=False, is_backend_op=True, casting=None
+    ),
+    any := generate_unary_op_func(
+        forward_func=np.any, is_differentiable=False, is_backend_op=True, casting=None
+    ),
+]
+
+
+def get_exported_names(local_vars):
+    exported = set()
+    for op in exported_ops:
+        for name, value in local_vars.items():
+            if value is op:
+                exported.add(name)
+    return list(exported)
+
+
+__all__ = get_exported_names(dict(locals()))

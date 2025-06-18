@@ -1,11 +1,19 @@
+from typing import List, Tuple, Optional, Dict
+
 import graphviz
+
 import minidiff as md
+import minidiff.typing as mdt
 
 
 def draw_tensor_op_graph(
-    root, tensor_names=None, graph=None, insert_intermediates=False, **kwargs
-):
-    def find_nested_tensor_name(tensor):
+    root: md.Tensor,
+    tensor_names: Optional[Dict[int, str]] = None,
+    graph: Optional[graphviz.Graph] = None,
+    insert_intermediates: bool = False,
+    **kwargs,
+) -> graphviz.Graph:
+    def find_nested_tensor_name(tensor: md.Tensor) -> str:
         # this essentially just finds the name of every input tensor,
         # and lists them as arguments to the function which produced tensor
         node = tensor.func_node
@@ -16,7 +24,7 @@ def draw_tensor_op_graph(
         nested_tensor_name = f"{op_name}({', '.join(input_names)})"
         return nested_tensor_name
 
-    def lookup_tensor_name(tensor):
+    def lookup_tensor_name(tensor: md.Tensor) -> str:
         nonlocal all_tensor_names
         nonlocal n_anonymous_tensors
 
@@ -40,7 +48,7 @@ def draw_tensor_op_graph(
 
         return tensor_name
 
-    def add_edges(graph, tensor):
+    def add_edges(graph: graphviz.Graph, tensor: md.Tensor):
         # self-explanatory: just connect every tensor to the tensors which created it
         if tensor.is_leaf:
             return
@@ -50,7 +58,7 @@ def draw_tensor_op_graph(
             child_id = id(child)
             graph.edge(str(child_id), str(tensor_id))
 
-    def draw_tensor_graph(graph, t):
+    def draw_tensor_graph(graph: graphviz.Graph, t: md.Tensor):
         # iterate through every tensor starting from leaf tensors
         all_tensors = t.toposort()
         for tensor in all_tensors:
@@ -81,7 +89,9 @@ def draw_tensor_op_graph(
     return graph
 
 
-def calculate_finite_differences(*input_tensors, func, h=1e-5):
+def calculate_finite_differences(
+    *input_tensors: List[md.Tensor], func: mdt.GenericOp, h: float = 1e-5
+) -> List[md.Tensor]:
     manual_gradients = []
     with md.no_grad():
         for i, input_tensor in enumerate(input_tensors):
@@ -110,7 +120,9 @@ def calculate_finite_differences(*input_tensors, func, h=1e-5):
     return manual_gradients
 
 
-def compute_grads(*input_tensors, func):
+def compute_grads(
+    *input_tensors: List[md.Tensor], func: mdt.GenericOp
+) -> Tuple[List[md.Tensor], List[md.Tensor]]:
     manual_gradients = calculate_finite_differences(*input_tensors, func=func)
     computed = func(*input_tensors)
     computed.backward()

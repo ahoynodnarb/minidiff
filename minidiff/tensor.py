@@ -1,10 +1,15 @@
+import contextvars
+from typing import List, Union, Any, Tuple, Dict, Optional, Sequence
+
 try:
     import cupy as np  # type: ignore
+    import cupy.typing as npt  # type: ignore
 except ImportError:
     import numpy as np
+    import numpy.typing as npt
 
 import minidiff as md
-import contextvars
+import minidiff.typing as mdt
 
 _allow_grad = contextvars.ContextVar("allow_grad", default=True)
 
@@ -34,7 +39,13 @@ def grad_allowed_():
 
 
 class Tensor:
-    def __init__(self, data, allow_grad=False, dtype=None, func_node=None):
+    def __init__(
+        self,
+        data: "np.ArrayLike",
+        allow_grad: bool = False,
+        dtype: Optional[np.dtype] = None,
+        func_node: Optional["md.topology.FuncNode"] = None,
+    ):
         if isinstance(data, np.ndarray):
             self._data = data.astype(dtype)
         else:
@@ -50,11 +61,11 @@ class Tensor:
         )
 
     @property
-    def func_node(self):
+    def func_node(self) -> "md.topology.FuncNode":
         return self._func_node
 
     @func_node.setter
-    def func_node(self, func_node):
+    def func_node(self, func_node: "md.topology.FuncNode"):
         # if we're on a graph, and we're a leaf that's trying to assign itself a node,
         # then fail because leafs, by definition, have no gradient history and therefore
         # cannot possess nodes
@@ -65,15 +76,15 @@ class Tensor:
 
     # we're a leaf if we have no gradient history and we are tracking gradients
     @property
-    def is_leaf(self):
+    def is_leaf(self) -> bool:
         return self.func_node is None
 
     @property
-    def allow_grad(self):
+    def allow_grad(self) -> bool:
         return self._allow_grad
 
     @allow_grad.setter
-    def allow_grad(self, allow_grad):
+    def allow_grad(self, allow_grad: bool):
         # if we're trying to turn off gradient tracking while we're graphed and an intermediate tensor, then error
         if not allow_grad and self.graphed and not self.is_leaf:
             raise ValueError(
@@ -93,26 +104,26 @@ class Tensor:
         self._allow_grad = allow_grad
 
     @property
-    def T(self):
+    def T(self) -> "Tensor":
         return md.transpose(self)
 
     @property
-    def shape(self):
+    def shape(self) -> Tuple[int, ...]:
         return self._data.shape
 
     @property
-    def size(self):
+    def size(self) -> int:
         return self._data.size
 
     @property
-    def ndim(self):
+    def ndim(self) -> int:
         return self._data.ndim
 
     @property
-    def dtype(self):
+    def dtype(self) -> np.dtype:
         return self._data.dtype
 
-    def toposort(self):
+    def toposort(self) -> List["Tensor"]:
         seen = set()
         traversal_path = []
 
@@ -130,7 +141,7 @@ class Tensor:
 
         return traversal_path
 
-    def backward(self, retain_graph=False, retain_grads=False):
+    def backward(self, retain_graph: bool = False, retain_grads: bool = False):
         # can't call backward if we're not tracking gradients or we have no gradient history
         if not self.allow_grad:
             return
@@ -161,11 +172,11 @@ class Tensor:
         self.func_node = None
 
     # returns a copy that does not track gradients
-    def detach(self, allow_grad=False):
+    def detach(self, allow_grad: bool = False) -> "Tensor":
         detached = Tensor(self._data.copy(), allow_grad=allow_grad)
         return detached
 
-    def item(self):
+    def item(self) -> np.ScalarType:
         if self.size != 1:
             raise ValueError(
                 "only Tensors with a single element can be reduced to a Python scalar"
@@ -173,31 +184,35 @@ class Tensor:
 
         return self._data.item()
 
-    def sum(self, **kwargs):
+    def sum(self, **kwargs) -> "Tensor":
         return md.sum(self, **kwargs)
 
-    def copy(self, **kwargs):
+    def copy(self, **kwargs) -> "Tensor":
         return md.copy(self, **kwargs)
 
-    def clip(self, a_min=None, a_max=None):
+    def clip(
+        self,
+        a_min: Optional[Union[float, int]] = None,
+        a_max: Optional[Union[float, int]] = None,
+    ) -> "Tensor":
         return md.clip(self, a_min=a_min, a_max=a_max)
 
-    def reshape(self, shape, **kwargs):
+    def reshape(self, shape: Sequence[int], **kwargs) -> "Tensor":
         return md.reshape(self, shape, **kwargs)
 
-    def dot(self, other, **kwargs):
+    def dot(self, other: "Tensor", **kwargs) -> "Tensor":
         return md.matmul(self, other, **kwargs)
 
-    def add(self, other, **kwargs):
+    def add(self, other: mdt.TensorLike, **kwargs) -> "Tensor":
         return md.add(self, other, **kwargs)
 
-    def multiply(self, other, **kwargs):
+    def multiply(self, other: mdt.TensorLike, **kwargs) -> "Tensor":
         return md.multiply(self, other, **kwargs)
 
-    def __matmul__(self, other):
+    def __matmul__(self, other: "Tensor") -> "Tensor":
         return md.matmul(self, other)
 
-    def __imatmul__(self, other):
+    def __imatmul__(self, other: "Tensor") -> "Tensor":
         if self.allow_grad and md.grad_allowed_():
             raise ValueError(
                 "in-place operations are not allowed while tracking gradients"
@@ -206,13 +221,13 @@ class Tensor:
         self._data = self._data @ other._data
         return self
 
-    def __add__(self, other):
+    def __add__(self, other: mdt.TensorLike) -> "Tensor":
         return md.add(self, other)
 
-    def __radd__(self, other):
+    def __radd__(self, other: mdt.TensorLike) -> "Tensor":
         return md.add(other, self)
 
-    def __iadd__(self, other):
+    def __iadd__(self, other: mdt.TensorLike) -> "Tensor":
         if self.allow_grad and md.grad_allowed_():
             raise ValueError(
                 "in-place operations are not allowed while tracking gradients"
@@ -225,13 +240,13 @@ class Tensor:
 
         return self
 
-    def __sub__(self, other):
+    def __sub__(self, other: mdt.TensorLike) -> "Tensor":
         return md.subtract(self, other)
 
-    def __rsub__(self, other):
+    def __rsub__(self, other: mdt.TensorLike) -> "Tensor":
         return md.subtract(other, self)
 
-    def __isub__(self, other):
+    def __isub__(self, other: mdt.TensorLike) -> "Tensor":
         if self.allow_grad and md.grad_allowed_():
             raise ValueError(
                 "in-place operations are not allowed while tracking gradients"
@@ -244,13 +259,13 @@ class Tensor:
 
         return self
 
-    def __mul__(self, other):
+    def __mul__(self, other: mdt.TensorLike) -> "Tensor":
         return md.multiply(self, other)
 
-    def __rmul__(self, other):
+    def __rmul__(self, other: mdt.TensorLike) -> "Tensor":
         return md.multiply(other, self)
 
-    def __imul__(self, other):
+    def __imul__(self, other: mdt.TensorLike) -> "Tensor":
         if self.allow_grad and md.grad_allowed_():
             raise ValueError(
                 "in-place operations are not allowed while tracking gradients"
@@ -263,13 +278,13 @@ class Tensor:
 
         return self
 
-    def __truediv__(self, other):
+    def __truediv__(self, other: mdt.TensorLike) -> "Tensor":
         return md.true_divide(self, other)
 
-    def __rtruediv__(self, other):
+    def __rtruediv__(self, other: mdt.TensorLike) -> "Tensor":
         return md.true_divide(other, self)
 
-    def __itruediv__(self, other):
+    def __itruediv__(self, other: mdt.TensorLike) -> "Tensor":
         if self.allow_grad and md.grad_allowed_():
             raise ValueError(
                 "in-place operations are not allowed while tracking gradients"
@@ -282,13 +297,13 @@ class Tensor:
 
         return self
 
-    def __floordiv__(self, other):
+    def __floordiv__(self, other: mdt.TensorLike) -> "Tensor":
         return md.floor_divide(self, other)
 
-    def __rfloordiv__(self, other):
+    def __rfloordiv__(self, other: mdt.TensorLike) -> "Tensor":
         return md.floor_divide(other, self)
 
-    def __ifloordiv__(self, other):
+    def __ifloordiv__(self, other: mdt.TensorLike) -> "Tensor":
         if self.allow_grad and md.grad_allowed_():
             raise ValueError(
                 "in-place operations are not allowed while tracking gradients"
@@ -301,13 +316,13 @@ class Tensor:
 
         return self
 
-    def __pow__(self, other):
+    def __pow__(self, other: mdt.TensorLike) -> "Tensor":
         return md.power(self, other)
 
-    def __rpow__(self, other):
+    def __rpow__(self, other: mdt.TensorLike) -> "Tensor":
         return md.power(other, self)
 
-    def __ipow__(self, other):
+    def __ipow__(self, other: mdt.TensorLike) -> "Tensor":
         if self.allow_grad and md.grad_allowed_():
             raise ValueError(
                 "in-place operations are not allowed while tracking gradients"
@@ -320,19 +335,19 @@ class Tensor:
 
         return self
 
-    def __neg__(self):
+    def __neg__(self) -> "Tensor":
         return -1 * self
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return self._data.__repr__()
 
-    def __len__(self):
+    def __len__(self) -> int:
         return self._data.__len__()
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: Any) -> "Tensor":
         return md.s_(self, key)
 
-    def __setitem__(self, key, val):
+    def __setitem__(self, key: Any, val: mdt.TensorLike):
         if self.allow_grad and md.grad_allowed_():
             raise ValueError(
                 "in-place operations are not allowed while tracking gradients"
@@ -343,41 +358,43 @@ class Tensor:
         else:
             self._data[key] = val
 
-    def __gt__(self, value):
+    def __gt__(self, value: mdt.TensorLike) -> "Tensor":
         return md.greater(self, value)
 
-    def __ge__(self, value):
+    def __ge__(self, value: mdt.TensorLike) -> "Tensor":
         return md.greater_equal(self, value)
 
-    def __lt__(self, value):
+    def __lt__(self, value: mdt.TensorLike) -> "Tensor":
         return md.less(self, value)
 
-    def __le__(self, value):
+    def __le__(self, value: mdt.TensorLike) -> "Tensor":
         return md.less_equal(self, value)
 
-    def __eq__(self, value):
+    def __eq__(self, value: mdt.TensorLike) -> "Tensor":
         return md.equal(self, value)
 
-    def __ne__(self, value):
+    def __ne__(self, value: mdt.TensorLike) -> "Tensor":
         return md.not_equal(self, value)
 
-    def __and__(self, value):
+    def __and__(self, value: mdt.TensorLike) -> "Tensor":
         return md.logical_and(self, value)
 
-    def __or__(self, value):
+    def __or__(self, value: mdt.TensorLike) -> "Tensor":
         return md.logical_or(self, value)
 
-    def __not__(self, value):
+    def __not__(self, value: mdt.TensorLike) -> "Tensor":
         return md.logical_not(self, value)
 
-    def __xor__(self, value):
+    def __xor__(self, value: mdt.TensorLike) -> "Tensor":
         return md.logical_xor(self, value)
 
     @property
-    def __array_interface__(self):
+    def __array_interface__(self) -> Dict[str, Any]:
         return self._data.__array_interface__
 
-    def __array__(self, dtype=None, copy=None):
+    def __array__(
+        self, dtype: Optional[np.dtype] = None, copy: Optional[bool] = None
+    ) -> npt.NDArray[Any]:
         if dtype is not None and dtype != self.dtype:
             if copy == False:
                 raise ValueError("attempted cast, but copies are not permitted")
@@ -387,31 +404,33 @@ class Tensor:
         return self._data
 
 
-def ones_like(a: Tensor, allow_grad=False, **kwargs):
+def ones_like(a: Tensor, allow_grad: bool = False, **kwargs) -> Tensor:
     return Tensor(np.ones_like(a._data, **kwargs), allow_grad=allow_grad)
 
 
-def ones(shape: tuple, allow_grad=False, **kwargs):
+def ones(shape: Sequence[int], allow_grad: bool = False, **kwargs) -> Tensor:
     return Tensor(np.ones(shape, **kwargs), allow_grad=allow_grad)
 
 
-def zeros_like(a: Tensor, allow_grad=False, **kwargs):
+def zeros_like(a: Tensor, allow_grad: bool = False, **kwargs) -> Tensor:
     return Tensor(np.zeros_like(a._data, **kwargs), allow_grad=allow_grad)
 
 
-def zeros(shape: tuple, allow_grad=False, **kwargs):
+def zeros(shape: Sequence[int], allow_grad: bool = False, **kwargs) -> Tensor:
     return Tensor(np.zeros(shape, **kwargs), allow_grad=allow_grad)
 
 
-def full_like(a: Tensor, x, allow_grad=False, **kwargs):
+def full_like(
+    a: Tensor, x: mdt.TensorLike, allow_grad: bool = False, **kwargs
+) -> Tensor:
     return Tensor(np.full_like(a._data, x, **kwargs), allow_grad=allow_grad)
 
 
-def full(shape: tuple, allow_grad=False, **kwargs):
+def full(shape: Sequence[int], allow_grad: bool = False, **kwargs) -> Tensor:
     return Tensor(np.full(shape, **kwargs), allow_grad=allow_grad)
 
 
-def collect_gradients(grad, target_shape):
+def collect_gradients(grad: Tensor, target_shape: Sequence[int]) -> Tensor:
     # this collects the prepended axes
     broadcasted_axes = tuple(range(grad.ndim - len(target_shape)))
     if len(broadcasted_axes) != 0:
