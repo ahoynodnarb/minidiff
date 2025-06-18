@@ -351,7 +351,9 @@ class Convolve2D(ops.BinaryOpClass):
 
 
 class CrossEntropyLoss(ops.BinaryOpClass):
+
     def create_forward(self) -> mdt.BinaryFunc:
+
         def loss_func(
             y_true: md.Tensor,
             y_pred: md.Tensor,
@@ -373,8 +375,8 @@ class CrossEntropyLoss(ops.BinaryOpClass):
         return loss_func
 
     def create_grads(self) -> Tuple[None, mdt.BinaryOpGrad]:
+
         def loss_gradient(
-            self,
             y_true: md.Tensor,
             y_pred: md.Tensor,
             grad,

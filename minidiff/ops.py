@@ -1,5 +1,5 @@
 from builtins import all as py_all, any as py_any
-from typing import Tuple, Optional, Type, Sequence, Union
+from typing import Tuple, Optional, Type, Sequence, Union, Any
 
 try:
     import cupy as np  # type: ignore
@@ -247,10 +247,12 @@ def generate_ternary_op_func(
 
 
 class TensorDot(BinaryOpClass):
+
     def create_forward(self) -> mdt.BinaryOp:
         return np.tensordot
 
     def create_grads(self) -> Tuple[mdt.BinaryOpGrad, mdt.BinaryOpGrad]:
+
         def grad_a(
             a: md.Tensor,
             b: md.Tensor,
@@ -322,7 +324,7 @@ class TensorDot(BinaryOpClass):
         return (grad_a, grad_b)
 
 
-def s__grad(a, key, grad):
+def s__grad(a: md.Tensor, key: Any, grad: md.Tensor) -> md.Tensor:
     ret = md.zeros_like(a)
     np.add.at(ret._data, key, grad._data)
     return ret
