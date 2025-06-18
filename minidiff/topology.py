@@ -30,6 +30,7 @@ class FuncNode:
             if isinstance(op_input, md.Tensor):
                 op_input.graphed = True
 
+    # this accumulates gradients for the input tensors through chain rule (reverse-mode)
     def update_grads(self, grad: md.Tensor):
         # don't use no_grad() here because we are assuming gradients already don't track their gradients,
         # and if they do, they may be doing higher-order partial derivatives

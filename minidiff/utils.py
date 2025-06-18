@@ -13,9 +13,9 @@ def draw_tensor_op_graph(
     insert_intermediates: bool = False,
     **kwargs,
 ) -> graphviz.Graph:
+    # this essentially just finds the name of every input tensor
+    # and lists them as arguments to the function which produced tensor
     def find_nested_tensor_name(tensor: md.Tensor) -> str:
-        # this essentially just finds the name of every input tensor,
-        # and lists them as arguments to the function which produced tensor
         node = tensor.func_node
         input_names = []
         for input_tensor in node.input_tensors:
@@ -32,11 +32,12 @@ def draw_tensor_op_graph(
         # already has a name
         if tensor_id in all_tensor_names:
             tensor_name = all_tensor_names[tensor_id]
-        # this is just a scalar
+        # this is just a scalar so return the value as its name
         elif tensor.size == 1:
             tensor_name = str(tensor.item())
             all_tensor_names[tensor_id] = tensor_name
         # if we're either giving everything a name, or we haven't found its name and it's a leaf
+        # then we give it a name
         elif insert_intermediates or tensor.is_leaf:
             tensor_name = f"t{n_anonymous_tensors}"
             n_anonymous_tensors += 1
@@ -48,8 +49,8 @@ def draw_tensor_op_graph(
 
         return tensor_name
 
+    # self-explanatory: just connect every tensor to the tensors which created it
     def add_edges(graph: graphviz.Graph, tensor: md.Tensor):
-        # self-explanatory: just connect every tensor to the tensors which created it
         if tensor.is_leaf:
             return
         node = tensor.func_node
@@ -100,6 +101,7 @@ def calculate_finite_differences(
             right = input_tensors[i + 1 :]
             flattened_input_tensor = input_tensor.reshape(-1)
             flattened_grad = md.zeros_like(flattened_input_tensor)
+            # this is the same as (f(x + h) - f(x - h)) / (2 * h), which is the definition of the derivative
             for x in range(input_tensor.size):
                 shifted_left = flattened_input_tensor.detach()
                 shifted_left[x] += h
@@ -120,6 +122,7 @@ def calculate_finite_differences(
     return manual_gradients
 
 
+# little helper function that just gives you the finite difference-calculated gradients and minidiff gradients
 def compute_grads(
     *input_tensors: List[md.Tensor], func: mdt.GenericOp
 ) -> Tuple[List[md.Tensor], List[md.Tensor]]:
@@ -130,6 +133,8 @@ def compute_grads(
     return manual_gradients, automatic_gradients
 
 
+# compare all the default exported variables with the ones we actually want to export and return the names
+# of the variables we want to export
 def get_exported_var_names(local_vars: Dict[str, Any], exported_vars: List[Any]):
     exported = set()
     for op in exported_vars:

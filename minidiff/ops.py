@@ -44,6 +44,7 @@ class TernaryOpClass(OpClass):
         raise NotImplementedError
 
 
+# decorators which just convert a generic function to an op
 def stateless_op_func(**kwargs) -> mdt.GenericOp:
     def wrapper(func):
         return generate_stateless_op_func(forward_func=func, **kwargs)
@@ -91,6 +92,7 @@ def generate_op_func(
             lambda a, b, grad: md.zeros_like(grad) for _ in range(len(grad_funcs))
         ]
 
+    # just sets the func_node property of op_output to the correct FuncNode
     def attach_func_node(op_output, op_inputs, forward_kwargs):
         grads_allowed = [isinstance(x, md.Tensor) and x.allow_grad for x in op_inputs]
         # obviously tensors who don't want their gradients to be checked have no gradient function
@@ -108,6 +110,7 @@ def generate_op_func(
         if propagate_kwargs:
             func_node.kwargs = forward_kwargs
 
+    # correctly formats forward inputs, gets the output, and casts back into a Tensor if necessary
     def get_op_output(op_inputs, allow_grad, forward_kwargs):
         # if the op is a traditional numpy function, then we need to "uncast" it back to numpy
         if is_backend_op:
@@ -131,6 +134,7 @@ def generate_op_func(
 
         return output
 
+    # this is the actual op function generate_op_func returns
     def minidiff_func(*op_inputs, **forward_kwargs):
         input_is_tensor = [isinstance(x, md.Tensor) for x in op_inputs]
 
@@ -162,6 +166,7 @@ def generate_op_func(
     return minidiff_func
 
 
+# for ops who don't need to be a class (i.e. don't manage their own state)
 def generate_stateless_op_func(
     forward_func: mdt.GenericFunc,
     grad_funcs: Sequence[Optional[mdt.GenericOpGrad]],
@@ -178,6 +183,7 @@ def generate_stateless_op_func(
     return generate_op_func(op_class=StatelessOpClass, **kwargs)
 
 
+# single argument
 def generate_unary_op_func(
     forward_func: mdt.UnaryFunc,
     grad: Optional[mdt.UnaryOpGrad] = None,
@@ -189,6 +195,7 @@ def generate_unary_op_func(
     )
 
 
+# two arguments
 def generate_binary_op_func(
     forward_func: mdt.BinaryFunc,
     grad_a: Optional[mdt.BinaryOpGrad] = None,
@@ -200,6 +207,7 @@ def generate_binary_op_func(
     )
 
 
+# three arguments
 def generate_ternary_op_func(
     forward_func: mdt.TernaryFunc,
     grad_a: Optional[mdt.TernaryOpGrad] = None,

@@ -17,6 +17,22 @@ Im2ColIndices = Tuple[mdt.NestedSequence[int], mdt.NestedSequence[int]]
 
 
 class Convolve2D(ops.BinaryOpClass):
+    
+    @staticmethod
+    def get_padded_edges(padding):
+        # padding is already a tuple
+        if isinstance(padding, collections.Sequence):
+            return padding
+        # padding is an integer
+        if padding % 1 == 0:
+            return (padding, padding, padding, padding)
+        # padding is a float
+        padding = int(math.floor(padding))
+        pad_top = pad_left = padding
+        pad_bottom = pad_right = padding + 1
+                
+        return pad_top, pad_bottom, pad_left, pad_right
+        
 
     @staticmethod
     @ops.unary_op_func(
@@ -37,17 +53,10 @@ class Convolve2D(ops.BinaryOpClass):
             or padding == 0
         ):
             return mat
+        
+        pad_top, pad_bottom, pad_left, pad_right = Convolve2D.get_padded_edges(padding)
 
-        if isinstance(padding, collections.Sequence):
-            pad_top, pad_bottom, pad_left, pad_right = padding
-        else:
-            if padding % 1 == 0:
-                pad_top = pad_bottom = pad_left = pad_right = padding
-            else:
-                padding = int(math.floor(padding))
-                pad_top = pad_left = padding
-                pad_bottom = pad_right = padding + 1
-
+        # return view of padded matrix cropped around the padded boundaries
         return mat[:, pad_top : height - pad_bottom, pad_left : width - pad_right, :]
 
     @staticmethod
@@ -70,15 +79,7 @@ class Convolve2D(ops.BinaryOpClass):
         ):
             return mat
 
-        if isinstance(padding, collections.Sequence):
-            pad_top, pad_bottom, pad_left, pad_right = padding
-        else:
-            if padding % 1 == 0:
-                pad_top = pad_bottom = pad_left = pad_right = padding
-            else:
-                padding = int(math.floor(padding))
-                pad_top = pad_left = padding
-                pad_bottom = pad_right = padding + 1
+        pad_top, pad_bottom, pad_left, pad_right = Convolve2D.get_padded_edges(padding)
 
         padded = md.zeros(
             (
@@ -99,12 +100,14 @@ class Convolve2D(ops.BinaryOpClass):
         pad_vert = (height * (stride - 1) + kernel_height - stride) / 2
         pad_hori = (width * (stride - 1) + kernel_width - stride) / 2
 
+        # we can evenly pad vertically
         if pad_vert % 1 == 0:
             pad_top = pad_bottom = pad_vert
         else:
             pad_vert = int(math.floor(pad_vert))
             pad_top, pad_bottom = pad_vert, pad_vert + 1
 
+        # we can evenly pad horizontally
         if pad_hori % 1 == 0:
             pad_left = pad_right = pad_hori
         else:
@@ -113,6 +116,7 @@ class Convolve2D(ops.BinaryOpClass):
 
         return (pad_top, pad_bottom, pad_left, pad_right)
 
+    # formula for full padding is just kernel_dim - original_pad_dim - 1
     @staticmethod
     def calculate_full_padding(
         kernel_height: int, kernel_width: int, original_padding: TensorPadding
@@ -134,6 +138,7 @@ class Convolve2D(ops.BinaryOpClass):
             pad_right -= original_padding
         return (pad_top, pad_bottom, pad_left, pad_right)
 
+    # formula for a convolved dimension is just (dim - kernel_dim + 2 * padding) / stride + 1
     @classmethod
     def calculate_convolved_dimensions(
         cls,
@@ -156,6 +161,7 @@ class Convolve2D(ops.BinaryOpClass):
         out_width = (width - kernel_width + horizontal_padding) // stride + 1
         return (int(out_height), int(out_width))
 
+    # this returns indices that we use to index over a matrix of rows_out x cols_out so that it is im2col'ed
     @staticmethod
     def calculate_im2col_indices(
         rows_out: int, cols_out: int, kernel_height: int, kernel_width: int, stride: int
@@ -179,6 +185,8 @@ class Convolve2D(ops.BinaryOpClass):
 
         return (row_indices, col_indices)
 
+    # this transforms the input tensor into a tensor where the columns make up each window of the convolution
+    # that way we can just perform a tensordot with the partially flattened kernels to simulate a convolution much faster
     @classmethod
     def perform_convolution(
         cls,
@@ -356,6 +364,7 @@ class CrossEntropyLoss(ops.BinaryOpClass):
 
     def create_forward(self) -> mdt.BinaryFunc:
 
+        # formula for cross entropy loss is sum(y_true * -log(y_pred))
         def loss_func(
             y_true: md.Tensor,
             y_pred: md.Tensor,
@@ -371,13 +380,17 @@ class CrossEntropyLoss(ops.BinaryOpClass):
             # avoid division by 0
             y_pred = y_pred.clip(a_min=1e-8, a_max=None)
             # compute the one hot loss, reshape to match
-            loss = -md.sum(y_smoothed * md.log(y_pred), axis=-1, keepdims=True)
+            loss = md.sum(y_smoothed * -md.log(y_pred), axis=-1, keepdims=True)
             return loss
 
         return loss_func
 
     def create_grads(self) -> Tuple[None, mdt.BinaryOpGrad]:
 
+        # partial derivative of cross entropy loss wrt to predictions is pretty easy to derive: -y_true / y_pred
+        # if we want to precompute the gradient (using logsoftmax) the gradient calculation becomes (y_pred - y_true)
+        # we just throw in the division by len(y_true) to make up for batching
+        # precomputing the gradient (using logsoftmax) is just a lot more numerically stable since there's no risk of division by 0
         def loss_gradient(
             y_true: md.Tensor,
             y_pred: md.Tensor,
@@ -397,13 +410,9 @@ class CrossEntropyLoss(ops.BinaryOpClass):
 
 
 exported_ops = [
-    # maybe make a custom conv2d function generator which outputs a forward and both grad functions. this way we can keep optimizations like
-    # im2col working for forward and backward passes without explicitly managing state in generate_binary_op_func.
-    # maybe implement a generate_*_op_func_from_factory function which takes in an OpFactory
     convolve2d := ops.generate_op_func(
         op_class=Convolve2D, tensor_only=True, casting=None
     ),
-    # this has to be an op itself because it has a custom gradient function
     cross_entropy_loss := ops.generate_op_func(
         op_class=CrossEntropyLoss, tensor_only=True, propagate_kwargs=True, casting=None
     ),

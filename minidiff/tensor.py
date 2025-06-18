@@ -35,7 +35,7 @@ def grad_allowed_():
 # dy/dw2 would just be the loss gradient
 
 # all tensors by default should not allow grad
-# all tensors keep their allow_grad state whether in no_grad() or not, no_grad() just prevents any graph creation
+# all tensors keep their allow_grad state whether in no_grad() or not; no_grad() just prevents any graph creation
 
 
 class Tensor:
@@ -86,7 +86,7 @@ class Tensor:
     @allow_grad.setter
     def allow_grad(self, allow_grad: bool):
         # if we're trying to turn off gradient tracking while we're graphed and an intermediate tensor, then error
-        if not allow_grad and self.graphed and not self.is_leaf:
+        if not allow_grad and (self.graphed and not self.is_leaf):
             raise ValueError(
                 "Tensors can only stop tracking gradients if they are not part of a computational graph or are a leaf"
             )
@@ -127,7 +127,11 @@ class Tensor:
         seen = set()
         traversal_path = []
 
-        # topologically sort
+        # topologically sort:
+        # step through the graph starting from the output tensor (self)
+        # go all the way down to the leaf tensors, skipping tensors we've already seen
+        # after getting all the way to the base, finally push ourselves onto the stack
+        # rinse and repeat for the input tensors, their input tensors, etc.
         def dfs(tensor):
             if id(tensor) in seen:
                 return
@@ -141,6 +145,8 @@ class Tensor:
 
         return traversal_path
 
+    # this does the actual advertised reverse-mode automatic differentiation.
+    # I mostly just referenced this Wikipedia page: https://en.wikipedia.org/wiki/Automatic_differentiation
     def backward(self, retain_graph: bool = False, retain_grads: bool = False):
         # can't call backward if we're not tracking gradients or we have no gradient history
         if not self.allow_grad:
@@ -154,6 +160,7 @@ class Tensor:
         self.grad = ones_like(self, allow_grad=False)
 
         for tensor in reversed(traversal_path):
+            # leaf tensors don't have any input tensors to update, so skip
             if tensor.is_leaf:
                 continue
             n = tensor.func_node
@@ -388,6 +395,7 @@ class Tensor:
     def __xor__(self, value: mdt.TensorLike) -> "Tensor":
         return md.logical_xor(self, value)
 
+    # numpy array specification requirements:
     @property
     def __array_interface__(self) -> Dict[str, Any]:
         return self._data.__array_interface__
@@ -430,19 +438,27 @@ def full(shape: Sequence[int], allow_grad: bool = False, **kwargs) -> Tensor:
     return Tensor(np.full(shape, **kwargs), allow_grad=allow_grad)
 
 
+# if broadcasting happened during the forward pass, you need to correctly
+# sum up the correct dimensions so that the gradients match up
 def collect_gradients(grad: Tensor, target_shape: Sequence[int]) -> Tensor:
     # this collects the prepended axes
-    broadcasted_axes = tuple(range(grad.ndim - len(target_shape)))
+    # numpy inserts dimensions from the left when broadcasting
+    # this just sums across those prepended dimensions
+    len_prepended = grad.ndim - len(target_shape)
+    broadcasted_axes = tuple(range(len_prepended))
     if len(broadcasted_axes) != 0:
         grad = grad.sum(axis=broadcasted_axes)
 
     # this collects the axes that were stretched to span a greater dim
+    # numpy will "stretch" dimensions so that dimensions of size 1 are tiled
+    # so that they match the greater dimension.
+    # we can undo this by just summing across those dimensions until we reach size 1 again
+    ndims = min(len(target_shape), grad.ndim)
     stretched_axes = tuple(
-        i
-        for i in range(min(len(target_shape), grad.ndim))
-        if grad.shape[i] > 1 and target_shape[i] == 1
+        i for i in range(ndims) if grad.shape[i] > 1 and target_shape[i] == 1
     )
     if len(stretched_axes) != 0:
         grad = grad.sum(axis=stretched_axes, keepdims=True)
 
+    # final reshape operation that can upsample if necessary
     return md.broadcast_to(grad, target_shape)
