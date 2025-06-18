@@ -1,5 +1,5 @@
 from builtins import all as py_all, any as py_any
-from typing import Tuple, Optional, Type, Sequence, Union, Any
+from typing import Tuple, Optional, Type, Sequence, Union, Any, Dict
 
 try:
     import cupy as np  # type: ignore
@@ -91,7 +91,7 @@ def generate_op_func(
             lambda a, b, grad: md.zeros_like(grad) for _ in range(len(grad_funcs))
         ]
 
-    def attach_func_node(op_output, op_inputs, kwargs):
+    def attach_func_node(op_output, op_inputs, forward_kwargs):
         grads_allowed = [isinstance(x, md.Tensor) and x.allow_grad for x in op_inputs]
         # obviously tensors who don't want their gradients to be checked have no gradient function
         filtered_grad_funcs = [
@@ -106,9 +106,9 @@ def generate_op_func(
         )
         func_node.op_name = forward_func.__name__ if op_name is None else op_name
         if propagate_kwargs:
-            func_node.kwargs = kwargs
+            func_node.kwargs = forward_kwargs
 
-    def get_op_output(op_inputs, allow_grad, kwargs):
+    def get_op_output(op_inputs, allow_grad, forward_kwargs):
         # if the op is a traditional numpy function, then we need to "uncast" it back to numpy
         if is_backend_op:
             forward_inputs = [
@@ -118,9 +118,9 @@ def generate_op_func(
             forward_inputs = op_inputs
 
         if casting is None:
-            output = forward_func(*forward_inputs, **kwargs)
+            output = forward_func(*forward_inputs, **forward_kwargs)
         else:
-            output = forward_func(*forward_inputs, casting=casting, **kwargs)
+            output = forward_func(*forward_inputs, casting=casting, **forward_kwargs)
 
         # traditional numpy functions of course return numpy objects, so we need to wrap in a Tensor
         if is_backend_op:
@@ -131,7 +131,7 @@ def generate_op_func(
 
         return output
 
-    def minidiff_func(*op_inputs, **kwargs):
+    def minidiff_func(*op_inputs, **forward_kwargs):
         input_is_tensor = [isinstance(x, md.Tensor) for x in op_inputs]
 
         if not tensor_only and not py_any(input_is_tensor):
@@ -148,12 +148,14 @@ def generate_op_func(
         )
 
         output = get_op_output(
-            op_inputs=op_inputs, allow_grad=allow_grad, kwargs=kwargs
+            op_inputs=op_inputs, allow_grad=allow_grad, forward_kwargs=forward_kwargs
         )
 
         # only attach a node if we're allowed to track gradients right now, and the tensor wants to track its gradient
         if md.grad_allowed_() and allow_grad:
-            attach_func_node(op_output=output, op_inputs=op_inputs, kwargs=kwargs)
+            attach_func_node(
+                op_output=output, op_inputs=op_inputs, forward_kwargs=forward_kwargs
+            )
 
         return output
 
@@ -163,13 +165,9 @@ def generate_op_func(
 def generate_stateless_op_func(
     forward_func: mdt.GenericFunc,
     grad_funcs: Sequence[Optional[mdt.GenericOpGrad]],
-    is_differentiable: bool = True,
-    tensor_only: bool = False,
-    is_backend_op: bool = False,
-    propagate_kwargs: bool = False,
-    op_name: Optional[str] = None,
-    casting: Optional[str] = "safe",
+    **kwargs,
 ) -> mdt.GenericOp:
+
     class StatelessOpClass(OpClass):
         def create_forward(self) -> mdt.GenericFunc:
             return forward_func
@@ -177,35 +175,17 @@ def generate_stateless_op_func(
         def create_grads(self) -> Sequence[Optional[mdt.GenericOpGrad]]:
             return grad_funcs
 
-    return generate_op_func(
-        op_class=StatelessOpClass,
-        is_differentiable=is_differentiable,
-        tensor_only=tensor_only,
-        is_backend_op=is_backend_op,
-        propagate_kwargs=propagate_kwargs,
-        op_name=op_name,
-        casting=casting,
-    )
+    return generate_op_func(op_class=StatelessOpClass, **kwargs)
 
 
 def generate_unary_op_func(
     forward_func: mdt.UnaryFunc,
     grad: Optional[mdt.UnaryOpGrad] = None,
-    is_differentiable: bool = True,
-    is_backend_op: bool = False,
-    propagate_kwargs: bool = False,
-    op_name: Optional[str] = None,
-    casting: Optional[str] = "safe",
+    **kwargs,
 ) -> mdt.UnaryOp:
+    kwargs["tensor_only"] = True
     return generate_stateless_op_func(
-        forward_func=forward_func,
-        grad_funcs=[grad],
-        is_differentiable=is_differentiable,
-        tensor_only=True,
-        is_backend_op=is_backend_op,
-        propagate_kwargs=propagate_kwargs,
-        op_name=op_name,
-        casting=casting,
+        forward_func=forward_func, grad_funcs=[grad], **kwargs
     )
 
 
@@ -213,22 +193,10 @@ def generate_binary_op_func(
     forward_func: mdt.BinaryFunc,
     grad_a: Optional[mdt.BinaryOpGrad] = None,
     grad_b: Optional[mdt.BinaryOpGrad] = None,
-    is_differentiable: bool = True,
-    tensor_only: bool = False,
-    is_backend_op: bool = False,
-    propagate_kwargs: bool = False,
-    op_name: Optional[str] = None,
-    casting: Optional[str] = "safe",
+    **kwargs,
 ) -> mdt.BinaryOp:
     return generate_stateless_op_func(
-        forward_func=forward_func,
-        grad_funcs=[grad_a, grad_b],
-        is_differentiable=is_differentiable,
-        tensor_only=tensor_only,
-        is_backend_op=is_backend_op,
-        propagate_kwargs=propagate_kwargs,
-        op_name=op_name,
-        casting=casting,
+        forward_func=forward_func, grad_funcs=[grad_a, grad_b], **kwargs
     )
 
 
@@ -237,22 +205,10 @@ def generate_ternary_op_func(
     grad_a: Optional[mdt.TernaryOpGrad] = None,
     grad_b: Optional[mdt.TernaryOpGrad] = None,
     grad_c: Optional[mdt.TernaryOpGrad] = None,
-    is_differentiable: bool = True,
-    tensor_only: bool = False,
-    is_backend_op: bool = False,
-    propagate_kwargs: bool = False,
-    op_name: Optional[str] = None,
-    casting: Optional[str] = "safe",
+    **kwargs,
 ) -> mdt.TernaryOp:
     return generate_stateless_op_func(
-        forward_func=forward_func,
-        grad_funcs=[grad_a, grad_b, grad_c],
-        is_differentiable=is_differentiable,
-        tensor_only=tensor_only,
-        is_backend_op=is_backend_op,
-        propagate_kwargs=propagate_kwargs,
-        op_name=op_name,
-        casting=casting,
+        forward_func=forward_func, grad_funcs=[grad_a, grad_b, grad_c], **kwargs
     )
 
 
