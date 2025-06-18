@@ -352,7 +352,7 @@ class Tensor:
         return self._data.__len__()
 
     def __getitem__(self, key: Any) -> "Tensor":
-        return md.s_(self, key)
+        return md.getitem(self, key)
 
     def __setitem__(self, key: Any, val: mdt.TensorLike):
         if self.allow_grad and md.grad_allowed_():

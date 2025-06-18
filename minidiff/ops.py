@@ -298,7 +298,7 @@ class TensorDot(BinaryOpClass):
         return (grad_a, grad_b)
 
 
-def s__grad(a: md.Tensor, key: Any, grad: md.Tensor) -> md.Tensor:
+def getitem_grad(a: md.Tensor, key: Any, grad: md.Tensor) -> md.Tensor:
     ret = md.zeros_like(a)
     np.add.at(ret._data, key, grad._data)
     return ret
@@ -358,9 +358,9 @@ exported_ops = [
         is_backend_op=True,
         casting=None,
     ),
-    s_ := generate_binary_op_func(
+    getitem := generate_binary_op_func(
         forward_func=lambda a, key: a[key],
-        grad_a=s__grad,
+        grad_a=getitem_grad,
         grad_b=None,
         is_backend_op=True,
         casting=None,
