@@ -475,7 +475,7 @@ def tile(A: mdt.TensorLike, reps: mdt.TensorLike, allow_grad: bool = False) -> T
     return Tensor(np.tile(A, reps), allow_grad=allow_grad)
 
 
-def arange(*args, allow_grad: bool = False, **kwargs) -> Tensor:
+def arange(*args: Union[int, float], allow_grad: bool = False, **kwargs) -> Tensor:
     return Tensor(np.arange(*args, **kwargs), allow_grad=allow_grad)
 
 
