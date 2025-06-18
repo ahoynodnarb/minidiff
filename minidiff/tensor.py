@@ -132,14 +132,15 @@ class Tensor:
         # go all the way down to the leaf tensors, skipping tensors we've already seen
         # after getting all the way to the base, finally push ourselves onto the stack
         # rinse and repeat for the input tensors, their input tensors, etc.
-        def dfs(tensor):
-            if id(tensor) in seen:
+        def dfs(op_output):
+            if id(op_output) in seen:
                 return
-            seen.add(id(tensor))
-            if (root := tensor.func_node) is not None:
-                for input_tensor in root.input_tensors:
-                    dfs(input_tensor)
-            traversal_path.append(tensor)
+            seen.add(id(op_output))
+            if not op_output.is_leaf:
+                root = op_output.func_node
+                for op_input in root.input_tensors:
+                    dfs(op_input)
+            traversal_path.append(op_output)
 
         dfs(self)
 
@@ -182,6 +183,9 @@ class Tensor:
     def detach(self, allow_grad: bool = False) -> "Tensor":
         detached = Tensor(self._data.copy(), allow_grad=allow_grad)
         return detached
+
+    def transpose(self, axes=None):
+        return md.transpose(self, axes=axes)
 
     def item(self) -> np.ScalarType:
         if self.size != 1:
@@ -436,6 +440,10 @@ def full_like(
 
 def full(shape: Sequence[int], allow_grad: bool = False, **kwargs) -> Tensor:
     return Tensor(np.full(shape, **kwargs), allow_grad=allow_grad)
+
+
+def unravel_index(indices: mdt.TensorLike, shape: Sequence[int], **kwargs) -> Tensor:
+    return Tensor(np.unravel_index(indices, shape, **kwargs))
 
 
 # if broadcasting happened during the forward pass, you need to correctly

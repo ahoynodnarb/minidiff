@@ -15,9 +15,7 @@ class FuncNode:
             raise ValueError("FuncNodes can only track tensors")
 
         self.op_inputs = op_inputs
-        self.input_tensors = [
-            x if isinstance(x, md.Tensor) else md.Tensor(x) for x in self.op_inputs
-        ]
+        self.input_tensors = [x for x in self.op_inputs if isinstance(x, md.Tensor)]
         self.grad_functions = grad_functions
 
         self.kwargs = {}

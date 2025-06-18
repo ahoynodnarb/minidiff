@@ -258,7 +258,7 @@ class TensorDot(BinaryOpClass):
                     permutation_indices[axes[0][contracted_idx]] = i
                     contracted_idx += 1
 
-            reshaped = md.transpose(result, permutation_indices)
+            reshaped = md.transpose(result, axes=permutation_indices)
             return reshaped
 
         def grad_b(
@@ -292,10 +292,46 @@ class TensorDot(BinaryOpClass):
                     permutation_indices[uncontracted_b[uncontracted_idx]] = i
                     uncontracted_idx += 1
 
-            reshaped = md.transpose(result, permutation_indices)
+            reshaped = md.transpose(result, axes=permutation_indices)
             return reshaped
 
         return (grad_a, grad_b)
+
+
+def max_grad(
+    a: md.Tensor,
+    grad: md.Tensor,
+    axis: Optional[Union[int, Tuple[int]]] = None,
+    **kwargs,
+) -> md.Tensor:
+    max_indices = argmax(a, axis=axis)
+    unraveled = md.unravel_index(max_indices, a.shape)
+    ret = md.zeros_like(a)
+    ret[unraveled] = grad
+    return grad
+
+
+def prod_grad(
+    a: md.Tensor,
+    grad: md.Tensor,
+    axis: Optional[Union[int, Tuple[int]]] = None,
+    **kwargs,
+) -> md.Tensor:
+    if axis == ():
+        return grad
+    multiplied = prod(a, axis=axis, keepdims=True)
+    return where(a == 0, 0, grad * multiplied / a)
+
+
+def transpose_grad(
+    a: md.Tensor, grad: md.Tensor, axes: Optional[Union[int, Tuple[int]]] = None
+) -> md.Tensor:
+    if axes is None:
+        return transpose(grad)
+    backward_axes = [-1] * len(axes)
+    for i, dim in enumerate(axes):
+        backward_axes[dim] = i
+    return transpose(grad, axes=backward_axes)
 
 
 def getitem_grad(a: md.Tensor, key: Any, grad: md.Tensor) -> md.Tensor:
@@ -304,10 +340,61 @@ def getitem_grad(a: md.Tensor, key: Any, grad: md.Tensor) -> md.Tensor:
     return ret
 
 
+def mean_grad(
+    a: md.Tensor,
+    grad: md.Tensor,
+    axis: Optional[Union[int, Tuple[int]]] = None,
+    **kwargs,
+) -> md.Tensor:
+    if axis is None:
+        return grad / a.size
+    if axis == ():
+        return grad
+    if isinstance(axis, int):
+        return grad / a.shape[axis]
+    in_shape = a.shape
+    multiplied_dims = [in_shape[dim] for dim in axis]
+    return prod(multiplied_dims)
+
+
 exported_ops = [
-    transpose := generate_binary_op_func(
+    argmax := generate_unary_op_func(
+        forward_func=np.argmax,
+        is_differentiable=False,
+        is_backend_op=True,
+        casting=None,
+    ),
+    max := generate_unary_op_func(
+        forward_func=np.max,
+        grad=max_grad,
+        is_backend_op=True,
+        propagate_kwargs=True,
+        casting=None,
+    ),
+    argwhere := generate_unary_op_func(
+        forward_func=np.argwhere,
+        is_differentiable=False,
+        is_backend_op=True,
+        casting=None,
+    ),
+    where := generate_ternary_op_func(
+        forward_func=np.where,
+        grad_a=None,
+        grad_b=lambda condition, b, c: b * condition,
+        grad_c=lambda condition, b, c: c * ~condition,
+        is_backend_op=True,
+        casting=None,
+    ),
+    prod := generate_unary_op_func(
+        forward_func=np.prod,
+        grad=prod_grad,
+        is_backend_op=True,
+        propagate_kwargs=True,
+        casting=None,
+    ),
+    transpose := generate_unary_op_func(
         forward_func=np.transpose,
-        grad_a=lambda a, grad, axes=None: transpose(grad, axes=axes),
+        grad=transpose_grad,
         is_backend_op=True,
         propagate_kwargs=True,
         casting=None,
@@ -472,8 +559,9 @@ exported_ops = [
     ),
     mean := generate_unary_op_func(
         forward_func=np.mean,
-        grad=lambda a, grad: grad / a.size,
+        grad=mean_grad,
         is_backend_op=True,
+        propagate_kwargs=True,
         casting=None,
     ),
     greater := generate_binary_op_func(

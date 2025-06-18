@@ -18,7 +18,7 @@ def draw_tensor_op_graph(
     def find_nested_tensor_name(tensor: md.Tensor) -> str:
         node = tensor.func_node
         input_names = []
-        for input_tensor in node.input_tensors:
+        for input_tensor in node.op_inputs:
             input_names.append(lookup_tensor_name(input_tensor))
         op_name = node.op_name
         nested_tensor_name = f"{op_name}({', '.join(input_names)})"
@@ -29,12 +29,15 @@ def draw_tensor_op_graph(
         nonlocal n_anonymous_tensors
 
         tensor_id = id(tensor)
+        if isinstance(tensor, md.Tensor) and tensor.size == 1:
+            tensor = tensor.item()
+            tensor_id = id(tensor)
         # already has a name
         if tensor_id in all_tensor_names:
             tensor_name = all_tensor_names[tensor_id]
         # this is just a scalar so return the value as its name
-        elif tensor.size == 1:
-            tensor_name = str(tensor.item())
+        elif isinstance(tensor, (int, float)):
+            tensor_name = str(tensor)
             all_tensor_names[tensor_id] = tensor_name
         # if we're either giving everything a name, or we haven't found its name and it's a leaf
         # then we give it a name
@@ -55,7 +58,7 @@ def draw_tensor_op_graph(
             return
         node = tensor.func_node
         tensor_id = id(tensor)
-        for child in node.input_tensors:
+        for child in node.op_inputs:
             child_id = id(child)
             graph.edge(str(child_id), str(tensor_id))
 
