@@ -1,5 +1,5 @@
 from builtins import all as py_all, any as py_any
-from typing import Tuple, Optional, Type, Sequence, Union, Any, Dict
+from typing import Tuple, Optional, Type, Sequence, Union, Any, Callable
 
 try:
     import cupy as np  # type: ignore
@@ -45,29 +45,29 @@ class TernaryOpClass(OpClass):
 
 
 # decorators which just convert a generic function to an op
-def stateless_op_func(**kwargs) -> mdt.GenericOp:
-    def wrapper(func):
+def stateless_op_func(**kwargs) -> Callable[[mdt.GenericFunc], mdt.GenericOp]:
+    def wrapper(func: mdt.GenericFunc) -> mdt.GenericOp:
         return generate_stateless_op_func(forward_func=func, **kwargs)
 
     return wrapper
 
 
-def unary_op_func(**kwargs) -> mdt.UnaryOp:
-    def wrapper(func):
+def unary_op_func(**kwargs) -> Callable[[mdt.UnaryFunc], mdt.UnaryOp]:
+    def wrapper(func: mdt.UnaryFunc) -> mdt.UnaryOp:
         return generate_unary_op_func(forward_func=func, **kwargs)
 
     return wrapper
 
 
-def binary_op_func(**kwargs) -> mdt.BinaryOp:
-    def wrapper(func):
+def binary_op_func(**kwargs) -> Callable[[mdt.BinaryFunc], mdt.BinaryOp]:
+    def wrapper(func: mdt.BinaryFunc) -> mdt.BinaryOp:
         return generate_binary_op_func(forward_func=func, **kwargs)
 
     return wrapper
 
 
-def ternary_op_func(**kwargs) -> mdt.TernaryOp:
-    def wrapper(func):
+def ternary_op_func(**kwargs) -> Callable[[mdt.TernaryFunc], mdt.TernaryOp]:
+    def wrapper(func: mdt.TernaryFunc) -> mdt.TernaryOp:
         return generate_ternary_op_func(forward_func=func, **kwargs)
 
     return wrapper
@@ -358,6 +358,13 @@ def mean_grad(
 
 
 exported_ops = [
+    astype := generate_binary_op_func(
+        forward_func=lambda a, dtype, **kwargs: md.Tensor(
+            a._data.astype(dtype, **kwargs), dtype=dtype
+        ),
+        grad_a=lambda a, dtype, grad: grad.astype(a.dtype),
+        casting=None,
+    ),
     argmax := generate_unary_op_func(
         forward_func=np.argmax,
         is_differentiable=False,
@@ -379,7 +386,6 @@ exported_ops = [
     ),
     where := generate_ternary_op_func(
         forward_func=np.where,
-        grad_a=None,
         grad_b=lambda condition, b, c: b * condition,
         grad_c=lambda condition, b, c: c * ~condition,
         is_backend_op=True,
@@ -448,7 +454,6 @@ exported_ops = [
     getitem := generate_binary_op_func(
         forward_func=lambda a, key: a[key],
         grad_a=getitem_grad,
-        grad_b=None,
         is_backend_op=True,
         casting=None,
         op_name="index",
@@ -467,7 +472,6 @@ exported_ops = [
     reshape := generate_binary_op_func(
         forward_func=np.reshape,
         grad_a=lambda a, b, grad: grad.reshape(a.shape),
-        grad_b=None,
         is_backend_op=True,
         casting=None,
     ),

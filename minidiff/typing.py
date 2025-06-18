@@ -17,12 +17,15 @@ class GenericOpGrad(Protocol):
     def __call__(self, *args: "md.Tensor") -> "md.Tensor": ...
 
 
-UnaryFunc = Callable[["md.Tensor"], "md.Tensor"]
+UnaryFunc = Union[
+    Callable[[Any], TensorLike],
+    Callable[["md.Tensor"], "md.Tensor"],
+]
 UnaryOp = Callable[["md.Tensor"], "md.Tensor"]
 UnaryOpGrad = Callable[["md.Tensor", "md.Tensor"], "md.Tensor"]
 
 BinaryFunc = Union[
-    Callable[[Any, Any], "md.Tensor"],
+    Callable[[Any, Any], TensorLike],
     Callable[["md.Tensor", "md.Tensor"], "md.Tensor"],
 ]
 BinaryOp = Union[
@@ -32,7 +35,7 @@ BinaryOp = Union[
 BinaryOpGrad = Callable[["md.Tensor", "md.Tensor", "md.Tensor"], "md.Tensor"]
 
 TernaryFunc = Union[
-    Callable[[Any, Any, Any], "md.Tensor"],
+    Callable[[Any, Any, Any], TensorLike],
     Callable[["md.Tensor", "md.Tensor", "md.Tensor"], "md.Tensor"],
 ]
 TernaryOp = Union[

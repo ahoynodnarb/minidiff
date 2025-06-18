@@ -1,4 +1,4 @@
-from typing import List, Any
+from typing import List, Any, Optional
 
 import minidiff as md
 import minidiff.typing as mdt
@@ -9,7 +9,7 @@ class FuncNode:
         self,
         op_output: md.Tensor,
         op_inputs: List[Any],
-        grad_functions: List[mdt.GenericOpGrad],
+        grad_functions: List[Optional[mdt.GenericOpGrad]],
     ):
         if not isinstance(op_output, md.Tensor):
             raise ValueError("FuncNodes can only track tensors")

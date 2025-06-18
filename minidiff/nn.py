@@ -12,12 +12,9 @@ import minidiff.ops as ops
 import minidiff.typing as mdt
 from minidiff.utils import get_exported_var_names
 
-TensorPadding = Union[int, float, Sequence[int]]
-Im2ColIndices = Tuple[mdt.NestedSequence[int], mdt.NestedSequence[int]]
-
 
 class Convolve2D(ops.BinaryOpClass):
-    
+
     @staticmethod
     def get_padded_edges(padding):
         # padding is already a tuple
@@ -30,9 +27,8 @@ class Convolve2D(ops.BinaryOpClass):
         padding = int(math.floor(padding))
         pad_top = pad_left = padding
         pad_bottom = pad_right = padding + 1
-                
+
         return pad_top, pad_bottom, pad_left, pad_right
-        
 
     @staticmethod
     @ops.unary_op_func(
@@ -43,7 +39,7 @@ class Convolve2D(ops.BinaryOpClass):
         casting=None,
     )
     def remove_padding(
-        mat: md.Tensor, padding: Optional[TensorPadding] = None
+        mat: md.Tensor, padding: Optional[Union[int, float, Sequence[int]]] = None
     ) -> md.Tensor:
         _, height, width, _ = mat.shape
 
@@ -53,7 +49,7 @@ class Convolve2D(ops.BinaryOpClass):
             or padding == 0
         ):
             return mat
-        
+
         pad_top, pad_bottom, pad_left, pad_right = Convolve2D.get_padded_edges(padding)
 
         # return view of padded matrix cropped around the padded boundaries
@@ -68,7 +64,7 @@ class Convolve2D(ops.BinaryOpClass):
         casting=None,
     )
     def add_padding(
-        mat: md.Tensor, padding: Optional[TensorPadding] = None
+        mat: md.Tensor, padding: Optional[Union[int, float, Sequence[int]]] = None
     ) -> md.Tensor:
         batch_size, height, width, channels = mat.shape
 
@@ -119,7 +115,9 @@ class Convolve2D(ops.BinaryOpClass):
     # formula for full padding is just kernel_dim - original_pad_dim - 1
     @staticmethod
     def calculate_full_padding(
-        kernel_height: int, kernel_width: int, original_padding: TensorPadding
+        kernel_height: int,
+        kernel_width: int,
+        original_padding: Union[int, float, Sequence[int]],
     ) -> Tuple[int, int, int, int]:
         pad_top = kernel_height - 1
         pad_bottom = kernel_height - 1
@@ -146,10 +144,10 @@ class Convolve2D(ops.BinaryOpClass):
         width: int,
         kernel_height: int,
         kernel_width: int,
-        padding: TensorPadding,
+        padding: Union[int, float, Sequence[int]],
         stride: int,
     ) -> Tuple[int, int]:
-        if isinstance(padding, tuple):
+        if isinstance(padding, collections.Sequence):
             top, bottom, left, right = padding
             vertical_padding = top + bottom
             horizontal_padding = left + right
@@ -165,16 +163,16 @@ class Convolve2D(ops.BinaryOpClass):
     @staticmethod
     def calculate_im2col_indices(
         rows_out: int, cols_out: int, kernel_height: int, kernel_width: int, stride: int
-    ) -> Im2ColIndices:
+    ) -> Tuple[md.Tensor, md.Tensor]:
         # these are the indices that correspond to each row within the patch
-        kernel_row_indices = np.repeat(np.arange(kernel_height), kernel_width)
+        kernel_row_indices = md.repeat(md.arange(kernel_height), kernel_width)
         # these are the indices corresponding to the row portion of the position of each patch within the input matrix
-        conv_row_indices = stride * np.repeat(np.arange(rows_out), cols_out)
+        conv_row_indices = stride * md.repeat(md.arange(rows_out), cols_out)
 
         # these are the indices that correspond to each column within the patch
-        kernel_col_indices = np.tile(np.arange(kernel_width), kernel_height)
+        kernel_col_indices = md.tile(md.arange(kernel_width), kernel_height)
         # these are the indices that correspond to the column portion of the position of each patch within the input matrix
-        conv_col_indices = stride * np.tile(np.arange(cols_out), rows_out)
+        conv_col_indices = stride * md.tile(md.arange(cols_out), rows_out)
 
         row_indices = kernel_row_indices.reshape((-1, 1)) + conv_row_indices.reshape(
             (1, -1)
@@ -183,7 +181,7 @@ class Convolve2D(ops.BinaryOpClass):
             (1, -1)
         )
 
-        return (row_indices, col_indices)
+        return (row_indices.astype(np.int32), col_indices.astype(np.int32))
 
     # this transforms the input tensor into a tensor where the columns make up each window of the convolution
     # that way we can just perform a tensordot with the partially flattened kernels to simulate a convolution much faster
@@ -192,9 +190,9 @@ class Convolve2D(ops.BinaryOpClass):
         cls,
         mat: md.Tensor,
         kernels: md.Tensor,
-        padding: Optional[TensorPadding] = None,
+        padding: Optional[Union[int, float, Sequence[int]]] = None,
         stride: int = 1,
-        im2col_indices: Optional[Im2ColIndices] = None,
+        im2col_indices: Optional[Tuple[md.Tensor, md.Tensor]] = None,
         out_dims: Optional[Sequence[int]] = None,
     ) -> md.Tensor:
         orig_shape = mat.shape
@@ -239,13 +237,13 @@ class Convolve2D(ops.BinaryOpClass):
         self,
         conv_input: md.Tensor,
         kernels: md.Tensor,
-        padding: TensorPadding = 0,
+        padding: Union[int, float, Sequence[int]] = 0,
         stride: int = 1,
     ):
         _, in_height, in_width, self.in_channels = conv_input.shape
         self.n_kernels, self.kernel_height, self.kernel_width, _ = kernels.shape
 
-        if isinstance(padding, tuple):
+        if isinstance(padding, collections.Sequence):
             pad_top, pad_bottom, pad_left, pad_right = padding
         else:
             pad_top = pad_bottom = pad_left = pad_right = padding
@@ -282,7 +280,7 @@ class Convolve2D(ops.BinaryOpClass):
         def forward(
             conv_input: md.Tensor,
             kernels: md.Tensor,
-            padding: TensorPadding = 0,
+            padding: Union[int, float, Sequence[int]] = 0,
             stride: int = 1,
         ) -> md.Tensor:
             self.setup(

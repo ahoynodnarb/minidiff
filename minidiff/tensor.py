@@ -184,6 +184,18 @@ class Tensor:
         detached = Tensor(self._data.copy(), allow_grad=allow_grad)
         return detached
 
+    # @ops.binary_op_func(
+    #     grad_a=lambda a, dtype, grad, **kwargs: grad.astype(dtype, **kwargs),
+    #     is_backend_op=False,
+    #     propagate_kwargs=True,
+    #     casting=None,
+    # )
+    def astype(self, dtype, **kwargs):
+        return md.astype(self, dtype, **kwargs)
+        # a = md.Tensor(self._data.astype(dtype, **kwargs), dtype=dtype)
+        # print(a)
+        # return a
+
     def transpose(self, axes=None):
         return md.transpose(self, axes=axes)
 
@@ -416,16 +428,16 @@ class Tensor:
         return self._data
 
 
-def ones_like(a: Tensor, allow_grad: bool = False, **kwargs) -> Tensor:
-    return Tensor(np.ones_like(a._data, **kwargs), allow_grad=allow_grad)
+def ones_like(a: mdt.TensorLike, allow_grad: bool = False, **kwargs) -> Tensor:
+    return Tensor(np.ones_like(a, **kwargs), allow_grad=allow_grad)
 
 
 def ones(shape: Sequence[int], allow_grad: bool = False, **kwargs) -> Tensor:
     return Tensor(np.ones(shape, **kwargs), allow_grad=allow_grad)
 
 
-def zeros_like(a: Tensor, allow_grad: bool = False, **kwargs) -> Tensor:
-    return Tensor(np.zeros_like(a._data, **kwargs), allow_grad=allow_grad)
+def zeros_like(a: mdt.TensorLike, allow_grad: bool = False, **kwargs) -> Tensor:
+    return Tensor(np.zeros_like(a, **kwargs), allow_grad=allow_grad)
 
 
 def zeros(shape: Sequence[int], allow_grad: bool = False, **kwargs) -> Tensor:
@@ -435,15 +447,34 @@ def zeros(shape: Sequence[int], allow_grad: bool = False, **kwargs) -> Tensor:
 def full_like(
     a: Tensor, x: mdt.TensorLike, allow_grad: bool = False, **kwargs
 ) -> Tensor:
-    return Tensor(np.full_like(a._data, x, **kwargs), allow_grad=allow_grad)
+    return Tensor(np.full_like(a, x, **kwargs), allow_grad=allow_grad)
 
 
 def full(shape: Sequence[int], allow_grad: bool = False, **kwargs) -> Tensor:
     return Tensor(np.full(shape, **kwargs), allow_grad=allow_grad)
 
 
-def unravel_index(indices: mdt.TensorLike, shape: Sequence[int], **kwargs) -> Tensor:
-    return Tensor(np.unravel_index(indices, shape, **kwargs))
+def unravel_index(
+    indices: mdt.TensorLike, shape: Sequence[int], allow_grad: bool = False, **kwargs
+) -> Tensor:
+    return Tensor(np.unravel_index(indices, shape, **kwargs), allow_grad=allow_grad)
+
+
+def repeat(
+    a: mdt.TensorLike,
+    repeats: Union[int, Sequence[int]],
+    allow_grad: bool = False,
+    axis: Optional[int] = None,
+) -> Tensor:
+    return Tensor(np.repeat(a, repeats, axis=axis), allow_grad=allow_grad)
+
+
+def tile(A: mdt.TensorLike, reps: mdt.TensorLike, allow_grad: bool = False) -> Tensor:
+    return Tensor(np.tile(A, reps), allow_grad=allow_grad)
+
+
+def arange(*args, allow_grad: bool = False, **kwargs) -> Tensor:
+    return Tensor(np.arange(*args, **kwargs), allow_grad=allow_grad)
 
 
 # if broadcasting happened during the forward pass, you need to correctly
