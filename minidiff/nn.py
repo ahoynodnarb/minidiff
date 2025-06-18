@@ -8,9 +8,9 @@ except ImportError:
     import numpy as np
 
 import minidiff as md
-import minidiff.typing as mdt
 import minidiff.ops as ops
-
+import minidiff.typing as mdt
+from minidiff.utils import get_exported_var_names
 
 TensorPadding = Union[int, float, Sequence[int]]
 Im2ColIndices = Tuple[mdt.NestedSequence[int], mdt.NestedSequence[int]]
@@ -394,11 +394,15 @@ class CrossEntropyLoss(ops.BinaryOpClass):
         return (None, loss_gradient)
 
 
-# maybe make a custom conv2d function generator which outputs a forward and both grad functions. this way we can keep optimizations like
-# im2col working for forward and backward passes without explicitly managing state in generate_binary_op_func.
-# maybe implement a generate_*_op_func_from_factory function which takes in an OpFactory
-convolve2d = ops.generate_op_func(op_class=Convolve2D, tensor_only=True)
-# this has to be an op itself because it has a custom gradient function
-cross_entropy_loss = ops.generate_op_func(
-    op_class=CrossEntropyLoss, tensor_only=True, propagate_kwargs=True
-)
+exported_ops = [
+    # maybe make a custom conv2d function generator which outputs a forward and both grad functions. this way we can keep optimizations like
+    # im2col working for forward and backward passes without explicitly managing state in generate_binary_op_func.
+    # maybe implement a generate_*_op_func_from_factory function which takes in an OpFactory
+    convolve2d := ops.generate_op_func(op_class=Convolve2D, tensor_only=True),
+    # this has to be an op itself because it has a custom gradient function
+    cross_entropy_loss := ops.generate_op_func(
+        op_class=CrossEntropyLoss, tensor_only=True, propagate_kwargs=True
+    ),
+]
+
+__all__ = get_exported_var_names(local_vars=dict(locals()), exported_vars=exported_ops)

@@ -1,4 +1,4 @@
-from typing import List, Tuple, Optional, Dict
+from typing import List, Tuple, Optional, Dict, Any
 
 import graphviz
 
@@ -128,3 +128,12 @@ def compute_grads(
     computed.backward()
     automatic_gradients = [t.grad for t in input_tensors]
     return manual_gradients, automatic_gradients
+
+
+def get_exported_var_names(local_vars: Dict[str, Any], exported_vars: List[Any]):
+    exported = set()
+    for op in exported_vars:
+        for name, value in local_vars.items():
+            if value is op:
+                exported.add(name)
+    return list(exported)

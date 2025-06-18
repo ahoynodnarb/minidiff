@@ -7,8 +7,9 @@ except ImportError:
     import numpy as np
 
 import minidiff as md
-import minidiff.typing as mdt
 from minidiff.topology import FuncNode
+import minidiff.typing as mdt
+from minidiff.utils import get_exported_var_names
 
 
 class OpClass:
@@ -561,13 +562,4 @@ exported_ops = [
 ]
 
 
-def get_exported_names(local_vars):
-    exported = set()
-    for op in exported_ops:
-        for name, value in local_vars.items():
-            if value is op:
-                exported.add(name)
-    return list(exported)
-
-
-__all__ = get_exported_names(dict(locals()))
+__all__ = get_exported_var_names(local_vars=dict(locals()), exported_vars=exported_ops)
