@@ -91,32 +91,33 @@ def generate_op_func(
             lambda a, b, grad: md.zeros_like(grad) for _ in range(len(grad_funcs))
         ]
 
-    def minidiff_func(*func_inputs, **kwargs):
-        tensor_inputs = [isinstance(x, md.Tensor) for x in func_inputs]
-
-        if not tensor_only and not py_any(tensor_inputs):
-            raise ValueError(
-                "minidiff functions only work when at least one argument is a minidiff Tensor"
-            )
-
-        if tensor_only and not py_all(tensor_inputs):
-            raise ValueError("This function only supports minidiff Tensors")
-
-        # allow gradient if at least one of the input tensors allows a gradient
-        allowed_grads = [
-            x.allow_grad if isinstance(x, md.Tensor) else False for x in func_inputs
+    def attach_func_node(op_output, op_inputs, kwargs):
+        grads_allowed = [isinstance(x, md.Tensor) and x.allow_grad for x in op_inputs]
+        # obviously tensors who don't want their gradients to be checked have no gradient function
+        filtered_grad_funcs = [
+            grad_func if grad_allowed else None
+            for grad_func, grad_allowed in zip(grad_funcs, grads_allowed)
         ]
-        allow_grad = py_any(allowed_grads)
 
+        func_node = FuncNode(
+            op_output=op_output,
+            op_inputs=op_inputs,
+            grad_functions=filtered_grad_funcs,
+        )
+        func_node.op_name = forward_func.__name__ if op_name is None else op_name
+        if propagate_kwargs:
+            func_node.kwargs = kwargs
+
+    def get_op_output(op_inputs, allow_grad, kwargs):
         # if the op is a traditional numpy function, then we need to "uncast" it back to numpy
         if is_backend_op:
             forward_inputs = [
-                x._data if isinstance(x, md.Tensor) else x for x in func_inputs
+                x._data if isinstance(x, md.Tensor) else x for x in op_inputs
             ]
         else:
-            forward_inputs = func_inputs
+            forward_inputs = op_inputs
 
-        if casting is None or not is_backend_op:
+        if casting is None:
             output = forward_func(*forward_inputs, **kwargs)
         else:
             output = forward_func(*forward_inputs, casting=casting, **kwargs)
@@ -128,23 +129,31 @@ def generate_op_func(
         # ensure gradient tracking rules do not break
         output.allow_grad = allow_grad
 
+        return output
+
+    def minidiff_func(*op_inputs, **kwargs):
+        input_is_tensor = [isinstance(x, md.Tensor) for x in op_inputs]
+
+        if not tensor_only and not py_any(input_is_tensor):
+            raise ValueError(
+                "minidiff functions only work when at least one argument is a minidiff Tensor"
+            )
+
+        if tensor_only and not py_all(input_is_tensor):
+            raise ValueError("This function only supports minidiff Tensors")
+
+        # allow gradient tracking if at least one of the input tensors allows a gradient
+        allow_grad = py_any(
+            [isinstance(x, md.Tensor) and x.allow_grad for x in op_inputs]
+        )
+
+        output = get_op_output(
+            op_inputs=op_inputs, allow_grad=allow_grad, kwargs=kwargs
+        )
+
         # only attach a node if we're allowed to track gradients right now, and the tensor wants to track its gradient
         if md.grad_allowed_() and allow_grad:
-            # obviously tensors who don't want their gradients to be checked have no gradient function
-            filtered_grad_funcs = [
-                grad_func if grad_allowed else None
-                for grad_func, grad_allowed in zip(grad_funcs, allowed_grads)
-            ]
-
-            # FuncNodes can only track tensors, so we have to make everything a tensor.
-            func_node = FuncNode(
-                op_output=output,
-                op_inputs=func_inputs,
-                grad_functions=filtered_grad_funcs,
-            )
-            func_node.op_name = forward_func.__name__ if op_name is None else op_name
-            if propagate_kwargs:
-                func_node.kwargs = kwargs
+            attach_func_node(op_output=output, op_inputs=op_inputs, kwargs=kwargs)
 
         return output
 
