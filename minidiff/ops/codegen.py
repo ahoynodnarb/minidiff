@@ -104,6 +104,13 @@ def generate_op_func(
         if propagate_kwargs:
             func_node.kwargs = forward_kwargs
 
+        op_output.func_node = func_node
+        op_output.graphed = True
+
+        for op_input in op_inputs:
+            if isinstance(op_input, md.Tensor):
+                op_input.graphed = True
+
     # correctly formats forward inputs, gets the output, and casts back into a Tensor if necessary
     def get_op_output(op_inputs, allow_grad, forward_kwargs):
         # if the op is a traditional numpy function, then we need to "uncast" it back to numpy

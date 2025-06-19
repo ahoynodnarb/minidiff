@@ -76,7 +76,7 @@ class Tensor:
         self._func_node = func_node
 
     # we're a leaf if we have no gradient history
-    # whether we're part of a gradient-tracked computation or not. 
+    # whether we're part of a gradient-tracked computation or not.
     @property
     def is_leaf(self) -> bool:
         return self.func_node is None
@@ -186,17 +186,8 @@ class Tensor:
         detached = Tensor(self._data.copy(), allow_grad=allow_grad)
         return detached
 
-    # @ops.binary_op_func(
-    #     grad_a=lambda a, dtype, grad, **kwargs: grad.astype(dtype, **kwargs),
-    #     is_backend_op=False,
-    #     propagate_kwargs=True,
-    #     casting=None,
-    # )
     def astype(self, dtype, **kwargs):
         return md.astype(self, dtype, **kwargs)
-        # a = md.Tensor(self._data.astype(dtype, **kwargs), dtype=dtype)
-        # print(a)
-        # return a
 
     def transpose(self, axes=None):
         return md.transpose(self, axes=axes)
@@ -477,29 +468,3 @@ def tile(A: mdt.TensorLike, reps: mdt.TensorLike, allow_grad: bool = False) -> T
 
 def arange(*args: Union[int, float], allow_grad: bool = False, **kwargs) -> Tensor:
     return Tensor(np.arange(*args, **kwargs), allow_grad=allow_grad)
-
-
-# if broadcasting happened during the forward pass, you need to correctly
-# sum up the correct dimensions so that the gradients match up
-def collect_gradients(grad: Tensor, target_shape: Sequence[int]) -> Tensor:
-    # this collects the prepended axes
-    # numpy inserts dimensions from the left when broadcasting
-    # this just sums across those prepended dimensions
-    len_prepended = grad.ndim - len(target_shape)
-    broadcasted_axes = tuple(range(len_prepended))
-    if len(broadcasted_axes) != 0:
-        grad = grad.sum(axis=broadcasted_axes)
-
-    # this collects the axes that were stretched to span a greater dim
-    # numpy will "stretch" dimensions so that dimensions of size 1 are tiled
-    # so that they match the greater dimension.
-    # we can undo this by just summing across those dimensions until we reach size 1 again
-    ndims = min(len(target_shape), grad.ndim)
-    stretched_axes = tuple(
-        i for i in range(ndims) if grad.shape[i] > 1 and target_shape[i] == 1
-    )
-    if len(stretched_axes) != 0:
-        grad = grad.sum(axis=stretched_axes, keepdims=True)
-
-    # final reshape operation that can upsample if necessary
-    return md.broadcast_to(grad, target_shape)

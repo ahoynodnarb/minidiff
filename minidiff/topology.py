@@ -21,13 +21,6 @@ class FuncNode:
         self.kwargs = {}
         self.op_name = None
 
-        op_output.func_node = self
-        op_output.graphed = True
-
-        for op_input in op_inputs:
-            if isinstance(op_input, md.Tensor):
-                op_input.graphed = True
-
     # this accumulates gradients for the input tensors through chain rule (reverse-mode)
     def update_grads(self, grad: md.Tensor):
         # don't use no_grad() here because we are assuming gradients already don't track their gradients,
@@ -37,16 +30,16 @@ class FuncNode:
                 continue
             if not op_input.allow_grad:
                 continue
+            if grad_function is None:
+                continue
             grad_computation = grad_function(*self.op_inputs, grad, **self.kwargs)
             # if broadcasting occured during the forward pass, we need to collect gradients
             # back in the backward pass so that the gradients are correctly distributed
-            collected_grad = md.collect_gradients(
-                grad=grad_computation, target_shape=op_input.shape
-            )
+            collected_grad = md.collect_gradients(grad_computation, op_input.shape)
             if op_input.grad is None:
                 op_input.grad = collected_grad
             else:
-                op_input.grad += collected_grad
+                op_input.grad = op_input.grad + collected_grad
 
     def __repr__(self) -> str:
         return f"{self.op_name}({', '.join([str(x) for x in self.op_inputs])})"

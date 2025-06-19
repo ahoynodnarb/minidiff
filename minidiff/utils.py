@@ -36,7 +36,7 @@ def draw_tensor_op_graph(
         if tensor_id in all_tensor_names:
             tensor_name = all_tensor_names[tensor_id]
         # this is just a scalar so return the value as its name
-        elif isinstance(tensor, (int, float)):
+        elif not isinstance(tensor, md.Tensor):
             tensor_name = str(tensor)
             all_tensor_names[tensor_id] = tensor_name
         # if we're either giving everything a name, or we haven't found its name and it's a leaf
