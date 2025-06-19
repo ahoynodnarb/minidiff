@@ -47,9 +47,12 @@ class Tensor:
         func_node: Optional["md.topology.FuncNode"] = None,
     ):
         if isinstance(data, np.ndarray):
-            self._data = data.astype(dtype)
+            self._data = data
         else:
-            self._data = np.array(data, dtype=dtype)
+            self._data = np.array(data)
+            
+        if dtype is not None:
+            self._data = self._data.astype(dtype)
 
         self._allow_grad = allow_grad
         # tensors not created by ops are leafs. this property is immutable

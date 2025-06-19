@@ -181,7 +181,7 @@ class Convolve2D(ops.BinaryOpClass):
             (1, -1)
         )
 
-        return (row_indices.astype(np.int32), col_indices.astype(np.int32))
+        return (row_indices, col_indices)
 
     # this transforms the input tensor into a tensor where the columns make up each window of the convolution
     # that way we can just perform a tensordot with the partially flattened kernels to simulate a convolution much faster
