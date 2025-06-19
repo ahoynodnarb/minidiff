@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from builtins import all as py_all
 from builtins import any as py_any
 from typing import Callable, Optional, Sequence, Type

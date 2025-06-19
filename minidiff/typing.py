@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import Any, Callable, Protocol, Sequence, TypeVar, Union
 
 import minidiff as md

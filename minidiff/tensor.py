@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import contextvars
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
