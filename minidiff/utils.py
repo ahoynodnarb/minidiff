@@ -1,4 +1,4 @@
-from typing import List, Tuple, Optional, Dict, Any
+from typing import Any, Dict, List, Optional, Tuple
 
 import graphviz
 

@@ -1,2 +1,2 @@
-from .tensor import *
 from .ops import *
+from .tensor import *

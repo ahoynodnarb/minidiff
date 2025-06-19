@@ -1,11 +1,6 @@
-import math
-from typing import Optional, Union, Sequence, Tuple
 import collections
-
-try:
-    import cupy as np  # type: ignore
-except ImportError:
-    import numpy as np
+import math
+from typing import Optional, Sequence, Tuple, Union
 
 import minidiff as md
 import minidiff.ops as ops
@@ -14,7 +9,6 @@ from minidiff.utils import get_exported_var_names
 
 
 class Convolve2D(ops.BinaryOpClass):
-
     @staticmethod
     def get_padded_edges(padding):
         # padding is already a tuple
@@ -276,7 +270,6 @@ class Convolve2D(ops.BinaryOpClass):
         )
 
     def create_forward(self) -> mdt.BinaryFunc:
-
         def forward(
             conv_input: md.Tensor,
             kernels: md.Tensor,
@@ -302,7 +295,6 @@ class Convolve2D(ops.BinaryOpClass):
         return forward
 
     def create_grads(self) -> Tuple[mdt.BinaryOpGrad, mdt.BinaryOpGrad]:
-
         def compute_grad_wrt_x(
             conv_input: md.Tensor,
             kernels: md.Tensor,
@@ -359,9 +351,7 @@ class Convolve2D(ops.BinaryOpClass):
 
 
 class CrossEntropyLoss(ops.BinaryOpClass):
-
     def create_forward(self) -> mdt.BinaryFunc:
-
         # formula for cross entropy loss is sum(y_true * -log(y_pred))
         def loss_func(
             y_true: md.Tensor,
@@ -384,7 +374,6 @@ class CrossEntropyLoss(ops.BinaryOpClass):
         return loss_func
 
     def create_grads(self) -> Tuple[None, mdt.BinaryOpGrad]:
-
         # partial derivative of cross entropy loss wrt to predictions is pretty easy to derive: -y_true / y_pred
         # if we want to precompute the gradient (using logsoftmax) the gradient calculation becomes (y_pred - y_true)
         # we just throw in the division by len(y_true) to make up for batching

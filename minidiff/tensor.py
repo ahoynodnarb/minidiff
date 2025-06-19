@@ -1,5 +1,5 @@
 import contextvars
-from typing import List, Union, Any, Tuple, Dict, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 try:
     import cupy as np  # type: ignore
@@ -50,7 +50,7 @@ class Tensor:
             self._data = data
         else:
             self._data = np.array(data)
-            
+
         if dtype is not None:
             self._data = self._data.astype(dtype)
 
@@ -416,10 +416,10 @@ class Tensor:
         self, dtype: Optional[np.dtype] = None, copy: Optional[bool] = None
     ) -> npt.NDArray[Any]:
         if dtype is not None and dtype != self.dtype:
-            if copy == False:
+            if not copy:
                 raise ValueError("attempted cast, but copies are not permitted")
             return self._data.astype(dtype=dtype)
-        if copy == True:
+        if copy:
             return self._data.copy()
         return self._data
 

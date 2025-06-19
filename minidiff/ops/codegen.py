@@ -1,9 +1,10 @@
-from builtins import any as py_any, all as py_all
-from typing import Sequence, Optional, Callable, Type
+from builtins import all as py_all
+from builtins import any as py_any
+from typing import Callable, Optional, Sequence, Type
 
 import minidiff as md
-from minidiff.topology import FuncNode
 import minidiff.typing as mdt
+from minidiff.topology import FuncNode
 
 
 class OpClass:
@@ -173,7 +174,6 @@ def generate_stateless_op_func(
     grad_funcs: Sequence[Optional[mdt.GenericOpGrad]],
     **kwargs,
 ) -> mdt.GenericOp:
-
     class StatelessOpClass(OpClass):
         def create_forward(self) -> mdt.GenericFunc:
             return forward_func

@@ -1,4 +1,4 @@
-from typing import Tuple, Union, Optional, Any, Sequence
+from typing import Any, Optional, Sequence, Tuple, Union
 
 try:
     import cupy as np  # type: ignore
@@ -6,18 +6,16 @@ except ImportError:
     import numpy as np
 
 import minidiff as md
+import minidiff.ops as ops
 import minidiff.typing as mdt
 from minidiff.utils import get_exported_var_names
-import minidiff.ops as ops
 
 
 class TensorDot(ops.BinaryOpClass):
-
     def create_forward(self) -> mdt.BinaryOp:
         return np.tensordot
 
     def create_grads(self) -> Tuple[mdt.BinaryOpGrad, mdt.BinaryOpGrad]:
-
         def grad_a(
             a: md.Tensor,
             b: md.Tensor,

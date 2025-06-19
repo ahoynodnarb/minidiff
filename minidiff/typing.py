@@ -1,4 +1,4 @@
-from typing import Callable, Any, Sequence, TypeVar, Union, Protocol
+from typing import Any, Callable, Protocol, Sequence, TypeVar, Union
 
 import minidiff as md
 
@@ -11,8 +11,12 @@ TensorLike = Union["md.Tensor", float, int]
 
 class GenericFunc(Protocol):
     def __call__(self, *args: TensorLike) -> TensorLike: ...
+
+
 class GenericOp(Protocol):
     def __call__(self, *args: Any) -> "md.Tensor": ...
+
+
 class GenericOpGrad(Protocol):
     def __call__(self, *args: "md.Tensor") -> "md.Tensor": ...
 

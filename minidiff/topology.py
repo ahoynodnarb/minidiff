@@ -1,4 +1,4 @@
-from typing import List, Any, Optional
+from typing import Any, List, Optional
 
 import minidiff as md
 import minidiff.typing as mdt
