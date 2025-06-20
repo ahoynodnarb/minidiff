@@ -37,7 +37,7 @@ class FuncNode:
             grad_computation = grad_function(*self.op_inputs, grad, **self.kwargs)
             # if broadcasting occured during the forward pass, we need to collect gradients
             # back in the backward pass so that the gradients are correctly distributed
-            collected_grad = md.collect_gradients(grad_computation, op_input.shape)
+            collected_grad = md.unbroadcast(grad_computation, op_input.shape)
             if op_input.grad is None:
                 op_input.grad = collected_grad
             else:

@@ -127,28 +127,28 @@ def transpose_grad(
 
 # if broadcasting happened during the forward pass, you need to correctly
 # sum up the correct dimensions so that the gradients match up
-def unbroadcast(grad: md.Tensor, target_shape: Sequence[int]) -> md.Tensor:
+def unbroadcast_forward(a: md.Tensor, target_shape: Sequence[int]) -> md.Tensor:
     # this collects the prepended axes
     # numpy inserts dimensions from the left when broadcasting
     # this just sums across those prepended dimensions
-    len_prepended = grad.ndim - len(target_shape)
+    len_prepended = a.ndim - len(target_shape)
     broadcasted_axes = tuple(range(len_prepended))
     if len(broadcasted_axes) != 0:
-        grad = grad.sum(axis=broadcasted_axes)
+        a = a.sum(axis=broadcasted_axes)
 
     # this collects the axes that were stretched to span a greater dim
     # numpy will "stretch" dimensions so that dimensions of size 1 are tiled
     # so that they match the greater dimension.
     # we can undo this by just summing across those dimensions until we reach size 1 again
-    ndims = min(len(target_shape), grad.ndim)
+    ndims = min(len(target_shape), a.ndim)
     stretched_axes = tuple(
-        i for i in range(ndims) if grad.shape[i] > 1 and target_shape[i] == 1
+        i for i in range(ndims) if a.shape[i] > 1 and target_shape[i] == 1
     )
     if len(stretched_axes) != 0:
-        grad = grad.sum(axis=stretched_axes, keepdims=True)
+        a = a.sum(axis=stretched_axes, keepdims=True)
 
     # final reshape operation that can upsample if necessary
-    return md.broadcast_to(grad, target_shape)
+    return md.broadcast_to(a, target_shape)
 
 
 def getitem_grad(a: md.Tensor, key: Any, grad: md.Tensor) -> md.Tensor:
@@ -238,16 +238,14 @@ exported_ops = [
         propagate_kwargs=True,
         casting=None,
     ),
-    collect_gradients := ops.generate_binary_op_func(
-        forward_func=unbroadcast,
+    unbroadcast := ops.generate_binary_op_func(
+        forward_func=unbroadcast_forward,
         grad_a=lambda a, shape, grad: broadcast_to(grad, a.shape),
         casting=None,
     ),
     broadcast_to := ops.generate_binary_op_func(
         forward_func=np.broadcast_to,
-        grad_a=lambda a, shape, grad: collect_gradients(
-            grad=grad, target_shape=a.shape
-        ),
+        grad_a=lambda a, shape, grad: unbroadcast(grad=grad, target_shape=a.shape),
         is_backend_op=True,
         casting=None,
     ),
