@@ -175,6 +175,18 @@ def mean_grad(
 
 
 exported_ops = [
+    split := ops.generate_binary_op_func(
+        forward_func=np.split,
+        grad_a=lambda a, idx, grad, axis=0: split(grad, idx, axis=axis),
+        is_backend_op=True,
+        casting=None,
+    ),
+    expand_dims := ops.generate_binary_op_func(
+        forward_func=np.expand_dims,
+        grad_a=lambda a, axis, grad: expand_dims(grad, axis),
+        is_backend_op=True,
+        casting=None,
+    ),
     astype := ops.generate_binary_op_func(
         forward_func=lambda a, dtype, **kwargs: md.Tensor(
             a._data.astype(dtype, **kwargs), dtype=dtype
@@ -440,6 +452,7 @@ exported_ops = [
         grad=lambda a, grad: grad * sign(a),
         is_backend_op=True,
     ),
+    abs := absolute,
     all := ops.generate_unary_op_func(
         forward_func=np.all, is_differentiable=False, is_backend_op=True, casting=None
     ),

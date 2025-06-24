@@ -476,3 +476,45 @@ def tile(A: mdt.TensorLike, reps: mdt.TensorLike, allow_grad: bool = False) -> T
 
 def arange(*args: Union[int, float], allow_grad: bool = False, **kwargs) -> Tensor:
     return Tensor(np.arange(*args, **kwargs), allow_grad=allow_grad)
+
+
+def stack(
+    arrays: Sequence[mdt.TensorLike], allow_grad: bool = False, **kwargs
+) -> Tensor:
+    return Tensor(np.stack(arrays, **kwargs), allow_grad=allow_grad)
+
+
+def save(file, arr: mdt.TensorLike, **kwargs):
+    np.save(file, arr._data, **kwargs)
+
+
+def load(file, allow_grad: bool = False, **kwargs) -> Tensor:
+    return Tensor(np.load(file, **kwargs), allow_grad=allow_grad)
+
+
+def rand(*dims: Optional[int], allow_grad: bool = False) -> Tensor:
+    return Tensor(np.random.rand(*dims), allow_grad=allow_grad)
+
+
+def randn(*dims: Optional[int], allow_grad: bool = False) -> Tensor:
+    return Tensor(np.random.randn(*dims), allow_grad=allow_grad)
+
+
+def binomial(
+    n: Union[int, mdt.TensorLike[int]],
+    p: Union[float, mdt.TensorLike[float]],
+    size: Tuple[int] = None,
+    allow_grad: bool = False,
+) -> Tensor:
+    return Tensor(np.random.binomial(n, p, size=size), allow_grad=allow_grad)
+
+
+def permutation(x: mdt.TensorLike, allow_grad: bool = False) -> Tensor:
+    return Tensor(np.random.permutation(x), allow_grad=allow_grad)
+
+
+def shuffle(x: Tensor):
+    np.random.shuffle(x._data)
+
+
+newaxis = None
