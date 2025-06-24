@@ -79,18 +79,10 @@ def generate_op_func(
     op_name: Optional[str] = None,
     casting: Optional[str] = "safe",
 ) -> mdt.GenericOp:
-    instance = op_class()
-    forward_func = instance.create_forward()
-    grad_funcs = instance.create_grads()
-    # if the function is not differentiable, we still want to propagate the gradient to avoid breaking the
-    # graph, but it is smarter to just zero out the gradients.
-    if not is_differentiable:
-        grad_funcs = [
-            lambda a, b, grad: md.zeros_like(grad) for _ in range(len(grad_funcs))
-        ]
-
     # just sets the func_node property of op_output to the correct FuncNode
-    def attach_func_node(op_output, op_inputs, forward_kwargs):
+    def attach_func_node(
+        forward_func, grad_funcs, op_output, op_inputs, forward_kwargs
+    ):
         grads_allowed = [isinstance(x, md.Tensor) and x.allow_grad for x in op_inputs]
         # obviously tensors who don't want their gradients to be checked have no gradient function
         filtered_grad_funcs = [
@@ -115,7 +107,7 @@ def generate_op_func(
                 op_input.graphed = True
 
     # correctly formats forward inputs, gets the output, and casts back into a Tensor if necessary
-    def get_op_output(op_inputs, allow_grad, forward_kwargs):
+    def get_op_output(forward_func, op_inputs, allow_grad, forward_kwargs):
         # if the op is a traditional numpy function, then we need to "uncast" it back to numpy
         if is_backend_op:
             forward_inputs = [
@@ -140,6 +132,16 @@ def generate_op_func(
 
     # this is the actual op function generate_op_func returns
     def minidiff_func(*op_inputs, **forward_kwargs):
+        instance = op_class()
+        forward_func = instance.create_forward()
+        grad_funcs = instance.create_grads()
+        # if the function is not differentiable, we still want to propagate the gradient to avoid breaking the
+        # graph, but it is smarter to just zero out the gradients.
+        if not is_differentiable:
+            grad_funcs = [
+                lambda a, b, grad: md.zeros_like(grad) for _ in range(len(grad_funcs))
+            ]
+
         input_is_tensor = [isinstance(x, md.Tensor) for x in op_inputs]
 
         if not tensor_only and not py_any(input_is_tensor):
@@ -156,13 +158,20 @@ def generate_op_func(
         )
 
         output = get_op_output(
-            op_inputs=op_inputs, allow_grad=allow_grad, forward_kwargs=forward_kwargs
+            forward_func=forward_func,
+            op_inputs=op_inputs,
+            allow_grad=allow_grad,
+            forward_kwargs=forward_kwargs,
         )
 
         # only attach a node if we're allowed to track gradients right now, and the tensor wants to track its gradient
         if md.grad_allowed_() and allow_grad:
             attach_func_node(
-                op_output=output, op_inputs=op_inputs, forward_kwargs=forward_kwargs
+                forward_func=forward_func,
+                grad_funcs=grad_funcs,
+                op_output=output,
+                op_inputs=op_inputs,
+                forward_kwargs=forward_kwargs,
             )
 
         return output
