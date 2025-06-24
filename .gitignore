@@ -4,3 +4,4 @@ __pycache__/
 graph
 graph.pdf
 minidiff.egg-info/
+build/

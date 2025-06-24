@@ -191,6 +191,12 @@ class Tensor:
         detached = Tensor(self._data.copy(), allow_grad=allow_grad)
         return detached
 
+    def ravel(self, order="C"):
+        return md.ravel(self, order=order)
+
+    def flatten(self, order="C"):
+        return md.flatten(self, order=order)
+
     def astype(self, dtype, **kwargs):
         return md.astype(self, dtype, **kwargs)
 

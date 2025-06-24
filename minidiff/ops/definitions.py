@@ -175,6 +175,18 @@ def mean_grad(
 
 
 exported_ops = [
+    ravel := ops.generate_unary_op_func(
+        forward_func=lambda a, order="C": a.ravel(order=order),
+        grad=lambda a, grad, order="C": ravel(grad, order=order),
+        is_backend_op=True,
+        casting=None,
+    ),
+    flatten := ops.generate_unary_op_func(
+        forward_func=lambda a, order="C": a.flatten(order=order),
+        grad=lambda a, grad, order="C": flatten(grad, order=order),
+        is_backend_op=True,
+        casting=None,
+    ),
     split := ops.generate_binary_op_func(
         forward_func=np.split,
         grad_a=lambda a, idx, grad, axis=0: split(grad, idx, axis=axis),
@@ -357,7 +369,8 @@ exported_ops = [
         grad_b=lambda a, b, grad: grad * log(a) * a**b,
         is_backend_op=True,
     ),
-    sqrt := lambda a, b, **kwargs: power(a, 0.5, **kwargs),
+    square := lambda a, **kwargs: power(a, 2, **kwargs),
+    sqrt := lambda a, **kwargs: power(a, 0.5, **kwargs),
     floor := ops.generate_unary_op_func(
         forward_func=np.floor, is_differentiable=False, is_backend_op=True
     ),
