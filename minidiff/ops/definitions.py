@@ -187,12 +187,6 @@ exported_ops = [
         is_backend_op=True,
         casting=None,
     ),
-    split := ops.generate_binary_op_func(
-        forward_func=np.split,
-        grad_a=lambda a, idx, grad, axis=0: split(grad, idx, axis=axis),
-        is_backend_op=True,
-        casting=None,
-    ),
     expand_dims := ops.generate_binary_op_func(
         forward_func=np.expand_dims,
         grad_a=lambda a, axis, grad: expand_dims(grad, axis),
@@ -304,14 +298,13 @@ exported_ops = [
         casting=None,
         op_name="index",
     ),
-    clip := ops.generate_unary_op_func(
+    clip := ops.generate_ternary_op_func(
         forward_func=np.clip,
-        grad=lambda a, grad, a_min=None, a_max=None: grad
+        grad_a=lambda a, grad, a_min=None, a_max=None: grad
         * logical_and(
             a > float("-inf") if a_min is None else a_min,
             a < float("inf") if a_max is None else a_max,
         ),
-        propagate_kwargs=True,
         is_backend_op=True,
         casting=None,
     ),

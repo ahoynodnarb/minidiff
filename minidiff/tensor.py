@@ -523,4 +523,17 @@ def shuffle(x: Tensor):
     np.random.shuffle(x._data)
 
 
+def split(
+    ary: mdt.TensorLike,
+    indices_or_sections: Union[int, Sequence[int]],
+    axis: int = 0,
+    allow_grad: bool = False,
+) -> md.Tensor:
+    output_np = np.split(ary, indices_or_sections, axis=axis)
+    output = [None] * len(output_np)
+    for i, section in enumerate(output_np):
+        output[i] = Tensor(section, allow_grad=allow_grad)
+    return output
+
+
 newaxis = None

@@ -369,6 +369,13 @@ class CrossEntropyLoss(ops.BinaryOpClass):
             y_smoothed = (1 - smoothing) * y_true + (smoothing / n_classes)
             # avoid division by 0
             y_pred = y_pred.clip(a_min=1e-8, a_max=None)
+            if precompute_grad:
+                mx = md.max(y_pred, axis=-1, keepdims=True)
+                e = md.exp(y_pred - mx)
+                s = md.sum(e, axis=-1, keepdims=True)
+                # log-sum-exp take the log of the sum of the exponents shifted by the max, and then shift again later
+                lse = mx + md.log(s)
+                return -(y_smoothed * (y_pred - lse))
             # compute the one hot loss, reshape to match
             loss = md.sum(y_smoothed * -md.log(y_pred), axis=-1, keepdims=True)
             return loss
