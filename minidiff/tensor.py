@@ -230,11 +230,14 @@ class Tensor:
     def multiply(self, other: mdt.TensorLike, **kwargs) -> "Tensor":
         return md.multiply(self, other, **kwargs)
 
+    def _allow_mutation(self):
+        return not (self.allow_grad and md.grad_allowed_() and self.graphed)
+
     def __matmul__(self, other: "Tensor") -> "Tensor":
         return md.matmul(self, other)
 
     def __imatmul__(self, other: "Tensor") -> "Tensor":
-        if self.allow_grad and md.grad_allowed_():
+        if not self._allow_mutation():
             raise ValueError(
                 "in-place operations are not allowed while tracking gradients"
             )
@@ -249,7 +252,7 @@ class Tensor:
         return md.add(other, self)
 
     def __iadd__(self, other: mdt.TensorLike) -> "Tensor":
-        if self.allow_grad and md.grad_allowed_():
+        if not self._allow_mutation():
             raise ValueError(
                 "in-place operations are not allowed while tracking gradients"
             )
@@ -268,7 +271,7 @@ class Tensor:
         return md.subtract(other, self)
 
     def __isub__(self, other: mdt.TensorLike) -> "Tensor":
-        if self.allow_grad and md.grad_allowed_():
+        if not self._allow_mutation():
             raise ValueError(
                 "in-place operations are not allowed while tracking gradients"
             )
@@ -287,7 +290,7 @@ class Tensor:
         return md.multiply(other, self)
 
     def __imul__(self, other: mdt.TensorLike) -> "Tensor":
-        if self.allow_grad and md.grad_allowed_():
+        if not self._allow_mutation():
             raise ValueError(
                 "in-place operations are not allowed while tracking gradients"
             )
@@ -306,7 +309,7 @@ class Tensor:
         return md.true_divide(other, self)
 
     def __itruediv__(self, other: mdt.TensorLike) -> "Tensor":
-        if self.allow_grad and md.grad_allowed_():
+        if not self._allow_mutation():
             raise ValueError(
                 "in-place operations are not allowed while tracking gradients"
             )
@@ -325,7 +328,7 @@ class Tensor:
         return md.floor_divide(other, self)
 
     def __ifloordiv__(self, other: mdt.TensorLike) -> "Tensor":
-        if self.allow_grad and md.grad_allowed_():
+        if not self._allow_mutation():
             raise ValueError(
                 "in-place operations are not allowed while tracking gradients"
             )
@@ -344,7 +347,7 @@ class Tensor:
         return md.power(other, self)
 
     def __ipow__(self, other: mdt.TensorLike) -> "Tensor":
-        if self.allow_grad and md.grad_allowed_():
+        if not self._allow_mutation():
             raise ValueError(
                 "in-place operations are not allowed while tracking gradients"
             )
@@ -369,7 +372,7 @@ class Tensor:
         return md.getitem(self, key)
 
     def __setitem__(self, key: Any, val: mdt.TensorLike):
-        if self.allow_grad and md.grad_allowed_():
+        if not self._allow_mutation():
             raise ValueError(
                 "in-place operations are not allowed while tracking gradients"
             )
