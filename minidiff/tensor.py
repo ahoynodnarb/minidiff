@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import contextvars
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Tuple, Union
 
 try:
     import cupy as np  # type: ignore
@@ -11,6 +11,9 @@ except ImportError:
     import numpy.typing as npt
 
 import minidiff as md
+
+if TYPE_CHECKING:
+    from minidiff.topology import FuncNode
 import minidiff.typing as mdt
 
 _allow_grad = contextvars.ContextVar("allow_grad", default=True)
@@ -43,10 +46,10 @@ def grad_allowed_():
 class Tensor:
     def __init__(
         self,
-        data: "np.ArrayLike",
+        data: np.ArrayLike,
         allow_grad: bool = False,
         dtype: Optional[np.dtype] = None,
-        func_node: Optional["md.topology.FuncNode"] = None,
+        func_node: Optional[FuncNode] = None,
     ):
         if isinstance(data, np.ndarray):
             self._data = data
@@ -67,11 +70,11 @@ class Tensor:
         )
 
     @property
-    def func_node(self) -> "md.topology.FuncNode":
+    def func_node(self) -> FuncNode:
         return self._func_node
 
     @func_node.setter
-    def func_node(self, func_node: "md.topology.FuncNode"):
+    def func_node(self, func_node: FuncNode):
         # if we're on a graph, and we're a leaf that's trying to assign itself a node,
         # then fail because leafs, by definition, have no gradient history and therefore
         # cannot possess nodes
@@ -111,7 +114,7 @@ class Tensor:
         self._allow_grad = allow_grad
 
     @property
-    def T(self) -> "Tensor":
+    def T(self) -> Tensor:
         return md.transpose(self)
 
     @property
@@ -130,7 +133,7 @@ class Tensor:
     def dtype(self) -> np.dtype:
         return self._data.dtype
 
-    def toposort(self) -> List["Tensor"]:
+    def toposort(self) -> List[Tensor]:
         seen = set()
         traversal_path = []
 
@@ -187,7 +190,7 @@ class Tensor:
         self.func_node = None
 
     # returns a copy that does not track gradients
-    def detach(self, allow_grad: bool = False) -> "Tensor":
+    def detach(self, allow_grad: bool = False) -> Tensor:
         detached = Tensor(self._data.copy(), allow_grad=allow_grad)
         return detached
 
@@ -211,38 +214,38 @@ class Tensor:
 
         return self._data.item()
 
-    def sum(self, **kwargs) -> "Tensor":
+    def sum(self, **kwargs) -> Tensor:
         return md.sum(self, **kwargs)
 
-    def copy(self, **kwargs) -> "Tensor":
+    def copy(self, **kwargs) -> Tensor:
         return md.copy(self, **kwargs)
 
     def clip(
         self,
         a_min: Optional[Union[float, int]] = None,
         a_max: Optional[Union[float, int]] = None,
-    ) -> "Tensor":
+    ) -> Tensor:
         return md.clip(self, a_min=a_min, a_max=a_max)
 
-    def reshape(self, shape: Sequence[int], **kwargs) -> "Tensor":
+    def reshape(self, shape: Sequence[int], **kwargs) -> Tensor:
         return md.reshape(self, shape, **kwargs)
 
-    def dot(self, other: "Tensor", **kwargs) -> "Tensor":
+    def dot(self, other: Tensor, **kwargs) -> Tensor:
         return md.matmul(self, other, **kwargs)
 
-    def add(self, other: mdt.TensorLike, **kwargs) -> "Tensor":
+    def add(self, other: mdt.TensorLike, **kwargs) -> Tensor:
         return md.add(self, other, **kwargs)
 
-    def multiply(self, other: mdt.TensorLike, **kwargs) -> "Tensor":
+    def multiply(self, other: mdt.TensorLike, **kwargs) -> Tensor:
         return md.multiply(self, other, **kwargs)
 
     def _allow_mutation(self):
         return not (self.allow_grad and md.grad_allowed_() and self.graphed)
 
-    def __matmul__(self, other: "Tensor") -> "Tensor":
+    def __matmul__(self, other: Tensor) -> Tensor:
         return md.matmul(self, other)
 
-    def __imatmul__(self, other: "Tensor") -> "Tensor":
+    def __imatmul__(self, other: Tensor) -> Tensor:
         if not self._allow_mutation():
             raise ValueError(
                 "in-place operations are not allowed while tracking gradients"
@@ -251,13 +254,13 @@ class Tensor:
         self._data = self._data @ other._data
         return self
 
-    def __add__(self, other: mdt.TensorLike) -> "Tensor":
+    def __add__(self, other: mdt.TensorLike) -> Tensor:
         return md.add(self, other)
 
-    def __radd__(self, other: mdt.TensorLike) -> "Tensor":
+    def __radd__(self, other: mdt.TensorLike) -> Tensor:
         return md.add(other, self)
 
-    def __iadd__(self, other: mdt.TensorLike) -> "Tensor":
+    def __iadd__(self, other: mdt.TensorLike) -> Tensor:
         if not self._allow_mutation():
             raise ValueError(
                 "in-place operations are not allowed while tracking gradients"
@@ -270,13 +273,13 @@ class Tensor:
 
         return self
 
-    def __sub__(self, other: mdt.TensorLike) -> "Tensor":
+    def __sub__(self, other: mdt.TensorLike) -> Tensor:
         return md.subtract(self, other)
 
-    def __rsub__(self, other: mdt.TensorLike) -> "Tensor":
+    def __rsub__(self, other: mdt.TensorLike) -> Tensor:
         return md.subtract(other, self)
 
-    def __isub__(self, other: mdt.TensorLike) -> "Tensor":
+    def __isub__(self, other: mdt.TensorLike) -> Tensor:
         if not self._allow_mutation():
             raise ValueError(
                 "in-place operations are not allowed while tracking gradients"
@@ -289,13 +292,13 @@ class Tensor:
 
         return self
 
-    def __mul__(self, other: mdt.TensorLike) -> "Tensor":
+    def __mul__(self, other: mdt.TensorLike) -> Tensor:
         return md.multiply(self, other)
 
-    def __rmul__(self, other: mdt.TensorLike) -> "Tensor":
+    def __rmul__(self, other: mdt.TensorLike) -> Tensor:
         return md.multiply(other, self)
 
-    def __imul__(self, other: mdt.TensorLike) -> "Tensor":
+    def __imul__(self, other: mdt.TensorLike) -> Tensor:
         if not self._allow_mutation():
             raise ValueError(
                 "in-place operations are not allowed while tracking gradients"
@@ -308,13 +311,13 @@ class Tensor:
 
         return self
 
-    def __truediv__(self, other: mdt.TensorLike) -> "Tensor":
+    def __truediv__(self, other: mdt.TensorLike) -> Tensor:
         return md.true_divide(self, other)
 
-    def __rtruediv__(self, other: mdt.TensorLike) -> "Tensor":
+    def __rtruediv__(self, other: mdt.TensorLike) -> Tensor:
         return md.true_divide(other, self)
 
-    def __itruediv__(self, other: mdt.TensorLike) -> "Tensor":
+    def __itruediv__(self, other: mdt.TensorLike) -> Tensor:
         if not self._allow_mutation():
             raise ValueError(
                 "in-place operations are not allowed while tracking gradients"
@@ -327,13 +330,13 @@ class Tensor:
 
         return self
 
-    def __floordiv__(self, other: mdt.TensorLike) -> "Tensor":
+    def __floordiv__(self, other: mdt.TensorLike) -> Tensor:
         return md.floor_divide(self, other)
 
-    def __rfloordiv__(self, other: mdt.TensorLike) -> "Tensor":
+    def __rfloordiv__(self, other: mdt.TensorLike) -> Tensor:
         return md.floor_divide(other, self)
 
-    def __ifloordiv__(self, other: mdt.TensorLike) -> "Tensor":
+    def __ifloordiv__(self, other: mdt.TensorLike) -> Tensor:
         if not self._allow_mutation():
             raise ValueError(
                 "in-place operations are not allowed while tracking gradients"
@@ -346,13 +349,13 @@ class Tensor:
 
         return self
 
-    def __pow__(self, other: mdt.TensorLike) -> "Tensor":
+    def __pow__(self, other: mdt.TensorLike) -> Tensor:
         return md.power(self, other)
 
-    def __rpow__(self, other: mdt.TensorLike) -> "Tensor":
+    def __rpow__(self, other: mdt.TensorLike) -> Tensor:
         return md.power(other, self)
 
-    def __ipow__(self, other: mdt.TensorLike) -> "Tensor":
+    def __ipow__(self, other: mdt.TensorLike) -> Tensor:
         if not self._allow_mutation():
             raise ValueError(
                 "in-place operations are not allowed while tracking gradients"
@@ -365,7 +368,7 @@ class Tensor:
 
         return self
 
-    def __neg__(self) -> "Tensor":
+    def __neg__(self) -> Tensor:
         return -1 * self
 
     def __repr__(self) -> str:
@@ -374,7 +377,7 @@ class Tensor:
     def __len__(self) -> int:
         return self._data.__len__()
 
-    def __getitem__(self, key: Any) -> "Tensor":
+    def __getitem__(self, key: Any) -> Tensor:
         return md.getitem(self, key)
 
     def __setitem__(self, key: Any, val: mdt.TensorLike):
@@ -388,34 +391,34 @@ class Tensor:
         else:
             self._data[key] = val
 
-    def __gt__(self, value: mdt.TensorLike) -> "Tensor":
+    def __gt__(self, value: mdt.TensorLike) -> Tensor:
         return md.greater(self, value)
 
-    def __ge__(self, value: mdt.TensorLike) -> "Tensor":
+    def __ge__(self, value: mdt.TensorLike) -> Tensor:
         return md.greater_equal(self, value)
 
-    def __lt__(self, value: mdt.TensorLike) -> "Tensor":
+    def __lt__(self, value: mdt.TensorLike) -> Tensor:
         return md.less(self, value)
 
-    def __le__(self, value: mdt.TensorLike) -> "Tensor":
+    def __le__(self, value: mdt.TensorLike) -> Tensor:
         return md.less_equal(self, value)
 
-    def __eq__(self, value: mdt.TensorLike) -> "Tensor":
+    def __eq__(self, value: mdt.TensorLike) -> Tensor:
         return md.equal(self, value)
 
-    def __ne__(self, value: mdt.TensorLike) -> "Tensor":
+    def __ne__(self, value: mdt.TensorLike) -> Tensor:
         return md.not_equal(self, value)
 
-    def __and__(self, value: mdt.TensorLike) -> "Tensor":
+    def __and__(self, value: mdt.TensorLike) -> Tensor:
         return md.logical_and(self, value)
 
-    def __or__(self, value: mdt.TensorLike) -> "Tensor":
+    def __or__(self, value: mdt.TensorLike) -> Tensor:
         return md.logical_or(self, value)
 
-    def __not__(self, value: mdt.TensorLike) -> "Tensor":
+    def __not__(self, value: mdt.TensorLike) -> Tensor:
         return md.logical_not(self, value)
 
-    def __xor__(self, value: mdt.TensorLike) -> "Tensor":
+    def __xor__(self, value: mdt.TensorLike) -> Tensor:
         return md.logical_xor(self, value)
 
     # numpy array specification requirements:
