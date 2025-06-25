@@ -9,18 +9,13 @@ import minidiff.typing as mdt
 class FuncNode:
     def __init__(
         self,
-        op_output: md.Tensor,
         op_inputs: List[Any],
         grad_functions: List[Optional[mdt.GenericOpGrad]],
     ):
-        if not isinstance(op_output, md.Tensor):
-            raise ValueError("FuncNodes can only track tensors")
-
         self.op_inputs = op_inputs
         self.input_tensors = [x for x in self.op_inputs if isinstance(x, md.Tensor)]
         self.grad_functions = grad_functions
 
-        self.kwargs = {}
         self.op_name = None
 
     # this accumulates gradients for the input tensors through chain rule (reverse-mode)
@@ -34,7 +29,7 @@ class FuncNode:
                 continue
             if grad_function is None:
                 continue
-            grad_computation = grad_function(*self.op_inputs, grad, **self.kwargs)
+            grad_computation = grad_function(grad)
             # if broadcasting occured during the forward pass, we need to collect gradients
             # back in the backward pass so that the gradients are correctly distributed
             collected_grad = md.unbroadcast(grad_computation, op_input.shape)

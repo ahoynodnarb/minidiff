@@ -229,7 +229,7 @@ class Convolve2D(ops.BinaryOpClass):
         reshaped = convolved.reshape(out_shape)
         return reshaped
 
-    def setup(
+    def __init__(
         self,
         conv_input: md.Tensor,
         kernels: md.Tensor,
@@ -247,6 +247,9 @@ class Convolve2D(ops.BinaryOpClass):
             raise ValueError("Cannot evenly convolve")
         if (in_height - self.kernel_width + pad_left + pad_right) % stride != 0:
             raise ValueError("Cannot evenly convolve")
+
+        self.conv_input = conv_input
+        self.kernels = kernels
 
         # we need to keep track of the shape of the inputs and outputs so we do not
         # have to recalculate them for every single batch
@@ -272,21 +275,10 @@ class Convolve2D(ops.BinaryOpClass):
         )
 
     def create_forward(self) -> mdt.BinaryFunc:
-        def forward(
-            conv_input: md.Tensor,
-            kernels: md.Tensor,
-            padding: Union[int, float, Sequence[int]] = 0,
-            stride: int = 1,
-        ) -> md.Tensor:
-            self.setup(
-                conv_input=conv_input,
-                kernels=kernels,
-                padding=padding,
-                stride=stride,
-            )
+        def forward() -> md.Tensor:
             convolved = self.perform_convolution(
-                conv_input,
-                kernels,
+                self.conv_input,
+                self.kernels,
                 padding=self.padding,
                 stride=self.stride,
                 out_dims=self.out_dims,
@@ -297,13 +289,9 @@ class Convolve2D(ops.BinaryOpClass):
         return forward
 
     def create_grads(self) -> Tuple[mdt.BinaryOpGrad, mdt.BinaryOpGrad]:
-        def compute_grad_wrt_x(
-            conv_input: md.Tensor,
-            kernels: md.Tensor,
-            grad: md.Tensor,
-        ) -> md.Tensor:
+        def compute_grad_wrt_x(grad: md.Tensor) -> md.Tensor:
             # rotate kernels, then swap axes to match up correctly
-            flipped_kernels = md.flip(md.flip(kernels, axis=1), axis=2)
+            flipped_kernels = md.flip(md.flip(self.kernels, axis=1), axis=2)
             flipped_kernels = md.swapaxes(flipped_kernels, -1, 0)
 
             full_padding = self.calculate_full_padding(
@@ -326,16 +314,12 @@ class Convolve2D(ops.BinaryOpClass):
         # the gradient with respect to the weights (kernel) tells us how the loss function changes relative to
         # changes to each individual element of the kernel
         # the overall computation boils down to convolving each channel of the previous outputs by each channel of the gradient
-        def compute_grad_wrt_w(
-            conv_input: md.Tensor,
-            kernels: md.Tensor,
-            grad: md.Tensor,
-        ) -> md.Tensor:
+        def compute_grad_wrt_w(grad: md.Tensor) -> md.Tensor:
             # normally, computing grad_wrt_w requires you to do convolutions for each slice of the previous outputs
             # and each slice of the gradient. But we can take advantage of batching to instead treat each slice of
             # output as a separate entry to the batch, and each slice of the gradient as a separate "kernel"
             # this results in us having the same final convolution, just the slices end up as the channels instead
-            swapped_prev_outputs = md.swapaxes(conv_input, 0, -1)
+            swapped_prev_outputs = md.swapaxes(self.conv_input, 0, -1)
             swapped_grad = md.swapaxes(grad, 0, -1)
             convolved = Convolve2D.perform_convolution(
                 swapped_prev_outputs,
@@ -353,23 +337,32 @@ class Convolve2D(ops.BinaryOpClass):
 
 
 class CrossEntropyLoss(ops.BinaryOpClass):
+    def __init__(
+        self,
+        y_true: md.Tensor,
+        y_pred: md.Tensor,
+        from_logits: bool = False,
+        smoothing: Union[int, float] = 0,
+    ):
+        if y_true is None:
+            raise ValueError("Empty ground truth array")
+        if y_true.shape != y_pred.shape:
+            raise ValueError("y_true and y_pred must have the same shape")
+        self.y_true = y_true
+        self.y_pred = y_pred
+        self.from_logits = from_logits
+        self.smoothing = smoothing
+
     def create_forward(self) -> mdt.BinaryFunc:
         # formula for cross entropy loss is sum(y_true * -log(y_pred))
-        def loss_func(
-            y_true: md.Tensor,
-            y_pred: md.Tensor,
-            precompute_grad: bool = False,
-            smoothing: Union[int, float] = 0,
-        ) -> md.Tensor:
-            if y_true is None:
-                raise ValueError("Empty ground truth array")
-            if y_true.shape != y_pred.shape:
-                raise ValueError("y_true and y_pred must have the same shape")
-            n_classes = y_true.shape[-1]
-            y_smoothed = (1 - smoothing) * y_true + (smoothing / n_classes)
+        def loss_func() -> md.Tensor:
+            n_classes = self.y_true.shape[-1]
+            y_smoothed = (1 - self.smoothing) * self.y_true + (
+                self.smoothing / n_classes
+            )
             # avoid division by 0
-            y_pred = y_pred.clip(a_min=1e-8, a_max=None)
-            if precompute_grad:
+            y_pred = self.y_pred.clip(a_min=1e-8, a_max=None)
+            if self.from_logits:
                 mx = md.max(y_pred, axis=-1, keepdims=True)
                 e = md.exp(y_pred - mx)
                 s = md.sum(e, axis=-1, keepdims=True)
@@ -387,18 +380,14 @@ class CrossEntropyLoss(ops.BinaryOpClass):
         # if we want to precompute the gradient (using logsoftmax) the gradient calculation becomes (y_pred - y_true)
         # we just throw in the division by len(y_true) to make up for batching
         # precomputing the gradient (using logsoftmax) is just a lot more numerically stable since there's no risk of division by 0
-        def loss_gradient(
-            y_true: md.Tensor,
-            y_pred: md.Tensor,
-            grad,
-            precompute_grad: bool = False,
-            smoothing: Union[int, float] = 0,
-        ) -> md.Tensor:
-            n_classes = y_true.shape[-1]
-            y_smoothed = (1 - smoothing) * y_true + (smoothing / n_classes)
-            y_pred = y_pred.clip(a_min=1e-8, a_max=None)
+        def loss_gradient(grad) -> md.Tensor:
+            n_classes = self.y_true.shape[-1]
+            y_smoothed = (1 - self.smoothing) * self.y_true + (
+                self.smoothing / n_classes
+            )
+            y_pred = self.y_pred.clip(a_min=1e-8, a_max=None)
             # more numerically stable than -y_true / y_pred
-            if precompute_grad:
+            if self.from_logits:
                 return grad * (y_pred - y_smoothed) / len(y_smoothed)
             return grad * -y_smoothed / y_pred
 
@@ -406,11 +395,9 @@ class CrossEntropyLoss(ops.BinaryOpClass):
 
 
 exported_ops = [
-    convolve2d := ops.generate_op_func(
-        op_class=Convolve2D, tensor_only=True, casting=None
-    ),
+    convolve2d := ops.generate_op_func(op_class=Convolve2D, tensor_only=True),
     cross_entropy_loss := ops.generate_op_func(
-        op_class=CrossEntropyLoss, tensor_only=True, propagate_kwargs=True, casting=None
+        op_class=CrossEntropyLoss, tensor_only=True
     ),
 ]
 

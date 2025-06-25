@@ -70,19 +70,34 @@ def ternary_op_func(**kwargs) -> Callable[[mdt.TernaryFunc], mdt.TernaryOp]:
     return wrapper
 
 
+# the generator functions expect Tensor functions, this just turns numpy-like to Tensor
+def as_minidiff(func: mdt.GenericFunc) -> mdt.GenericFunc:
+    def wrapper(*args, **kwargs):
+        allow_grad = py_any([isinstance(x, md.Tensor) and x.allow_grad for x in args])
+        wrapped_args = [x._data if isinstance(x, md.Tensor) else x for x in args]
+        wrapped_kwargs = {
+            key: (val._data if isinstance(val, md.Tensor) else val)
+            for key, val in kwargs.items()
+        }
+
+        output = func(*wrapped_args, **wrapped_kwargs)
+        as_tensor = md.Tensor(output, allow_grad=allow_grad)
+
+        return as_tensor
+
+    wrapper.__name__ = func.__name__
+
+    return wrapper
+
+
 def generate_op_func(
     op_class: Type[OpClass],
     is_differentiable: bool = True,
     tensor_only: bool = False,
-    is_backend_op: bool = False,
-    propagate_kwargs: bool = False,
     op_name: Optional[str] = None,
-    casting: Optional[str] = "safe",
 ) -> mdt.GenericOp:
     # just sets the func_node property of op_output to the correct FuncNode
-    def attach_func_node(
-        forward_func, grad_funcs, op_output, op_inputs, forward_kwargs
-    ):
+    def create_func_node(grad_funcs, op_inputs, op_name):
         grads_allowed = [isinstance(x, md.Tensor) and x.allow_grad for x in op_inputs]
         # obviously tensors who don't want their gradients to be checked have no gradient function
         filtered_grad_funcs = [
@@ -91,62 +106,21 @@ def generate_op_func(
         ]
 
         func_node = FuncNode(
-            op_output=op_output,
             op_inputs=op_inputs,
             grad_functions=filtered_grad_funcs,
         )
-        func_node.op_name = forward_func.__name__ if op_name is None else op_name
-        if propagate_kwargs:
-            func_node.kwargs = forward_kwargs
+        func_node.op_name = op_name
 
-        op_output.func_node = func_node
-        op_output.graphed = True
-
-        for op_input in op_inputs:
-            if isinstance(op_input, md.Tensor):
-                op_input.graphed = True
-
-    # correctly formats forward inputs, gets the output, and casts back into a Tensor if necessary
-    def get_op_output(forward_func, op_inputs, allow_grad, forward_kwargs):
-        # if the op is a traditional numpy function, then we need to "uncast" it back to numpy
-        if is_backend_op:
-            forward_inputs = [
-                x._data if isinstance(x, md.Tensor) else x for x in op_inputs
-            ]
-        else:
-            forward_inputs = op_inputs
-
-        if casting is None:
-            output = forward_func(*forward_inputs, **forward_kwargs)
-        else:
-            output = forward_func(*forward_inputs, casting=casting, **forward_kwargs)
-
-        # traditional numpy functions of course return numpy objects, so we need to wrap in a Tensor
-        if is_backend_op:
-            output = md.Tensor(output)
-
-        # ensure gradient tracking rules do not break
-        output.allow_grad = allow_grad
-
-        return output
+        return func_node
 
     # this is the actual op function generate_op_func returns
     def minidiff_func(*op_inputs, **forward_kwargs):
-        instance = op_class()
-        forward_func = instance.create_forward()
-        grad_funcs = instance.create_grads()
-        # if the function is not differentiable, we still want to propagate the gradient to avoid breaking the
-        # graph, but it is smarter to just zero out the gradients.
-        if not is_differentiable:
-            grad_funcs = [
-                lambda a, b, grad: md.zeros_like(grad) for _ in range(len(grad_funcs))
-            ]
 
         input_is_tensor = [isinstance(x, md.Tensor) for x in op_inputs]
 
         if not tensor_only and not py_any(input_is_tensor):
             raise ValueError(
-                "minidiff functions only work when at least one argument is a minidiff Tensor"
+                "This function requires at least one minidiff Tensor argument"
             )
 
         if tensor_only and not py_all(input_is_tensor):
@@ -157,22 +131,34 @@ def generate_op_func(
             [isinstance(x, md.Tensor) and x.allow_grad for x in op_inputs]
         )
 
-        output = get_op_output(
-            forward_func=forward_func,
-            op_inputs=op_inputs,
-            allow_grad=allow_grad,
-            forward_kwargs=forward_kwargs,
-        )
+        instance = op_class(*op_inputs, **forward_kwargs)
+        forward_func = instance.create_forward()
+
+        output = forward_func()
+        output.allow_grad = allow_grad
 
         # only attach a node if we're allowed to track gradients right now, and the tensor wants to track its gradient
         if md.grad_allowed_() and allow_grad:
-            attach_func_node(
-                forward_func=forward_func,
+            grad_funcs = instance.create_grads()
+            # if the function is not differentiable, we still want to propagate the gradient to avoid breaking the
+            # graph, but it is smarter to just zero out the gradients.
+            if not is_differentiable:
+                grad_funcs = [
+                    lambda grad: md.zeros_like(grad) for _ in range(len(grad_funcs))
+                ]
+
+            func_node = create_func_node(
                 grad_funcs=grad_funcs,
-                op_output=output,
                 op_inputs=op_inputs,
-                forward_kwargs=forward_kwargs,
+                op_name=forward_func.__name__ if op_name is None else op_name,
             )
+
+            output.func_node = func_node
+            output.graphed = True
+
+            for op_input in op_inputs:
+                if isinstance(op_input, md.Tensor):
+                    op_input.graphed = True
 
         return output
 
@@ -183,14 +169,38 @@ def generate_op_func(
 def generate_stateless_op_func(
     forward_func: mdt.GenericFunc,
     grad_funcs: Sequence[Optional[mdt.GenericOpGrad]],
+    propagate_kwargs: bool = False,
+    casting: Optional[str] = "safe",
     **kwargs,
 ) -> mdt.GenericOp:
     class StatelessOpClass(OpClass):
+        def __init__(self, *func_args, **func_kwargs):
+            self.func_args = func_args
+            if casting is not None:
+                func_kwargs["casting"] = casting
+            self.func_kwargs = func_kwargs
+
         def create_forward(self) -> mdt.GenericFunc:
-            return forward_func
+            def forward():
+                a = forward_func(*self.func_args, **self.func_kwargs)
+                return a
+
+            return forward
 
         def create_grads(self) -> Sequence[Optional[mdt.GenericOpGrad]]:
-            return grad_funcs
+            backward_kwargs = self.func_kwargs if propagate_kwargs else {}
+
+            # stateless op grads need inputs, grads, and kwargs, but the internal engine only provides grads
+            # so create a wrapper that just automatically feeds those stored inputs and kwargs alongside grads
+            def make_wrapped(grad_func):
+                def wrapped_func(grad):
+                    return grad_func(*self.func_args, grad, **backward_kwargs)
+
+                return wrapped_func
+
+            wrapped_grads = [make_wrapped(grad_func) for grad_func in grad_funcs]
+
+            return wrapped_grads
 
     return generate_op_func(op_class=StatelessOpClass, **kwargs)
 
