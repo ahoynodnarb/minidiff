@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from builtins import bool as py_bool
+
 import contextvars
 from typing import TYPE_CHECKING
 
@@ -53,8 +55,8 @@ class Tensor:
     def __init__(
         self,
         data: np.ArrayLike,
-        allow_grad: bool = False,
-        dtype: Optional[np.dtype] = None,
+        allow_grad: py_bool = False,
+        dtype: Optional[md.dtype] = None,
         func_node: Optional[FuncNode] = None,
     ):
         if isinstance(data, np.ndarray):
@@ -92,15 +94,15 @@ class Tensor:
     # we're a leaf if we have no gradient history
     # whether we're part of a gradient-tracked computation or not.
     @property
-    def is_leaf(self) -> bool:
+    def is_leaf(self) -> py_bool:
         return self.func_node is None
 
     @property
-    def allow_grad(self) -> bool:
+    def allow_grad(self) -> py_bool:
         return self._allow_grad
 
     @allow_grad.setter
-    def allow_grad(self, allow_grad: bool):
+    def allow_grad(self, allow_grad: py_bool):
         # if we're trying to turn off gradient tracking while we're graphed and an intermediate tensor, then error
         if not allow_grad and (self.graphed and not self.is_leaf):
             raise ValueError(
@@ -136,7 +138,7 @@ class Tensor:
         return self._data.ndim
 
     @property
-    def dtype(self) -> np.dtype:
+    def dtype(self) -> mdt.dtype:
         return self._data.dtype
 
     def toposort(self) -> List[Tensor]:
@@ -164,7 +166,7 @@ class Tensor:
 
     # this does the actual advertised reverse-mode automatic differentiation.
     # I mostly just referenced this Wikipedia page: https://en.wikipedia.org/wiki/Automatic_differentiation
-    def backward(self, retain_graph: bool = False, retain_grads: bool = False):
+    def backward(self, retain_graph: py_bool = False, retain_grads: py_bool = False):
         # can't call backward if we're not tracking gradients or we have no gradient history
         if not self.allow_grad:
             return
@@ -196,7 +198,7 @@ class Tensor:
         self.func_node = None
 
     # returns a copy that does not track gradients
-    def detach(self, allow_grad: bool = False) -> Tensor:
+    def detach(self, allow_grad: py_bool = False) -> Tensor:
         detached = Tensor(self._data.copy(), allow_grad=allow_grad)
         return detached
 
@@ -412,7 +414,7 @@ class Tensor:
         return self._data.__array_interface__
 
     def __array__(
-        self, dtype: Optional[np.dtype] = None, copy: Optional[bool] = None
+        self, dtype: Optional[mdt.dtype] = None, copy: Optional[py_bool] = None
     ) -> npt.NDArray[Any]:
         if dtype is not None and dtype != self.dtype:
             if not copy:
@@ -423,34 +425,34 @@ class Tensor:
         return self._data
 
 
-def ones_like(a: mdt.TensorLike, allow_grad: bool = False, **kwargs) -> Tensor:
+def ones_like(a: mdt.TensorLike, allow_grad: py_bool = False, **kwargs) -> Tensor:
     return Tensor(np.ones_like(a, **kwargs), allow_grad=allow_grad)
 
 
-def ones(shape: Sequence[int], allow_grad: bool = False, **kwargs) -> Tensor:
+def ones(shape: Sequence[int], allow_grad: py_bool = False, **kwargs) -> Tensor:
     return Tensor(np.ones(shape, **kwargs), allow_grad=allow_grad)
 
 
-def zeros_like(a: mdt.TensorLike, allow_grad: bool = False, **kwargs) -> Tensor:
+def zeros_like(a: mdt.TensorLike, allow_grad: py_bool = False, **kwargs) -> Tensor:
     return Tensor(np.zeros_like(a, **kwargs), allow_grad=allow_grad)
 
 
-def zeros(shape: Sequence[int], allow_grad: bool = False, **kwargs) -> Tensor:
+def zeros(shape: Sequence[int], allow_grad: py_bool = False, **kwargs) -> Tensor:
     return Tensor(np.zeros(shape, **kwargs), allow_grad=allow_grad)
 
 
 def full_like(
-    a: Tensor, x: mdt.TensorLike, allow_grad: bool = False, **kwargs
+    a: Tensor, x: mdt.TensorLike, allow_grad: py_bool = False, **kwargs
 ) -> Tensor:
     return Tensor(np.full_like(a, x, **kwargs), allow_grad=allow_grad)
 
 
-def full(shape: Sequence[int], allow_grad: bool = False, **kwargs) -> Tensor:
+def full(shape: Sequence[int], allow_grad: py_bool = False, **kwargs) -> Tensor:
     return Tensor(np.full(shape, **kwargs), allow_grad=allow_grad)
 
 
 def unravel_index(
-    indices: mdt.TensorLike, shape: Sequence[int], allow_grad: bool = False, **kwargs
+    indices: mdt.TensorLike, shape: Sequence[int], allow_grad: py_bool = False, **kwargs
 ) -> Tensor:
     return Tensor(np.unravel_index(indices, shape, **kwargs), allow_grad=allow_grad)
 
@@ -458,22 +460,24 @@ def unravel_index(
 def repeat(
     a: mdt.TensorLike,
     repeats: Union[int, Sequence[int]],
-    allow_grad: bool = False,
+    allow_grad: py_bool = False,
     axis: Optional[int] = None,
 ) -> Tensor:
     return Tensor(np.repeat(a, repeats, axis=axis), allow_grad=allow_grad)
 
 
-def tile(A: mdt.TensorLike, reps: mdt.TensorLike, allow_grad: bool = False) -> Tensor:
+def tile(
+    A: mdt.TensorLike, reps: mdt.TensorLike, allow_grad: py_bool = False
+) -> Tensor:
     return Tensor(np.tile(A, reps), allow_grad=allow_grad)
 
 
-def arange(*args: Union[int, float], allow_grad: bool = False, **kwargs) -> Tensor:
+def arange(*args: Union[int, float], allow_grad: py_bool = False, **kwargs) -> Tensor:
     return Tensor(np.arange(*args, **kwargs), allow_grad=allow_grad)
 
 
 def stack(
-    arrays: Sequence[mdt.TensorLike], allow_grad: bool = False, **kwargs
+    arrays: Sequence[mdt.TensorLike], allow_grad: py_bool = False, **kwargs
 ) -> Tensor:
     return Tensor(np.stack(arrays, **kwargs), allow_grad=allow_grad)
 
@@ -482,15 +486,15 @@ def save(file, arr: mdt.TensorLike, **kwargs):
     np.save(file, arr._data, **kwargs)
 
 
-def load(file, allow_grad: bool = False, **kwargs) -> Tensor:
+def load(file, allow_grad: py_bool = False, **kwargs) -> Tensor:
     return Tensor(np.load(file, **kwargs), allow_grad=allow_grad)
 
 
-def rand(*dims: Optional[int], allow_grad: bool = False) -> Tensor:
+def rand(*dims: Optional[int], allow_grad: py_bool = False) -> Tensor:
     return Tensor(np.random.rand(*dims), allow_grad=allow_grad)
 
 
-def randn(*dims: Optional[int], allow_grad: bool = False) -> Tensor:
+def randn(*dims: Optional[int], allow_grad: py_bool = False) -> Tensor:
     return Tensor(np.random.randn(*dims), allow_grad=allow_grad)
 
 
@@ -498,12 +502,12 @@ def binomial(
     n: Union[int, mdt.TensorLike[int]],
     p: Union[float, mdt.TensorLike[float]],
     size: Tuple[int] = None,
-    allow_grad: bool = False,
+    allow_grad: py_bool = False,
 ) -> Tensor:
     return Tensor(np.random.binomial(n, p, size=size), allow_grad=allow_grad)
 
 
-def permutation(x: mdt.TensorLike, allow_grad: bool = False) -> Tensor:
+def permutation(x: mdt.TensorLike, allow_grad: py_bool = False) -> Tensor:
     return Tensor(np.random.permutation(x), allow_grad=allow_grad)
 
 
@@ -515,7 +519,7 @@ def split(
     ary: mdt.TensorLike,
     indices_or_sections: Union[int, Sequence[int]],
     axis: int = 0,
-    allow_grad: bool = False,
+    allow_grad: py_bool = False,
 ) -> md.Tensor:
     output_np = np.split(ary, indices_or_sections, axis=axis)
     output = [None] * len(output_np)
@@ -524,4 +528,18 @@ def split(
     return output
 
 
+dtypes = [
+    float64 := np.float64,
+    float32 := np.float32,
+    float16 := np.float16,
+    uint64 := np.uint64,
+    uint32 := np.uint32,
+    uint16 := np.uint16,
+    uint8 := np.uint8,
+    int64 := np.int64,
+    int32 := np.int32,
+    int16 := np.int16,
+    int8 := np.int8,
+    bool := np.bool,
+]
 newaxis = None

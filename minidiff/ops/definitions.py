@@ -189,9 +189,7 @@ exported_ops = [
         casting=None,
     ),
     astype := ops.generate_binary_op_func(
-        forward_func=lambda a, dtype, **kwargs: md.Tensor(
-            a._data.astype(dtype, **kwargs), dtype=dtype
-        ),
+        forward_func=ops.as_minidiff(np.astype),
         grad_a=lambda a, dtype, grad: grad.astype(a.dtype),
         casting=None,
     ),

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import collections
+import collections.abc as abc
 import math
 from typing import TYPE_CHECKING
 
@@ -18,7 +18,7 @@ class Convolve2D(ops.BinaryOpClass):
     @staticmethod
     def get_padded_edges(padding):
         # padding is already a tuple
-        if isinstance(padding, collections.Sequence):
+        if isinstance(padding, abc.Sequence):
             return padding
         # padding is an integer
         if padding % 1 == 0:
@@ -45,7 +45,7 @@ class Convolve2D(ops.BinaryOpClass):
 
         if (
             padding is None
-            or (isinstance(padding, collections.Sequence) and sum(padding) == 0)
+            or (isinstance(padding, abc.Sequence) and sum(padding) == 0)
             or padding == 0
         ):
             return mat
@@ -70,7 +70,7 @@ class Convolve2D(ops.BinaryOpClass):
 
         if (
             padding is None
-            or (isinstance(padding, collections.Sequence) and sum(padding) == 0)
+            or (isinstance(padding, abc.Sequence) and sum(padding) == 0)
             or padding == 0
         ):
             return mat
@@ -123,7 +123,7 @@ class Convolve2D(ops.BinaryOpClass):
         pad_bottom = kernel_height - 1
         pad_left = kernel_width - 1
         pad_right = kernel_width - 1
-        if isinstance(original_padding, collections.Sequence):
+        if isinstance(original_padding, abc.Sequence):
             o_top, o_bottom, o_left, o_right = original_padding
             pad_top -= o_top
             pad_bottom -= o_bottom
@@ -147,7 +147,7 @@ class Convolve2D(ops.BinaryOpClass):
         padding: Union[int, float, Sequence[int]],
         stride: int,
     ) -> Tuple[int, int]:
-        if isinstance(padding, collections.Sequence):
+        if isinstance(padding, abc.Sequence):
             top, bottom, left, right = padding
             vertical_padding = top + bottom
             horizontal_padding = left + right
@@ -243,7 +243,7 @@ class Convolve2D(ops.BinaryOpClass):
         _, in_height, in_width, self.in_channels = conv_input.shape
         self.n_kernels, self.kernel_height, self.kernel_width, _ = kernels.shape
 
-        if isinstance(padding, collections.Sequence):
+        if isinstance(padding, abc.Sequence):
             pad_top, pad_bottom, pad_left, pad_right = padding
         else:
             pad_top = pad_bottom = pad_left = pad_right = padding
