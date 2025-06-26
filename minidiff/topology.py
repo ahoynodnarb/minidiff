@@ -1,9 +1,13 @@
 from __future__ import annotations
 
-from typing import Any, List, Optional
+from typing import TYPE_CHECKING
 
 import minidiff as md
-import minidiff.typing as mdt
+
+if TYPE_CHECKING:
+    from typing import Any, List, Optional
+
+    import minidiff.typing as mdt
 
 
 class FuncNode:

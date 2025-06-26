@@ -2,11 +2,15 @@ from __future__ import annotations
 
 from builtins import all as py_all
 from builtins import any as py_any
-from typing import Callable, Optional, Sequence, Type
+from typing import TYPE_CHECKING
 
 import minidiff as md
-import minidiff.typing as mdt
 from minidiff.topology import FuncNode
+
+if TYPE_CHECKING:
+    from typing import Callable, Optional, Sequence, Type
+
+    import minidiff.typing as mdt
 
 
 class OpClass:
@@ -115,7 +119,6 @@ def generate_op_func(
 
     # this is the actual op function generate_op_func returns
     def minidiff_func(*op_inputs, **forward_kwargs):
-
         input_is_tensor = [isinstance(x, md.Tensor) for x in op_inputs]
 
         if not tensor_only and not py_any(input_is_tensor):

@@ -1,11 +1,15 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING
 
 import graphviz
 
 import minidiff as md
-import minidiff.typing as mdt
+
+if TYPE_CHECKING:
+    from typing import Any, Dict, List, Optional, Tuple
+
+    import minidiff.typing as mdt
 
 
 def draw_tensor_op_graph(

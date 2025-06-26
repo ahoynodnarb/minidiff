@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Optional, Sequence, Tuple, Union
+from typing import TYPE_CHECKING
 
 try:
     import cupy as np  # type: ignore
@@ -9,8 +9,12 @@ except ImportError:
 
 import minidiff as md
 import minidiff.ops as ops
-import minidiff.typing as mdt
 from minidiff.utils import get_exported_var_names
+
+if TYPE_CHECKING:
+    from typing import Any, Optional, Sequence, Tuple, Union
+
+    import minidiff.typing as mdt
 
 
 def tensordot_grad_a(

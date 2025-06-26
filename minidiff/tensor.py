@@ -1,20 +1,26 @@
 from __future__ import annotations
 
 import contextvars
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Tuple, Union
-
-try:
-    import cupy as np  # type: ignore
-    import cupy.typing as npt  # type: ignore
-except ImportError:
-    import numpy as np
-    import numpy.typing as npt
+from typing import TYPE_CHECKING
 
 import minidiff as md
 
+try:
+    import cupy as np  # type: ignore
+except ImportError:
+    import numpy as np
+
 if TYPE_CHECKING:
+    from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+
+    try:
+        import cupy.typing as npt  # type: ignore
+    except ImportError:
+        import numpy.typing as npt
+
+    import minidiff.typing as mdt
     from minidiff.topology import FuncNode
-import minidiff.typing as mdt
+
 
 _allow_grad = contextvars.ContextVar("allow_grad", default=True)
 
@@ -266,10 +272,7 @@ class Tensor:
                 "in-place operations are not allowed while tracking gradients"
             )
 
-        if isinstance(other, Tensor):
-            self._data = np.add(self._data, other._data, casting="safe")
-        else:
-            self._data = np.add(self._data, other, casting="safe")
+        self._data += other._data if isinstance(other, Tensor) else other
 
         return self
 
@@ -285,10 +288,7 @@ class Tensor:
                 "in-place operations are not allowed while tracking gradients"
             )
 
-        if isinstance(other, Tensor):
-            self._data = np.subtract(self._data, other._data, casting="safe")
-        else:
-            self._data = np.subtract(self._data, other, casting="safe")
+        self._data -= other._data if isinstance(other, Tensor) else other
 
         return self
 
@@ -304,10 +304,7 @@ class Tensor:
                 "in-place operations are not allowed while tracking gradients"
             )
 
-        if isinstance(other, Tensor):
-            self._data = np.multiply(self._data, other._data, casting="safe")
-        else:
-            self._data = np.multiply(self._data, other, casting="safe")
+        self._data *= other._data if isinstance(other, Tensor) else other
 
         return self
 
@@ -323,10 +320,7 @@ class Tensor:
                 "in-place operations are not allowed while tracking gradients"
             )
 
-        if isinstance(other, Tensor):
-            self._data = np.true_divide(self._data, other._data, casting="safe")
-        else:
-            self._data = np.true_divide(self._data, other, casting="safe")
+        self._data /= other._data if isinstance(other, Tensor) else other
 
         return self
 
@@ -342,10 +336,7 @@ class Tensor:
                 "in-place operations are not allowed while tracking gradients"
             )
 
-        if isinstance(other, Tensor):
-            self._data = np.floor_divide(self._data, other._data, casting="safe")
-        else:
-            self._data = np.floor_divide(self._data, other, casting="safe")
+        self._data //= other._data if isinstance(other, Tensor) else other
 
         return self
 
@@ -361,10 +352,7 @@ class Tensor:
                 "in-place operations are not allowed while tracking gradients"
             )
 
-        if isinstance(other, Tensor):
-            self._data = np.power(self._data, other._data, casting="safe")
-        else:
-            self._data = np.power(self._data, other, casting="safe")
+        self._data **= other._data if isinstance(other, Tensor) else other
 
         return self
 
@@ -386,10 +374,7 @@ class Tensor:
                 "in-place operations are not allowed while tracking gradients"
             )
 
-        if isinstance(val, Tensor):
-            self._data[key] = val._data
-        else:
-            self._data[key] = val
+        self._data[key] = val._data if isinstance(val, Tensor) else val
 
     def __gt__(self, value: mdt.TensorLike) -> Tensor:
         return md.greater(self, value)
