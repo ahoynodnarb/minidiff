@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from builtins import all as py_all
 from builtins import any as py_any
+from inspect import signature
 from typing import TYPE_CHECKING
 
 import minidiff as md
@@ -164,6 +165,11 @@ def generate_op_func(
                     op_input.graphed = True
 
         return output
+
+    sig = signature(op_class.__init__)
+    sig = sig.replace(parameters=tuple(sig.parameters.values())[1:])
+    sig = sig.replace(return_annotation="md.Tensor")
+    minidiff_func.__signature__ = sig
 
     return minidiff_func
 
