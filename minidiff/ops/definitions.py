@@ -16,6 +16,17 @@ if TYPE_CHECKING:
     import minidiff.typing as mdt
 
 
+def squeeze_grad(
+    a: md.Tensor,
+    grad: md.Tensor,
+    axis: Optional[Union[int, Tuple[int]]] = None,
+    **kwargs,
+) -> md.Tensor:
+    if axis is None:
+        axis = [i for i, dim in enumerate(a.shape) if dim == 1]
+    return expand_dims(grad, axis)
+
+
 def tensordot_grad_a(
     a: md.Tensor,
     b: md.Tensor,
@@ -96,7 +107,7 @@ def max_grad(
     unraveled = md.unravel_index(max_indices, a.shape)
     ret = md.zeros_like(a)
     ret[unraveled] = grad
-    return grad
+    return ret
 
 
 def prod_grad(
@@ -173,20 +184,25 @@ def mean_grad(
 
 ravel: Callable[[md.Tensor], md.Tensor] = ops.generate_unary_op_func(
     forward_func=ops.as_minidiff(lambda a, order="C": a.ravel(order=order)),
-    grad=lambda a, grad, order="C": ravel(grad, order=order),
+    grad=lambda a, grad, order="C": reshape(grad, a.shape, order=order),
     casting=None,
 )
 
 flatten: Callable[[md.Tensor], md.Tensor] = ops.generate_unary_op_func(
     forward_func=ops.as_minidiff(lambda a, order="C": a.flatten(order=order)),
-    grad=lambda a, grad, order="C": flatten(grad, order=order),
+    grad=lambda a, grad, order="C": reshape(grad, a.shape, order=order),
+    casting=None,
+)
+squeeze: Callable[[md.Tensor], md.Tensor] = ops.generate_unary_op_func(
+    forward_func=ops.as_minidiff(np.squeeze),
+    grad=squeeze_grad,
     casting=None,
 )
 
 expand_dims: Callable[[md.Tensor, Union[int, Sequence[int]]], md.Tensor] = (
     ops.generate_binary_op_func(
         forward_func=ops.as_minidiff(np.expand_dims),
-        grad_a=lambda a, axis, grad: expand_dims(grad, axis),
+        grad_a=lambda a, axis, grad: squeeze(grad, axis=axis),
         casting=None,
     )
 )
@@ -219,8 +235,8 @@ argwhere: Callable[[md.Tensor], md.Tensor] = ops.generate_unary_op_func(
 where: Callable[[md.Tensor, md.Tensor, md.Tensor], md.Tensor] = (
     ops.generate_ternary_op_func(
         forward_func=ops.as_minidiff(np.where),
-        grad_b=lambda condition, b, c: b * condition,
-        grad_c=lambda condition, b, c: c * ~condition,
+        grad_b=lambda condition, b, c, grad: grad * condition,
+        grad_c=lambda condition, b, c, grad: grad * ~condition,
         casting=None,
     )
 )
@@ -308,8 +324,8 @@ clip: Callable[
     forward_func=ops.as_minidiff(np.clip),
     grad_a=lambda a, grad, a_min=None, a_max=None: grad
     * logical_and(
-        a > float("-inf") if a_min is None else a_min,
-        a < float("inf") if a_max is None else a_max,
+        1 if a_min is None else a > a_min,
+        1 if a_max is None else a < a_max,
     ),
     casting=None,
 )
