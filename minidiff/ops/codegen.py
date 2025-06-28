@@ -113,7 +113,7 @@ def generate_op_func(
     # just sets the func_node property of op_output to the correct FuncNode
     def create_func_node(
         grad_funcs: List[mdt.GenericOpGrad], op_inputs: List[Any], op_name: str
-    ):
+    ) -> md.FuncNode:
         grads_allowed = [isinstance(x, md.Tensor) and x.allow_grad for x in op_inputs]
         # obviously tensors who don't want their gradients to be checked have no gradient function
         filtered_grad_funcs = [
@@ -130,7 +130,7 @@ def generate_op_func(
         return func_node
 
     # this is the actual op function generate_op_func returns
-    def minidiff_func(*op_inputs: P.args, **forward_kwargs: P.kwargs):
+    def minidiff_func(*op_inputs: P.args, **forward_kwargs: P.kwargs) -> md.Tensor:
         input_is_tensor = [isinstance(x, md.Tensor) for x in op_inputs]
 
         if not tensor_only and not py_any(input_is_tensor):
