@@ -216,11 +216,13 @@ argwhere: Callable[[md.Tensor], md.Tensor] = ops.generate_unary_op_func(
     casting=None,
 )
 
-where: Callable[[md.Tensor], md.Tensor] = ops.generate_ternary_op_func(
-    forward_func=ops.as_minidiff(np.where),
-    grad_b=lambda condition, b, c: b * condition,
-    grad_c=lambda condition, b, c: c * ~condition,
-    casting=None,
+where: Callable[[md.Tensor, md.Tensor, md.Tensor], md.Tensor] = (
+    ops.generate_ternary_op_func(
+        forward_func=ops.as_minidiff(np.where),
+        grad_b=lambda condition, b, c: b * condition,
+        grad_c=lambda condition, b, c: c * ~condition,
+        casting=None,
+    )
 )
 
 prod: Callable[[md.Tensor], md.Tensor] = ops.generate_unary_op_func(
@@ -300,7 +302,9 @@ getitem: Callable[[md.Tensor, Any], md.Tensor] = ops.generate_binary_op_func(
     op_name="index",
 )
 
-clip: Callable[[md.Tensor, Optional[mdt.TensorLike]]] = ops.generate_ternary_op_func(
+clip: Callable[
+    [md.Tensor, Optional[mdt.TensorLike], Optional[mdt.TensorLike]], md.Tensor
+] = ops.generate_ternary_op_func(
     forward_func=ops.as_minidiff(np.clip),
     grad_a=lambda a, grad, a_min=None, a_max=None: grad
     * logical_and(
@@ -514,11 +518,9 @@ logical_or: Callable[[mdt.TensorLike, mdt.TensorLike], md.Tensor] = (
     )
 )
 
-logical_not: Callable[[mdt.TensorLike, mdt.TensorLike], md.Tensor] = (
-    ops.generate_binary_op_func(
-        forward_func=ops.as_minidiff(np.logical_not),
-        is_differentiable=False,
-    )
+logical_not: Callable[[mdt.TensorLike], md.Tensor] = ops.generate_unary_op_func(
+    forward_func=ops.as_minidiff(np.logical_not),
+    is_differentiable=False,
 )
 
 logical_xor: Callable[[mdt.TensorLike, mdt.TensorLike], md.Tensor] = (
