@@ -9,7 +9,7 @@ import minidiff as md
 from minidiff.topology import FuncNode
 
 if TYPE_CHECKING:
-    from typing import Callable, Optional, Sequence, Type, List, Any, ParamSpec
+    from typing import Callable, Optional, Sequence, List, Any, ParamSpec
 
     P = ParamSpec("P")
 
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
 
 class OpClass:
-    def create_forward(self) -> mdt.GenericFunc:
+    def create_forward(self) -> Callable[P, md.Tensor]:
         raise NotImplementedError
 
     def create_grads(self) -> Sequence[Optional[mdt.GenericOpGrad]]:
@@ -25,7 +25,7 @@ class OpClass:
 
 
 class UnaryOpClass(OpClass):
-    def create_forward(self) -> mdt.UnaryFunc:
+    def create_forward(self) -> Callable[P, md.Tensor]:
         raise NotImplementedError
 
     def create_grads(self) -> Sequence[Optional[mdt.UnaryOpGrad]]:
@@ -33,7 +33,7 @@ class UnaryOpClass(OpClass):
 
 
 class BinaryOpClass(OpClass):
-    def create_forward(self) -> mdt.BinaryFunc:
+    def create_forward(self) -> Callable[P, md.Tensor]:
         raise NotImplementedError
 
     def create_grads(self) -> Sequence[Optional[mdt.BinaryOpGrad]]:
@@ -41,7 +41,7 @@ class BinaryOpClass(OpClass):
 
 
 class TernaryOpClass(OpClass):
-    def create_forward(self) -> mdt.TernaryFunc:
+    def create_forward(self) -> Callable[P, md.Tensor]:
         raise NotImplementedError
 
     def create_grads(self) -> Sequence[Optional[mdt.TernaryOpGrad]]:
@@ -49,37 +49,45 @@ class TernaryOpClass(OpClass):
 
 
 # decorators which just convert a generic function to an op
-def stateless_op_func(**kwargs) -> Callable[[mdt.GenericFunc], mdt.GenericOp]:
-    def wrapper(func: mdt.GenericFunc) -> mdt.GenericOp:
+def stateless_op_func(
+    **kwargs,
+) -> Callable[[Callable[P, md.Tensor]], Callable[P, md.Tensor]]:
+    def wrapper(func: Callable[P, md.Tensor]) -> Callable[P, md.Tensor]:
         return generate_stateless_op_func(forward_func=func, **kwargs)
 
     return wrapper
 
 
-def unary_op_func(**kwargs) -> Callable[[mdt.UnaryFunc], mdt.UnaryOp]:
-    def wrapper(func: mdt.UnaryFunc) -> mdt.UnaryOp:
+def unary_op_func(
+    **kwargs,
+) -> Callable[[Callable[P, md.Tensor]], Callable[P, md.Tensor]]:
+    def wrapper(func: Callable[P, md.Tensor]) -> Callable[P, md.Tensor]:
         return generate_unary_op_func(forward_func=func, **kwargs)
 
     return wrapper
 
 
-def binary_op_func(**kwargs) -> Callable[[mdt.BinaryFunc], mdt.BinaryOp]:
-    def wrapper(func: mdt.BinaryFunc) -> mdt.BinaryOp:
+def binary_op_func(
+    **kwargs,
+) -> Callable[[Callable[P, md.Tensor]], Callable[P, md.Tensor]]:
+    def wrapper(func: Callable[P, md.Tensor]) -> Callable[P, md.Tensor]:
         return generate_binary_op_func(forward_func=func, **kwargs)
 
     return wrapper
 
 
-def ternary_op_func(**kwargs) -> Callable[[mdt.TernaryFunc], mdt.TernaryOp]:
-    def wrapper(func: mdt.TernaryFunc) -> mdt.TernaryOp:
+def ternary_op_func(
+    **kwargs,
+) -> Callable[[Callable[P, md.Tensor]], Callable[P, md.Tensor]]:
+    def wrapper(func: Callable[P, md.Tensor]) -> Callable[P, md.Tensor]:
         return generate_ternary_op_func(forward_func=func, **kwargs)
 
     return wrapper
 
 
 # the generator functions expect Tensor functions, this just turns numpy-like to Tensor
-def as_minidiff(func: mdt.GenericFunc) -> mdt.GenericFunc:
-    def wrapper(*args, **kwargs):
+def as_minidiff(func: Callable[P, md.Tensor]) -> Callable[P, md.Tensor]:
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> md.Tensor:
         allow_grad = py_any([isinstance(x, md.Tensor) and x.allow_grad for x in args])
         wrapped_args = [x._data if isinstance(x, md.Tensor) else x for x in args]
         wrapped_kwargs = {
@@ -99,7 +107,6 @@ def as_minidiff(func: mdt.GenericFunc) -> mdt.GenericFunc:
 
 def generate_op_func(
     op_class: Callable[P, None],
-    # op_class: Type[OpClass],
     is_differentiable: bool = True,
     tensor_only: bool = False,
     op_name: Optional[str] = None,
