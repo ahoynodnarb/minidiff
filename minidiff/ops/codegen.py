@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
 
 class OpClass:
-    def create_forward(self) -> Callable[P, md.Tensor]:
+    def create_forward(self) -> mdt.GenericFunc:
         raise NotImplementedError
 
     def create_grads(self) -> Sequence[Optional[mdt.GenericOpGrad]]:
@@ -24,7 +24,7 @@ class OpClass:
 
 
 class UnaryOpClass(OpClass):
-    def create_forward(self) -> Callable[P, md.Tensor]:
+    def create_forward(self) -> mdt.UnaryFunc:
         raise NotImplementedError
 
     def create_grads(self) -> Sequence[Optional[mdt.UnaryOpGrad]]:
@@ -32,7 +32,7 @@ class UnaryOpClass(OpClass):
 
 
 class BinaryOpClass(OpClass):
-    def create_forward(self) -> Callable[P, md.Tensor]:
+    def create_forward(self) -> mdt.BinaryFunc:
         raise NotImplementedError
 
     def create_grads(self) -> Sequence[Optional[mdt.BinaryOpGrad]]:
@@ -40,7 +40,7 @@ class BinaryOpClass(OpClass):
 
 
 class TernaryOpClass(OpClass):
-    def create_forward(self) -> Callable[P, md.Tensor]:
+    def create_forward(self) -> mdt.TernaryFunc:
         raise NotImplementedError
 
     def create_grads(self) -> Sequence[Optional[mdt.TernaryOpGrad]]:

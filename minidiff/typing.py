@@ -37,29 +37,26 @@ if TYPE_CHECKING:
     class GenericOpGrad(Protocol):
         def __call__(self, *args: md.Tensor) -> md.Tensor: ...
 
-    UnaryFunc = Union[
-        Callable[[Any], md.Tensor],
-        Callable[[md.Tensor], md.Tensor],
-    ]
-    UnaryOp = Callable[[md.Tensor], md.Tensor]
+    UnaryFunc = Union[Callable[[md.Tensor], md.Tensor],]
+    UnaryOp = UnaryFunc
     UnaryOpGrad = Callable[[md.Tensor, md.Tensor], md.Tensor]
 
     BinaryFunc = Union[
-        Callable[[Any, Any], md.Tensor],
+        Callable[[md.Tensor, Any], md.Tensor],
+        Callable[[Any, md.Tensor], md.Tensor],
         Callable[[md.Tensor, md.Tensor], md.Tensor],
     ]
-    BinaryOp = Union[
-        Callable[[Any, Any], md.Tensor],
-        Callable[[md.Tensor, md.Tensor], md.Tensor],
-    ]
+    BinaryOp = BinaryFunc
     BinaryOpGrad = Callable[[md.Tensor, md.Tensor, md.Tensor], md.Tensor]
 
     TernaryFunc = Union[
-        Callable[[Any, Any, Any], md.Tensor],
+        Callable[[md.Tensor, Any, Any], md.Tensor],
+        Callable[[md.Tensor, md.Tensor, Any], md.Tensor],
+        Callable[[md.Tensor, Any, md.Tensor], md.Tensor],
+        Callable[[Any, md.Tensor, Any], md.Tensor],
+        Callable[[Any, md.Tensor, md.Tensor], md.Tensor],
+        Callable[[Any, Any, md.Tensor], md.Tensor],
         Callable[[md.Tensor, md.Tensor, md.Tensor], md.Tensor],
     ]
-    TernaryOp = Union[
-        Callable[[Any, Any, Any], md.Tensor],
-        Callable[[md.Tensor, md.Tensor, md.Tensor], md.Tensor],
-    ]
+    TernaryOp = TernaryFunc
     TernaryOpGrad = Callable[[md.Tensor, md.Tensor, md.Tensor, md.Tensor], md.Tensor]
