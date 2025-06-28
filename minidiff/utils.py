@@ -140,3 +140,10 @@ def compute_grads(
     computed.backward()
     automatic_gradients = [t.grad for t in input_tensors if t.grad is not None]
     return manual_gradients, automatic_gradients
+
+
+__all__ = [
+    "draw_tensor_op_graph",
+    "calculate_finite_differences",
+    "compute_grads",
+]

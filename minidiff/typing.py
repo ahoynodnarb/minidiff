@@ -3,13 +3,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from typing import Any, Callable, Protocol, Sequence, TypeVar, Union
+    from typing import Any, Callable, Protocol, TypeVar, Union
 
     import minidiff as md
 
     T = TypeVar("T")
-
-    NestedSequence = Union[Sequence[T], Sequence["NestedSequence[T]"]]
 
     TensorLike = Union[int, float, md.Tensor]
 
@@ -60,3 +58,20 @@ if TYPE_CHECKING:
     ]
     TernaryOp = TernaryFunc
     TernaryOpGrad = Callable[[md.Tensor, md.Tensor, md.Tensor, md.Tensor], md.Tensor]
+
+    __all__ = [
+        "TensorLike",
+        "dtype",
+        "GenericFunc",
+        "GenericOp",
+        "GenericOpGrad",
+        "UnaryFunc",
+        "UnaryOp",
+        "UnaryOpGrad",
+        "BinaryFunc",
+        "BinaryOp",
+        "BinaryOpGrad",
+        "TernaryFunc",
+        "TernaryOp",
+        "TernaryOpGrad",
+    ]
