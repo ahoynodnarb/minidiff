@@ -9,7 +9,9 @@ import minidiff as md
 from minidiff.topology import FuncNode
 
 if TYPE_CHECKING:
-    from typing import Callable, Optional, Sequence, Type
+    from typing import Callable, Optional, Sequence, Type, List, Any, ParamSpec
+
+    P = ParamSpec("P")
 
     import minidiff.typing as mdt
 
@@ -96,13 +98,16 @@ def as_minidiff(func: mdt.GenericFunc) -> mdt.GenericFunc:
 
 
 def generate_op_func(
-    op_class: Type[OpClass],
+    op_class: Callable[P, None],
+    # op_class: Type[OpClass],
     is_differentiable: bool = True,
     tensor_only: bool = False,
     op_name: Optional[str] = None,
-) -> mdt.GenericOp:
+) -> Callable[P, md.Tensor]:
     # just sets the func_node property of op_output to the correct FuncNode
-    def create_func_node(grad_funcs, op_inputs, op_name):
+    def create_func_node(
+        grad_funcs: List[mdt.GenericOpGrad], op_inputs: List[Any], op_name: str
+    ):
         grads_allowed = [isinstance(x, md.Tensor) and x.allow_grad for x in op_inputs]
         # obviously tensors who don't want their gradients to be checked have no gradient function
         filtered_grad_funcs = [
@@ -119,7 +124,7 @@ def generate_op_func(
         return func_node
 
     # this is the actual op function generate_op_func returns
-    def minidiff_func(*op_inputs, **forward_kwargs):
+    def minidiff_func(*op_inputs: P.args, **forward_kwargs):
         input_is_tensor = [isinstance(x, md.Tensor) for x in op_inputs]
 
         if not tensor_only and not py_any(input_is_tensor):
@@ -166,22 +171,17 @@ def generate_op_func(
 
         return output
 
-    sig = signature(op_class.__init__)
-    sig = sig.replace(parameters=tuple(sig.parameters.values())[1:])
-    sig = sig.replace(return_annotation="md.Tensor")
-    minidiff_func.__signature__ = sig
-
     return minidiff_func
 
 
 # for ops who don't need to be a class (i.e. don't manage their own state)
 def generate_stateless_op_func(
-    forward_func: mdt.GenericFunc,
+    forward_func: Callable[P, md.Tensor],
     grad_funcs: Sequence[Optional[mdt.GenericOpGrad]],
     propagate_kwargs: bool = False,
     casting: Optional[str] = "safe",
     **kwargs,
-) -> mdt.GenericOp:
+) -> Callable[P, md.Tensor]:
     class StatelessOpClass(OpClass):
         def __init__(self, *func_args, **func_kwargs):
             self.func_args = func_args
@@ -216,10 +216,10 @@ def generate_stateless_op_func(
 
 # single argument
 def generate_unary_op_func(
-    forward_func: mdt.UnaryFunc,
+    forward_func: Callable[P, md.Tensor],
     grad: Optional[mdt.UnaryOpGrad] = None,
     **kwargs,
-) -> mdt.UnaryOp:
+) -> Callable[P, md.Tensor]:
     kwargs["tensor_only"] = True
     return generate_stateless_op_func(
         forward_func=forward_func, grad_funcs=[grad], **kwargs
@@ -228,11 +228,11 @@ def generate_unary_op_func(
 
 # two arguments
 def generate_binary_op_func(
-    forward_func: mdt.BinaryFunc,
+    forward_func: Callable[P, md.Tensor],
     grad_a: Optional[mdt.BinaryOpGrad] = None,
     grad_b: Optional[mdt.BinaryOpGrad] = None,
     **kwargs,
-) -> mdt.BinaryOp:
+) -> Callable[P, md.Tensor]:
     return generate_stateless_op_func(
         forward_func=forward_func, grad_funcs=[grad_a, grad_b], **kwargs
     )
@@ -240,12 +240,12 @@ def generate_binary_op_func(
 
 # three arguments
 def generate_ternary_op_func(
-    forward_func: mdt.TernaryFunc,
+    forward_func: Callable[P, md.Tensor],
     grad_a: Optional[mdt.TernaryOpGrad] = None,
     grad_b: Optional[mdt.TernaryOpGrad] = None,
     grad_c: Optional[mdt.TernaryOpGrad] = None,
     **kwargs,
-) -> mdt.TernaryOp:
+) -> Callable[P, md.Tensor]:
     return generate_stateless_op_func(
         forward_func=forward_func, grad_funcs=[grad_a, grad_b, grad_c], **kwargs
     )

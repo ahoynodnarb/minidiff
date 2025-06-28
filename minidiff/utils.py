@@ -78,7 +78,7 @@ def draw_tensor_op_graph(
 
             # if we're naming everything, then all tensors are expanded
             # otherwise, the tensor must be explicitly named to be expanded
-            should_expand = tensor_id in tensor_names or insert_intermediates
+            should_expand = insert_intermediates or tensor_id in tensor_names
             if not tensor.is_leaf and should_expand:
                 tensor_name = f"{tensor_name} = {find_nested_tensor_name(tensor)}"
 
@@ -100,7 +100,7 @@ def draw_tensor_op_graph(
 
 
 def calculate_finite_differences(
-    *input_tensors: List[md.Tensor], func: mdt.GenericOp, h: float = 1e-5
+    *input_tensors: md.Tensor, func: mdt.GenericOp, h: float = 1e-5
 ) -> List[md.Tensor]:
     manual_gradients = []
     with md.no_grad():
@@ -133,12 +133,12 @@ def calculate_finite_differences(
 
 # little helper function that just gives you the finite difference-calculated gradients and minidiff gradients
 def compute_grads(
-    *input_tensors: List[md.Tensor], func: mdt.GenericOp
+    *input_tensors: md.Tensor, func: mdt.GenericOp
 ) -> Tuple[List[md.Tensor], List[md.Tensor]]:
     manual_gradients = calculate_finite_differences(*input_tensors, func=func)
     computed = func(*input_tensors)
     computed.backward()
-    automatic_gradients = [t.grad for t in input_tensors]
+    automatic_gradients = [t.grad for t in input_tensors if t.grad is not None]
     return manual_gradients, automatic_gradients
 
 

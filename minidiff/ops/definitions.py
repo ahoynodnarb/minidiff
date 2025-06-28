@@ -293,8 +293,8 @@ exported_ops = [
     ),
     matmul := ops.generate_binary_op_func(
         forward_func=ops.as_minidiff(np.matmul),
-        grad_a=lambda a, b, grad: matmul(grad, b.t),
-        grad_b=lambda a, b, grad: matmul(a.t, grad),
+        grad_a=lambda a, b, grad: matmul(grad, b.T),
+        grad_b=lambda a, b, grad: matmul(a.T, grad),
         tensor_only=True,
         casting=None,
     ),
