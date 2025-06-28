@@ -235,7 +235,7 @@ class Tensor:
     ) -> Tensor:
         return md.clip(self, a_min=a_min, a_max=a_max)
 
-    def reshape(self, shape: Sequence[int], **kwargs) -> Tensor:
+    def reshape(self, shape: Union[int, Sequence[int]], **kwargs) -> Tensor:
         return md.reshape(self, shape, **kwargs)
 
     def dot(self, other: Tensor, **kwargs) -> Tensor:

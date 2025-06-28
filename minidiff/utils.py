@@ -7,7 +7,7 @@ import graphviz
 import minidiff as md
 
 if TYPE_CHECKING:
-    from typing import Any, Dict, List, Optional, Tuple
+    from typing import Dict, List, Optional, Tuple
 
     import minidiff.typing as mdt
 
@@ -78,7 +78,7 @@ def draw_tensor_op_graph(
 
             # if we're naming everything, then all tensors are expanded
             # otherwise, the tensor must be explicitly named to be expanded
-            should_expand = tensor_id in tensor_names or insert_intermediates
+            should_expand = insert_intermediates or tensor_id in tensor_names
             if not tensor.is_leaf and should_expand:
                 tensor_name = f"{tensor_name} = {find_nested_tensor_name(tensor)}"
 
@@ -100,7 +100,7 @@ def draw_tensor_op_graph(
 
 
 def calculate_finite_differences(
-    *input_tensors: List[md.Tensor], func: mdt.GenericOp, h: float = 1e-5
+    *input_tensors: md.Tensor, func: mdt.GenericOp, h: float = 1e-5
 ) -> List[md.Tensor]:
     manual_gradients = []
     with md.no_grad():
@@ -133,21 +133,10 @@ def calculate_finite_differences(
 
 # little helper function that just gives you the finite difference-calculated gradients and minidiff gradients
 def compute_grads(
-    *input_tensors: List[md.Tensor], func: mdt.GenericOp
+    *input_tensors: md.Tensor, func: mdt.GenericOp
 ) -> Tuple[List[md.Tensor], List[md.Tensor]]:
     manual_gradients = calculate_finite_differences(*input_tensors, func=func)
     computed = func(*input_tensors)
     computed.backward()
-    automatic_gradients = [t.grad for t in input_tensors]
+    automatic_gradients = [t.grad for t in input_tensors if t.grad is not None]
     return manual_gradients, automatic_gradients
-
-
-# compare all the default exported variables with the ones we actually want to export and return the names
-# of the variables we want to export
-def get_exported_var_names(local_vars: Dict[str, Any], exported_vars: List[Any]):
-    exported = set()
-    for op in exported_vars:
-        for name, value in local_vars.items():
-            if value is op:
-                exported.add(name)
-    return list(exported)
