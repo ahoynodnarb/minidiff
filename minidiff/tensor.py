@@ -545,6 +545,10 @@ dtypes = [
 newaxis = None
 
 __all__ = [
+    "_allow_grad",
+    "no_grad",
+    "set_allow_grad",
+    "grad_allowed_",
     "Tensor",
     "ones_like",
     "ones",
