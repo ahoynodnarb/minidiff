@@ -131,7 +131,7 @@ def generate_op_func(
         return func_node
 
     # this is the actual op function generate_op_func returns
-    def minidiff_func(*op_inputs: P.args, **forward_kwargs):
+    def minidiff_func(*op_inputs: P.args, **forward_kwargs: P.kwargs):
         input_is_tensor = [isinstance(x, md.Tensor) for x in op_inputs]
 
         if not tensor_only and not py_any(input_is_tensor):
