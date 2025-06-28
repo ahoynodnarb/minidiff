@@ -16,9 +16,9 @@ if TYPE_CHECKING:
     from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
     try:
-        import cupy.typing as npt  # type: ignore
+        from cupy.typing import ArrayLike  # type: ignore
     except ImportError:
-        import numpy.typing as npt
+        from numpy.typing import ArrayLike
 
     import minidiff.typing as mdt
     from minidiff.topology import FuncNode
@@ -54,9 +54,9 @@ def grad_allowed_():
 class Tensor:
     def __init__(
         self,
-        data: np.ArrayLike,
+        data: ArrayLike,
         allow_grad: py_bool = False,
-        dtype: Optional[md.dtype] = None,
+        dtype: Optional[mdt.dtype] = None,
         func_node: Optional[FuncNode] = None,
     ):
         if isinstance(data, np.ndarray):
@@ -208,13 +208,13 @@ class Tensor:
     def flatten(self, order="C"):
         return md.flatten(self, order=order)
 
-    def astype(self, dtype, **kwargs):
+    def astype(self, dtype: mdt.dtype, **kwargs):
         return md.astype(self, dtype, **kwargs)
 
-    def transpose(self, axes=None):
+    def transpose(self, axes: Optional[Union[int, Sequence[int]]] = None):
         return md.transpose(self, axes=axes)
 
-    def item(self) -> np.ScalarType:
+    def item(self) -> mdt.dtype:
         if self.size != 1:
             raise ValueError(
                 "only Tensors with a single element can be reduced to a Python scalar"
@@ -414,8 +414,8 @@ class Tensor:
         return self._data.__array_interface__
 
     def __array__(
-        self, dtype: Optional[mdt.dtype] = None, copy: Optional[py_bool] = None
-    ) -> npt.NDArray[Any]:
+        self, dtype: Optional[np.dtype] = None, copy: Optional[py_bool] = None
+    ):
         if dtype is not None and dtype != self.dtype:
             if not copy:
                 raise ValueError("attempted cast, but copies are not permitted")
