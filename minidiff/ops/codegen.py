@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from builtins import all as py_all
 from builtins import any as py_any
-from inspect import signature
 from typing import TYPE_CHECKING
 
 import minidiff as md
@@ -86,8 +85,8 @@ def ternary_op_func(
 
 
 # the generator functions expect Tensor functions, this just turns numpy-like to Tensor
-def as_minidiff(func: Callable[P, md.Tensor]) -> Callable[P, md.Tensor]:
-    def wrapper(*args: P.args, **kwargs: P.kwargs) -> md.Tensor:
+def as_minidiff(func: Callable[..., Any]) -> Callable[..., md.Tensor]:
+    def wrapper(*args, **kwargs):
         allow_grad = py_any([isinstance(x, md.Tensor) and x.allow_grad for x in args])
         wrapped_args = [x._data if isinstance(x, md.Tensor) else x for x in args]
         wrapped_kwargs = {
@@ -200,6 +199,8 @@ def generate_stateless_op_func(
             def forward():
                 a = forward_func(*self.func_args, **self.func_kwargs)
                 return a
+
+            forward.__name__ = forward_func.__name__
 
             return forward
 

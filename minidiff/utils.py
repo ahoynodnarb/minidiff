@@ -7,7 +7,7 @@ import graphviz
 import minidiff as md
 
 if TYPE_CHECKING:
-    from typing import Any, Dict, List, Optional, Tuple
+    from typing import Dict, List, Optional, Tuple
 
     import minidiff.typing as mdt
 
@@ -140,14 +140,3 @@ def compute_grads(
     computed.backward()
     automatic_gradients = [t.grad for t in input_tensors if t.grad is not None]
     return manual_gradients, automatic_gradients
-
-
-# compare all the default exported variables with the ones we actually want to export and return the names
-# of the variables we want to export
-def get_exported_var_names(local_vars: Dict[str, Any], exported_vars: List[Any]):
-    exported = set()
-    for op in exported_vars:
-        for name, value in local_vars.items():
-            if value is op:
-                exported.add(name)
-    return list(exported)

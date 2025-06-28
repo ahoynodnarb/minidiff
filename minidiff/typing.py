@@ -11,6 +11,8 @@ if TYPE_CHECKING:
 
     NestedSequence = Union[Sequence[T], Sequence["NestedSequence[T]"]]
 
+    TensorLike = Union[int, float, md.Tensor]
+
     dtype = Union[*md.dtypes]
 
     class GenericFunc(Protocol):
