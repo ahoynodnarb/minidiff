@@ -168,7 +168,7 @@ def mean_grad(
         return grad / a.shape[axis]
     in_shape = a.shape
     multiplied_dims = [in_shape[dim] for dim in axis]
-    return prod(multiplied_dims)
+    return grad / prod(multiplied_dims)
 
 
 ravel: Callable[[md.Tensor], md.Tensor] = ops.generate_unary_op_func(

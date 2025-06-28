@@ -16,9 +16,9 @@ if TYPE_CHECKING:
     from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
     try:
-        from cupy.typing import ArrayLike  # type: ignore
+        import cupy.typing as npt  # type: ignore
     except ImportError:
-        from numpy.typing import ArrayLike
+        import numpy.typing as npt
 
     import minidiff.typing as mdt
     from minidiff.topology import FuncNode
@@ -54,7 +54,7 @@ def grad_allowed_():
 class Tensor:
     def __init__(
         self,
-        data: ArrayLike,
+        data: npt.ArrayLike,
         allow_grad: py_bool = False,
         dtype: Optional[mdt.dtype] = None,
         func_node: Optional[FuncNode] = None,
@@ -415,7 +415,7 @@ class Tensor:
 
     def __array__(
         self, dtype: Optional[np.dtype] = None, copy: Optional[py_bool] = None
-    ):
+    ) -> npt.NDArray:
         if dtype is not None and dtype != self.dtype:
             if not copy:
                 raise ValueError("attempted cast, but copies are not permitted")
