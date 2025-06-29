@@ -191,37 +191,30 @@ abs = absolute
 all: Callable[[md.Tensor], md.Tensor] = ops.generate_unary_op_func(
     forward_func=ops.as_minidiff(np.all),
     is_differentiable=False,
-    casting=None,
 )
 any: Callable[[md.Tensor], md.Tensor] = ops.generate_unary_op_func(
     forward_func=ops.as_minidiff(np.any),
     is_differentiable=False,
-    casting=None,
 )
 argmax: Callable[[md.Tensor], md.Tensor] = ops.generate_unary_op_func(
     forward_func=ops.as_minidiff(np.argmax),
     is_differentiable=False,
-    casting=None,
 )
 argwhere: Callable[[md.Tensor], md.Tensor] = ops.generate_unary_op_func(
     forward_func=ops.as_minidiff(np.argwhere),
     is_differentiable=False,
-    casting=None,
 )
 atleast_1d: Callable[[md.Tensor], md.Tensor] = ops.generate_unary_op_func(
     forward_func=ops.as_minidiff(np.atleast_1d),
     grad=lambda a, grad: grad,
-    casting=None,
 )
 atleast_2d: Callable[[md.Tensor], md.Tensor] = ops.generate_unary_op_func(
     forward_func=ops.as_minidiff(np.atleast_2d),
     grad=lambda a, grad: grad,
-    casting=None,
 )
 atleast_3d: Callable[[md.Tensor], md.Tensor] = ops.generate_unary_op_func(
     forward_func=ops.as_minidiff(np.atleast_3d),
     grad=lambda a, grad: grad,
-    casting=None,
 )
 ceil: Callable[[md.Tensor], md.Tensor] = ops.generate_unary_op_func(
     forward_func=ops.as_minidiff(np.ceil),
@@ -230,7 +223,6 @@ ceil: Callable[[md.Tensor], md.Tensor] = ops.generate_unary_op_func(
 copy: Callable[[md.Tensor], md.Tensor] = ops.generate_unary_op_func(
     forward_func=ops.as_minidiff(np.copy),
     grad=lambda a, grad: grad,
-    casting=None,
 )
 cos: Callable[[md.Tensor], md.Tensor] = ops.generate_unary_op_func(
     forward_func=ops.as_minidiff(np.cos),
@@ -247,13 +239,11 @@ exp: Callable[[md.Tensor], md.Tensor] = ops.generate_unary_op_func(
 flatten: Callable[[md.Tensor], md.Tensor] = ops.generate_unary_op_func(
     forward_func=ops.as_minidiff(lambda a, order="C": a.flatten(order=order)),
     grad=lambda a, grad, order="C": reshape(grad, a.shape, order=order),
-    casting=None,
 )
 flip: Callable[[md.Tensor], md.Tensor] = ops.generate_unary_op_func(
     forward_func=ops.as_minidiff(np.flip),
     grad=lambda a, grad, **kwargs: flip(grad, **kwargs),
     propagate_kwargs=True,
-    casting=None,
 )
 floor: Callable[[md.Tensor], md.Tensor] = ops.generate_unary_op_func(
     forward_func=ops.as_minidiff(np.floor),
@@ -271,24 +261,20 @@ max: Callable[[md.Tensor], md.Tensor] = ops.generate_unary_op_func(
     forward_func=ops.as_minidiff(np.max),
     grad=max_grad,
     propagate_kwargs=True,
-    casting=None,
 )
 mean: Callable[[md.Tensor], md.Tensor] = ops.generate_unary_op_func(
     forward_func=ops.as_minidiff(np.mean),
     grad=mean_grad,
     propagate_kwargs=True,
-    casting=None,
 )
 prod: Callable[[md.Tensor], md.Tensor] = ops.generate_unary_op_func(
     forward_func=ops.as_minidiff(np.prod),
     grad=prod_grad,
     propagate_kwargs=True,
-    casting=None,
 )
 ravel: Callable[[md.Tensor], md.Tensor] = ops.generate_unary_op_func(
     forward_func=ops.as_minidiff(lambda a, order="C": a.ravel(order=order)),
     grad=lambda a, grad, order="C": reshape(grad, a.shape, order=order),
-    casting=None,
 )
 sign: Callable[[md.Tensor], md.Tensor] = ops.generate_unary_op_func(
     forward_func=ops.as_minidiff(np.sign),
@@ -315,12 +301,10 @@ def square(a: md.Tensor, **kwargs) -> md.Tensor:
 squeeze: Callable[[md.Tensor], md.Tensor] = ops.generate_unary_op_func(
     forward_func=ops.as_minidiff(np.squeeze),
     grad=squeeze_grad,
-    casting=None,
 )
 sum: Callable[[md.Tensor], md.Tensor] = ops.generate_unary_op_func(
     forward_func=ops.as_minidiff(np.sum),
     grad=lambda a, grad: grad,
-    casting=None,
 )
 
 tan: Callable[[md.Tensor], md.Tensor] = ops.generate_unary_op_func(
@@ -335,7 +319,6 @@ transpose: Callable[[md.Tensor], md.Tensor] = ops.generate_unary_op_func(
     forward_func=ops.as_minidiff(np.transpose),
     grad=transpose_grad,
     propagate_kwargs=True,
-    casting=None,
 )
 # -------------------- BINARY FUNCS --------------------
 add: Callable[[mdt.TensorLike, mdt.TensorLike], md.Tensor] = (
@@ -348,27 +331,23 @@ add: Callable[[mdt.TensorLike, mdt.TensorLike], md.Tensor] = (
 astype: Callable[[md.Tensor, mdt.dtype], md.Tensor] = ops.generate_binary_op_func(
     forward_func=ops.as_minidiff(np.astype),
     grad_a=lambda a, dtype, grad: grad.astype(a.dtype),
-    casting=None,
 )
 broadcast_to: Callable[[md.Tensor, Sequence[int]], md.Tensor] = (
     ops.generate_binary_op_func(
         forward_func=ops.as_minidiff(np.broadcast_to),
         grad_a=lambda a, shape, grad: unbroadcast(grad=grad, target_shape=a.shape),
-        casting=None,
     )
 )
 equal: Callable[[mdt.TensorLike, mdt.TensorLike], md.Tensor] = (
     ops.generate_binary_op_func(
         forward_func=ops.as_minidiff(np.equal),
         is_differentiable=False,
-        casting=None,
     )
 )
 expand_dims: Callable[[md.Tensor, Union[int, Sequence[int]]], md.Tensor] = (
     ops.generate_binary_op_func(
         forward_func=ops.as_minidiff(np.expand_dims),
         grad_a=lambda a, axis, grad: squeeze(grad, axis=axis),
-        casting=None,
     )
 )
 floor_divide: Callable[[mdt.TensorLike, mdt.TensorLike], md.Tensor] = (
@@ -380,35 +359,30 @@ floor_divide: Callable[[mdt.TensorLike, mdt.TensorLike], md.Tensor] = (
 getitem: Callable[[md.Tensor, Any], md.Tensor] = ops.generate_binary_op_func(
     forward_func=ops.as_minidiff(lambda a, key: a[key]),
     grad_a=getitem_grad,
-    casting=None,
     op_name="index",
 )
 greater: Callable[[mdt.TensorLike, mdt.TensorLike], md.Tensor] = (
     ops.generate_binary_op_func(
         forward_func=ops.as_minidiff(np.greater),
         is_differentiable=False,
-        casting=None,
     )
 )
 greater_equal: Callable[[mdt.TensorLike, mdt.TensorLike], md.Tensor] = (
     ops.generate_binary_op_func(
         forward_func=ops.as_minidiff(np.greater_equal),
         is_differentiable=False,
-        casting=None,
     )
 )
 less: Callable[[mdt.TensorLike, mdt.TensorLike], md.Tensor] = (
     ops.generate_binary_op_func(
         forward_func=ops.as_minidiff(np.less),
         is_differentiable=False,
-        casting=None,
     )
 )
 less_equal: Callable[[mdt.TensorLike, mdt.TensorLike], md.Tensor] = (
     ops.generate_binary_op_func(
         forward_func=ops.as_minidiff(np.less_equal),
         is_differentiable=False,
-        casting=None,
     )
 )
 logical_and: Callable[[mdt.TensorLike, mdt.TensorLike], md.Tensor] = (
@@ -434,7 +408,6 @@ matmul: Callable[[md.Tensor, md.Tensor], md.Tensor] = ops.generate_binary_op_fun
     grad_a=lambda a, b, grad: matmul(grad, b.T),
     grad_b=lambda a, b, grad: matmul(a.T, grad),
     tensor_only=True,
-    casting=None,
 )
 multiply: Callable[[mdt.TensorLike, mdt.TensorLike], md.Tensor] = (
     ops.generate_binary_op_func(
@@ -447,7 +420,6 @@ not_equal: Callable[[mdt.TensorLike, mdt.TensorLike], md.Tensor] = (
     ops.generate_binary_op_func(
         forward_func=ops.as_minidiff(np.not_equal),
         is_differentiable=False,
-        casting=None,
     )
 )
 power: Callable[[mdt.TensorLike, mdt.TensorLike], md.Tensor] = (
@@ -460,7 +432,6 @@ power: Callable[[mdt.TensorLike, mdt.TensorLike], md.Tensor] = (
 reshape: Callable[[md.Tensor, Sequence[int]], md.Tensor] = ops.generate_binary_op_func(
     forward_func=ops.as_minidiff(np.reshape),
     grad_a=lambda a, b, grad: grad.reshape(a.shape),
-    casting=None,
 )
 subtract: Callable[[mdt.TensorLike, mdt.TensorLike], md.Tensor] = (
     ops.generate_binary_op_func(
@@ -475,7 +446,6 @@ tensordot: Callable[[md.Tensor, md.Tensor], md.Tensor] = ops.generate_binary_op_
     grad_b=tensordot_grad_b,
     tensor_only=True,
     propagate_kwargs=True,
-    casting=None,
 )
 true_divide: Callable[[mdt.TensorLike, mdt.TensorLike], md.Tensor] = (
     ops.generate_binary_op_func(
@@ -488,7 +458,6 @@ unbroadcast: Callable[[md.Tensor, Sequence[int]], md.Tensor] = (
     ops.generate_binary_op_func(
         forward_func=unbroadcast_forward,
         grad_a=lambda a, shape, grad: broadcast_to(grad, a.shape),
-        casting=None,
     )
 )
 # -------------------- TERNARY FUNCS --------------------
@@ -501,7 +470,6 @@ clip: Callable[
         1 if a_min is None else a > a_min,
         1 if a_max is None else a < a_max,
     ),
-    casting=None,
 )
 swapaxes: Callable[[md.Tensor, int, int], md.Tensor] = ops.generate_ternary_op_func(
     forward_func=ops.as_minidiff(np.swapaxes),
@@ -509,14 +477,12 @@ swapaxes: Callable[[md.Tensor, int, int], md.Tensor] = ops.generate_ternary_op_f
         grad, axis1, axis2, **kwargs
     ),
     propagate_kwargs=True,
-    casting=None,
 )
 where: Callable[[md.Tensor, md.Tensor, md.Tensor], md.Tensor] = (
     ops.generate_ternary_op_func(
         forward_func=ops.as_minidiff(np.where),
         grad_b=lambda condition, b, c, grad: grad * condition,
         grad_c=lambda condition, b, c, grad: grad * ~condition,
-        casting=None,
     )
 )
 

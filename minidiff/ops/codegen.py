@@ -100,6 +100,7 @@ def as_minidiff(func: Callable[..., Any]) -> Callable[..., md.Tensor]:
         return as_tensor
 
     wrapper.__name__ = func.__name__
+    wrapper.__qualname__ = func.__qualname__
 
     return wrapper
 
@@ -110,6 +111,9 @@ def generate_op_func(
     tensor_only: bool = False,
     op_name: Optional[str] = None,
 ) -> Callable[P, md.Tensor]:
+    if op_name is None:
+        op_name = op_class.__name__
+
     # just sets the func_node property of op_output to the correct FuncNode
     def create_func_node(
         grad_funcs: List[mdt.GenericOpGrad], op_inputs: List[Any], op_name: str
@@ -165,7 +169,7 @@ def generate_op_func(
             func_node = create_func_node(
                 grad_funcs=grad_funcs,
                 op_inputs=op_inputs,
-                op_name=forward_func.__name__ if op_name is None else op_name,
+                op_name=op_name,
             )
 
             output._func_node = func_node
@@ -177,6 +181,9 @@ def generate_op_func(
 
         return output
 
+    minidiff_func.__name__ = op_name
+    minidiff_func.__qualname__ = f"<op func '{op_name}'>"
+
     return minidiff_func
 
 
@@ -185,22 +192,16 @@ def generate_stateless_op_func(
     forward_func: Callable[P, md.Tensor],
     grad_funcs: Sequence[Optional[mdt.GenericOpGrad]],
     propagate_kwargs: bool = False,
-    casting: Optional[str] = "safe",
     **kwargs,
 ) -> Callable[P, md.Tensor]:
     class StatelessOpClass(OpClass):
         def __init__(self, *func_args, **func_kwargs):
             self.func_args = func_args
-            if casting is not None:
-                func_kwargs["casting"] = casting
             self.func_kwargs = func_kwargs
 
         def create_forward(self) -> mdt.GenericFunc:
             def forward():
-                a = forward_func(*self.func_args, **self.func_kwargs)
-                return a
-
-            forward.__name__ = forward_func.__name__
+                return forward_func(*self.func_args, **self.func_kwargs)
 
             return forward
 
@@ -219,6 +220,9 @@ def generate_stateless_op_func(
 
             return wrapped_grads
 
+    if "op_name" not in kwargs:
+        kwargs = dict(kwargs, op_name=forward_func.__name__)
+
     return generate_op_func(op_class=StatelessOpClass, **kwargs)
 
 
@@ -228,7 +232,7 @@ def generate_unary_op_func(
     grad: Optional[mdt.UnaryOpGrad] = None,
     **kwargs,
 ) -> Callable[P, md.Tensor]:
-    kwargs["tensor_only"] = True
+    kwargs = dict(kwargs, tensor_only=True)
     return generate_stateless_op_func(
         forward_func=forward_func, grad_funcs=[grad], **kwargs
     )
