@@ -52,7 +52,7 @@ def stateless_op_func(
     **kwargs,
 ) -> Callable[[Callable[P, md.Tensor]], Callable[P, md.Tensor]]:
     def wrapper(func: Callable[P, md.Tensor]) -> Callable[P, md.Tensor]:
-        return generate_stateless_op_func(forward_func=func, **kwargs)
+        return create_stateless_op_func(forward_func=func, **kwargs)
 
     return wrapper
 
@@ -61,7 +61,7 @@ def unary_op_func(
     **kwargs,
 ) -> Callable[[Callable[P, md.Tensor]], Callable[P, md.Tensor]]:
     def wrapper(func: Callable[P, md.Tensor]) -> Callable[P, md.Tensor]:
-        return generate_unary_op_func(forward_func=func, **kwargs)
+        return create_unary_op_func(forward_func=func, **kwargs)
 
     return wrapper
 
@@ -70,7 +70,7 @@ def binary_op_func(
     **kwargs,
 ) -> Callable[[Callable[P, md.Tensor]], Callable[P, md.Tensor]]:
     def wrapper(func: Callable[P, md.Tensor]) -> Callable[P, md.Tensor]:
-        return generate_binary_op_func(forward_func=func, **kwargs)
+        return create_binary_op_func(forward_func=func, **kwargs)
 
     return wrapper
 
@@ -79,7 +79,7 @@ def ternary_op_func(
     **kwargs,
 ) -> Callable[[Callable[P, md.Tensor]], Callable[P, md.Tensor]]:
     def wrapper(func: Callable[P, md.Tensor]) -> Callable[P, md.Tensor]:
-        return generate_ternary_op_func(forward_func=func, **kwargs)
+        return create_ternary_op_func(forward_func=func, **kwargs)
 
     return wrapper
 
@@ -105,7 +105,7 @@ def as_minidiff(func: Callable[..., Any]) -> Callable[..., md.Tensor]:
     return wrapper
 
 
-def generate_op_func(
+def create_op_func(
     op_class: Callable[P, None],
     is_differentiable: bool = True,
     tensor_only: bool = False,
@@ -133,7 +133,7 @@ def generate_op_func(
 
         return func_node
 
-    # this is the actual op function generate_op_func returns
+    # this is the actual op function create_op_func returns
     def minidiff_func(*op_inputs: P.args, **forward_kwargs: P.kwargs) -> md.Tensor:
         input_is_tensor = [isinstance(x, md.Tensor) for x in op_inputs]
 
@@ -188,7 +188,7 @@ def generate_op_func(
 
 
 # for ops who don't need to be a class (i.e. don't manage their own state)
-def generate_stateless_op_func(
+def create_stateless_op_func(
     forward_func: Callable[P, md.Tensor],
     grad_funcs: Sequence[Optional[mdt.GenericOpGrad]],
     propagate_kwargs: bool = False,
@@ -223,42 +223,42 @@ def generate_stateless_op_func(
     if "op_name" not in kwargs:
         kwargs = dict(kwargs, op_name=forward_func.__name__)
 
-    return generate_op_func(op_class=StatelessOpClass, **kwargs)
+    return create_op_func(op_class=StatelessOpClass, **kwargs)
 
 
 # single argument
-def generate_unary_op_func(
+def create_unary_op_func(
     forward_func: Callable[P, md.Tensor],
     grad: Optional[mdt.UnaryOpGrad] = None,
     **kwargs,
 ) -> Callable[P, md.Tensor]:
     kwargs = dict(kwargs, tensor_only=True)
-    return generate_stateless_op_func(
+    return create_stateless_op_func(
         forward_func=forward_func, grad_funcs=[grad], **kwargs
     )
 
 
 # two arguments
-def generate_binary_op_func(
+def create_binary_op_func(
     forward_func: Callable[P, md.Tensor],
     grad_a: Optional[mdt.BinaryOpGrad] = None,
     grad_b: Optional[mdt.BinaryOpGrad] = None,
     **kwargs,
 ) -> Callable[P, md.Tensor]:
-    return generate_stateless_op_func(
+    return create_stateless_op_func(
         forward_func=forward_func, grad_funcs=[grad_a, grad_b], **kwargs
     )
 
 
 # three arguments
-def generate_ternary_op_func(
+def create_ternary_op_func(
     forward_func: Callable[P, md.Tensor],
     grad_a: Optional[mdt.TernaryOpGrad] = None,
     grad_b: Optional[mdt.TernaryOpGrad] = None,
     grad_c: Optional[mdt.TernaryOpGrad] = None,
     **kwargs,
 ) -> Callable[P, md.Tensor]:
-    return generate_stateless_op_func(
+    return create_stateless_op_func(
         forward_func=forward_func, grad_funcs=[grad_a, grad_b, grad_c], **kwargs
     )
 
@@ -273,9 +273,9 @@ __all__ = [
     "binary_op_func",
     "ternary_op_func",
     "as_minidiff",
-    "generate_op_func",
-    "generate_stateless_op_func",
-    "generate_unary_op_func",
-    "generate_binary_op_func",
-    "generate_ternary_op_func",
+    "create_op_func",
+    "create_stateless_op_func",
+    "create_unary_op_func",
+    "create_binary_op_func",
+    "create_ternary_op_func",
 ]
