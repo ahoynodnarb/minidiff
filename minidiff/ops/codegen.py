@@ -48,7 +48,7 @@ class TernaryOpClass(OpClass):
 
 
 # decorators which just convert a generic function to an op
-def stateless_op_func(
+def op_func(
     **kwargs,
 ) -> Callable[[Callable[P, md.Tensor]], Callable[P, md.Tensor]]:
     def wrapper(func: Callable[P, md.Tensor]) -> Callable[P, md.Tensor]:
@@ -268,7 +268,7 @@ __all__ = [
     "UnaryOpClass",
     "BinaryOpClass",
     "TernaryOpClass",
-    "stateless_op_func",
+    "op_func",
     "unary_op_func",
     "binary_op_func",
     "ternary_op_func",
