@@ -81,16 +81,6 @@ class Tensor:
     def func_node(self) -> FuncNode:
         return self._func_node
 
-    @func_node.setter
-    def func_node(self, func_node: FuncNode):
-        # if we're on a graph, and we're a leaf that's trying to assign itself a node,
-        # then fail because leafs, by definition, have no gradient history and therefore
-        # cannot possess nodes
-        if self.graphed and (self.is_leaf and func_node is not None):
-            raise ValueError("leaf tensors cannot possess func_nodes")
-
-        self._func_node = func_node
-
     # we're a leaf if we have no gradient history
     # whether we're part of a gradient-tracked computation or not.
     @property
@@ -195,7 +185,7 @@ class Tensor:
     # destroy our portion of the graph
     def wipe(self):
         self.graphed = False
-        self.func_node = None
+        self._func_node = None
 
     # returns a copy that does not track gradients
     def detach(self, allow_grad: py_bool = False) -> Tensor:

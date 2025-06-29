@@ -168,7 +168,7 @@ def generate_op_func(
                 op_name=forward_func.__name__ if op_name is None else op_name,
             )
 
-            output.func_node = func_node
+            output._func_node = func_node
             output.graphed = True
 
             for op_input in op_inputs:
