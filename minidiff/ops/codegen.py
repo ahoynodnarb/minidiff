@@ -8,7 +8,7 @@ import minidiff as md
 from minidiff.topology import FuncNode
 
 if TYPE_CHECKING:
-    from typing import Callable, Optional, Sequence, List, Any, ParamSpec
+    from typing import Any, Callable, List, Optional, ParamSpec, Sequence
 
     P = ParamSpec("P")
 
@@ -100,7 +100,9 @@ def as_minidiff(func: Callable[..., Any]) -> Callable[..., md.Tensor]:
         return as_tensor
 
     wrapper.__name__ = func.__name__
-    wrapper.__qualname__ = func.__qualname__
+    wrapper.__qualname__ = (
+        func.__qualname__ if hasattr(func, "__qualname__") else func.__name__
+    )
 
     return wrapper
 

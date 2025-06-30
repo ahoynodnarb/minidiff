@@ -100,11 +100,14 @@ def draw_tensor_op_graph(
 
 
 def calculate_finite_differences(
-    *input_tensors: md.Tensor, func: mdt.GenericOp, h: float = 1e-5
+    *input_tensors: md.Tensor, func: mdt.GenericOp, h: float = 1e-7
 ) -> List[md.Tensor]:
     manual_gradients = []
     with md.no_grad():
         for i, input_tensor in enumerate(input_tensors):
+            if not isinstance(input_tensor, md.Tensor) or not input_tensor.allow_grad:
+                manual_gradients.append(None)
+                continue
             # this just computes the gradients from first principles
             left = input_tensors[:i]
             right = input_tensors[i + 1 :]
@@ -138,7 +141,9 @@ def compute_grads(
     manual_gradients = calculate_finite_differences(*input_tensors, func=func)
     computed = func(*input_tensors)
     computed.backward()
-    automatic_gradients = [t.grad for t in input_tensors if t.grad is not None]
+    automatic_gradients = [
+        t.grad if isinstance(t, md.Tensor) else None for t in input_tensors
+    ]
     return manual_gradients, automatic_gradients
 
 

@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from builtins import bool as py_bool
-
 import contextvars
+from builtins import bool as py_bool
 from typing import TYPE_CHECKING
 
 import minidiff as md
@@ -228,8 +227,8 @@ class Tensor:
     def reshape(self, shape: Union[int, Sequence[int]], **kwargs) -> Tensor:
         return md.reshape(self, shape, **kwargs)
 
-    def dot(self, other: Tensor, **kwargs) -> Tensor:
-        return md.matmul(self, other, **kwargs)
+    def dot(self, other: mdt.TensorLike, **kwargs) -> Tensor:
+        return md.dot(self, other, **kwargs)
 
     def add(self, other: mdt.TensorLike, **kwargs) -> Tensor:
         return md.add(self, other, **kwargs)
@@ -398,6 +397,9 @@ class Tensor:
     def __xor__(self, value: mdt.TensorLike) -> Tensor:
         return md.logical_xor(self, value)
 
+    def __invert__(self) -> Tensor:
+        return md.invert(self)
+
     # numpy array specification requirements:
     @property
     def __array_interface__(self) -> Dict[str, Any]:
@@ -447,6 +449,31 @@ def unravel_index(
     return Tensor(np.unravel_index(indices, shape, **kwargs), allow_grad=allow_grad)
 
 
+def take_along_axis(
+    arr: md.Tensor,
+    indices: md.Tensor,
+    axis: Optional[int] = None,
+    allow_grad: py_bool = False,
+) -> Tensor:
+    return Tensor(
+        np.take_along_axis(arr._data, indices._data, axis=axis), allow_grad=allow_grad
+    )
+
+
+def put_along_axis(
+    arr: md.Tensor,
+    indices: md.Tensor,
+    values: mdt.TensorLike,
+    axis: Optional[int],
+) -> Tensor:
+    np.put_along_axis(
+        arr._data,
+        indices._data,
+        values._data if isinstance(values, Tensor) else values,
+        axis,
+    )
+
+
 def repeat(
     a: mdt.TensorLike,
     repeats: Union[int, Sequence[int]],
@@ -480,8 +507,26 @@ def load(file, allow_grad: py_bool = False, **kwargs) -> Tensor:
     return Tensor(np.load(file, **kwargs), allow_grad=allow_grad)
 
 
+def choice(
+    a: Union[mdt.TensorLike, int],
+    size: Optional[Union[int, Sequence[int]]] = None,
+    replace: py_bool = True,
+    p: Optional[mdt.TensorLike] = None,
+) -> md.Tensor:
+    return Tensor(np.random.choice(a, size=size, replace=replace, p=p))
+
+
 def rand(*dims: Optional[int], allow_grad: py_bool = False) -> Tensor:
     return Tensor(np.random.rand(*dims), allow_grad=allow_grad)
+
+
+def randint(
+    low: Union[int, Sequence[int]],
+    high: Optional[Union[int, Sequence[int]]] = None,
+    size: Optional[Union[int, Sequence[int]]] = None,
+    allow_grad: py_bool = False,
+) -> Tensor:
+    return Tensor(np.random.randint(low, high=high, size=size), allow_grad=allow_grad)
 
 
 def randn(*dims: Optional[int], allow_grad: py_bool = False) -> Tensor:
@@ -546,6 +591,8 @@ __all__ = [
     "zeros",
     "full_like",
     "full",
+    "take_along_axis",
+    "put_along_axis",
     "unravel_index",
     "repeat",
     "tile",
@@ -553,7 +600,9 @@ __all__ = [
     "stack",
     "save",
     "load",
+    "choice",
     "rand",
+    "randint",
     "randn",
     "binomial",
     "permutation",

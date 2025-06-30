@@ -11,7 +11,7 @@ import minidiff as md
 import minidiff.ops as ops
 
 if TYPE_CHECKING:
-    from typing import Any, Optional, Sequence, Tuple, Union, Callable
+    from typing import Any, Callable, Optional, Sequence, Tuple, Union
 
     import minidiff.typing as mdt
 
@@ -103,10 +103,10 @@ def max_grad(
     axis: Optional[Union[int, Tuple[int]]] = None,
     **kwargs,
 ) -> md.Tensor:
-    max_indices = argmax(a, axis=axis)
-    unraveled = md.unravel_index(max_indices, a.shape)
+    max_indices = argmax(a, axis=axis, keepdims=True)
+    grad = grad.reshape(max_indices.shape)
     ret = md.zeros_like(a)
-    ret[unraveled] = grad
+    md.put_along_axis(ret, max_indices, grad, axis=axis)
     return ret
 
 
@@ -119,7 +119,8 @@ def prod_grad(
     if axis == ():
         return grad
     multiplied = prod(a, axis=axis, keepdims=True)
-    return where(a == 0, 0, grad * multiplied / a)
+    print(axis)
+    return md.where(a == 0, 0, grad * multiplied / a)
 
 
 def transpose_grad(
@@ -129,7 +130,7 @@ def transpose_grad(
         return transpose(grad)
     backward_axes = [-1] * len(axes)
     for i, dim in enumerate(axes):
-        backward_axes[dim] = i
+        backward_axes[dim.item()] = i
     return transpose(grad, axes=backward_axes)
 
 
@@ -249,6 +250,10 @@ floor: Callable[[md.Tensor], md.Tensor] = ops.create_unary_op_func(
     forward_func=ops.as_minidiff(np.floor),
     is_differentiable=False,
 )
+invert: Callable[[md.Tensor], md.Tensor] = ops.create_unary_op_func(
+    forward_func=ops.as_minidiff(np.invert),
+    is_differentiable=False,
+)
 log: Callable[[md.Tensor], md.Tensor] = ops.create_unary_op_func(
     forward_func=ops.as_minidiff(np.log),
     grad=lambda a, grad: grad / a,
@@ -309,11 +314,11 @@ sum: Callable[[md.Tensor], md.Tensor] = ops.create_unary_op_func(
 
 tan: Callable[[md.Tensor], md.Tensor] = ops.create_unary_op_func(
     forward_func=ops.as_minidiff(np.tan),
-    grad=lambda a, grad: grad * (1 / cos(a) ** 2),
+    grad=lambda a, grad: grad * (1 * cos(a) ** (-2)),
 )
 tanh: Callable[[md.Tensor], md.Tensor] = ops.create_unary_op_func(
     forward_func=ops.as_minidiff(np.tanh),
-    grad=lambda a, grad: grad * (1 / cosh(a) ** 2),
+    grad=lambda a, grad: grad * (1 * cosh(a) ** (-2)),
 )
 transpose: Callable[[md.Tensor], md.Tensor] = ops.create_unary_op_func(
     forward_func=ops.as_minidiff(np.transpose),
@@ -333,8 +338,13 @@ astype: Callable[[md.Tensor, mdt.dtype], md.Tensor] = ops.create_binary_op_func(
 broadcast_to: Callable[[md.Tensor, Sequence[int]], md.Tensor] = (
     ops.create_binary_op_func(
         forward_func=ops.as_minidiff(np.broadcast_to),
-        grad_a=lambda a, shape, grad: unbroadcast(grad=grad, target_shape=a.shape),
+        grad_a=lambda a, shape, grad: unbroadcast(grad, a.shape),
     )
+)
+dot: Callable[[md.Tensor, md.Tensor], md.Tensor] = ops.create_binary_op_func(
+    forward_func=ops.as_minidiff(np.dot),
+    grad_a=lambda a, b, grad: grad * b,
+    grad_b=lambda a, b, grad: grad * a,
 )
 equal: Callable[[mdt.TensorLike, mdt.TensorLike], md.Tensor] = (
     ops.create_binary_op_func(
@@ -447,7 +457,7 @@ true_divide: Callable[[mdt.TensorLike, mdt.TensorLike], md.Tensor] = (
     ops.create_binary_op_func(
         forward_func=ops.as_minidiff(np.true_divide),
         grad_a=lambda a, b, grad: grad / b,
-        grad_b=lambda a, b, grad: (-grad * a) / (b**2),
+        grad_b=lambda a, b, grad: grad * (-a * b ** (-2)),
     )
 )
 unbroadcast: Callable[[md.Tensor, Sequence[int]], md.Tensor] = (
@@ -478,7 +488,7 @@ where: Callable[[md.Tensor, md.Tensor, md.Tensor], md.Tensor] = (
     ops.create_ternary_op_func(
         forward_func=ops.as_minidiff(np.where),
         grad_b=lambda condition, b, c, grad: grad * condition,
-        grad_c=lambda condition, b, c, grad: grad * ~condition,
+        grad_c=lambda condition, b, c, grad: grad * (1 - condition),
     )
 )
 
@@ -500,6 +510,7 @@ __all__ = [
     "flatten",
     "flip",
     "floor",
+    "invert",
     "log",
     "logical_not",
     "max",
@@ -519,6 +530,7 @@ __all__ = [
     "add",
     "astype",
     "broadcast_to",
+    "dot",
     "equal",
     "expand_dims",
     "floor_divide",
