@@ -119,7 +119,6 @@ def prod_grad(
     if axis == ():
         return grad
     multiplied = prod(a, axis=axis, keepdims=True)
-    print(axis)
     return md.where(a == 0, 0, grad * multiplied / a)
 
 
@@ -314,11 +313,11 @@ sum: Callable[[md.Tensor], md.Tensor] = ops.create_unary_op_func(
 
 tan: Callable[[md.Tensor], md.Tensor] = ops.create_unary_op_func(
     forward_func=ops.as_minidiff(np.tan),
-    grad=lambda a, grad: grad * (1 * cos(a) ** (-2)),
+    grad=lambda a, grad: grad * (1 / cos(a) ** 2),
 )
 tanh: Callable[[md.Tensor], md.Tensor] = ops.create_unary_op_func(
     forward_func=ops.as_minidiff(np.tanh),
-    grad=lambda a, grad: grad * (1 * cosh(a) ** (-2)),
+    grad=lambda a, grad: grad * (1 / cosh(a) ** 2),
 )
 transpose: Callable[[md.Tensor], md.Tensor] = ops.create_unary_op_func(
     forward_func=ops.as_minidiff(np.transpose),
@@ -457,7 +456,7 @@ true_divide: Callable[[mdt.TensorLike, mdt.TensorLike], md.Tensor] = (
     ops.create_binary_op_func(
         forward_func=ops.as_minidiff(np.true_divide),
         grad_a=lambda a, b, grad: grad / b,
-        grad_b=lambda a, b, grad: grad * (-a * b ** (-2)),
+        grad_b=lambda a, b, grad: grad * (-a / b**2),
     )
 )
 unbroadcast: Callable[[md.Tensor, Sequence[int]], md.Tensor] = (
