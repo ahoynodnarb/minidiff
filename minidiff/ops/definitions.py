@@ -117,9 +117,10 @@ def prod_grad(
     **kwargs,
 ) -> md.Tensor:
     if axis == ():
-        return grad
+        return grad.reshape(a.shape)
     multiplied = prod(a, axis=axis, keepdims=True)
-    return md.where(a == 0, 0, grad * multiplied / a)
+    grad = grad.reshape(multiplied.shape)
+    return md.where(a == 0, grad * multiplied, grad * multiplied / a)
 
 
 def transpose_grad(
@@ -310,7 +311,6 @@ sum: Callable[[md.Tensor], md.Tensor] = ops.create_unary_op_func(
     forward_func=ops.as_minidiff(np.sum),
     grad=lambda a, grad: grad,
 )
-
 tan: Callable[[md.Tensor], md.Tensor] = ops.create_unary_op_func(
     forward_func=ops.as_minidiff(np.tan),
     grad=lambda a, grad: grad * (1 / cos(a) ** 2),

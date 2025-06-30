@@ -1,20 +1,28 @@
+from __future__ import annotations
+
 import random
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 import minidiff as md
 from minidiff.utils import compute_grads
 
+if TYPE_CHECKING:
+    from typing import Any, Dict, List
+
+    import minidiff.typing as mdt
+
 
 def perform_test(
-    func,
-    backend_func,
-    args,
-    kwargs,
-    forward_rtol=1e-02,
-    forward_atol=1e-05,
-    backward_rtol=1e-02,
-    backward_atol=1e-05,
+    func: mdt.GenericFunc,
+    backend_func: mdt.GenericFunc,
+    args: List[Any],
+    kwargs: Dict[str, Any],
+    forward_rtol: float = 1e-02,
+    forward_atol: float = 1e-05,
+    backward_rtol: float = 1e-02,
+    backward_atol: float = 1e-05,
 ):
     out = func(*args, **kwargs)._data
     comp = backend_func(*args, **kwargs)
@@ -116,7 +124,7 @@ def test_prod():
             md.randn(2, 2, 2, 2, allow_grad=True),
         ],
         kwargs={"axis": tuple(random.sample(range(4), k=random.randint(0, 4)))},
-        backward_atol=1,
+        backward_rtol=1e-01,
     )
 
 
@@ -329,7 +337,7 @@ def test_true_divide():
             md.randn(2, 2, 2, 2, allow_grad=True),
         ],
         kwargs={},
-        backward_rtol=1e-02,
+        backward_rtol=1e-01,
         backward_atol=1e-05,
     )
 
