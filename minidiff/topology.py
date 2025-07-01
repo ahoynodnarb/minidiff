@@ -44,6 +44,3 @@ class FuncNode:
 
     def __repr__(self) -> str:
         return f"{self.op_name}({', '.join([str(x) for x in self.op_inputs])})"
-
-
-__all__ = ["FuncNode"]

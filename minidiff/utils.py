@@ -145,10 +145,3 @@ def compute_grads(
         t.grad if isinstance(t, md.Tensor) else None for t in input_tensors
     ]
     return manual_gradients, automatic_gradients
-
-
-__all__ = [
-    "draw_tensor_op_graph",
-    "calculate_finite_differences",
-    "compute_grads",
-]
