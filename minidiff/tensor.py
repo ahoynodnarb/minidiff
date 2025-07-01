@@ -155,7 +155,13 @@ class Tensor:
 
     # this does the actual advertised reverse-mode automatic differentiation.
     # I mostly just referenced this Wikipedia page: https://en.wikipedia.org/wiki/Automatic_differentiation
-    def backward(self, retain_graph: py_bool = False, retain_grads: py_bool = False):
+    def backward(
+        self,
+        retain_graph: py_bool = False,
+        retain_grads: py_bool = False,
+        allow_higher_order: py_bool = False,
+        reset_grads: py_bool = True,
+    ):
         # can't call backward if we're not tracking gradients or we have no gradient history
         if not self.allow_grad:
             return
@@ -165,15 +171,32 @@ class Tensor:
 
         traversal_path = self.toposort()
 
-        self.grad = ones_like(self, allow_grad=False)
+        # computing higher order derivatives means partially re-traversing the subgraph for whichever variable
+        # we're computing the higher order derivative of, so the graph needs to remain
+        # in accumulating gradients when calling backward() the second time, gradients from intermediates
+        # will almost always be necessary so those have to be kept in memory too
+        if allow_higher_order:
+            retain_grads = True
+            retain_graph = True
+
+        if reset_grads:
+            for tensor in traversal_path:
+                if not tensor.is_leaf:
+                    tensor.grad = None
+                    continue
+                tensor.grad = md.zeros_like(tensor.grad, allow_grad=allow_higher_order)
+
+        self.grad = ones_like(self, allow_grad=allow_higher_order)
 
         for tensor in reversed(traversal_path):
             # leaf tensors don't have any input tensors to update, so skip
             if tensor.is_leaf:
                 continue
             n = tensor.func_node
-            n_grad = tensor.grad
-            n.update_grads(n_grad)
+            if allow_higher_order:
+                tensor.grad.allow_grad = True
+
+            n.update_grads(tensor.grad)
             # we're only temporarily storing grads, so we need to remove any references when
             # we're done for the sake of memory
             if not retain_grads:
