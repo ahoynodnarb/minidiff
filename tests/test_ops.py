@@ -19,8 +19,8 @@ def perform_test(
     backend_func: mdt.GenericFunc,
     args: List[Any],
     kwargs: Dict[str, Any],
-    forward_rtol: float = 1e-02,
-    forward_atol: float = 1e-05,
+    forward_rtol: float = 1e-05,
+    forward_atol: float = 1e-08,
     backward_rtol: float = 1e-02,
     backward_atol: float = 1e-05,
 ):
