@@ -9,7 +9,7 @@ import minidiff as md
 from minidiff.utils import compute_grads
 
 if TYPE_CHECKING:
-    from typing import Any, Dict, List
+    from typing import Any, Dict, List, Optional
 
     import minidiff.typing as mdt
 
@@ -23,6 +23,7 @@ def perform_test(
     forward_atol: float = 1e-08,
     backward_rtol: float = 1e-02,
     backward_atol: float = 1e-05,
+    exclude: Optional[List[md.Tensor]] = None,
 ):
     out = func(*args, **kwargs)._data
     comp = backend_func(*args, **kwargs)
@@ -33,18 +34,20 @@ def perform_test(
         return md.sum((expected - actual) ** 2) / 2
 
     mask = ~(np.isnan(out) | np.isnan(comp))
-    assert np.allclose(
-        out[mask], comp[mask], rtol=forward_rtol, atol=forward_atol
-    ), f"❌ Forward Test failed for {func}. Compared against {backend_func}\nminidiff:\n{out}\nnumpy:\n{comp}"
+    assert np.allclose(out[mask], comp[mask], rtol=forward_rtol, atol=forward_atol), (
+        f"❌ Forward Test failed for {func}. Compared against {backend_func}\nminidiff:\n{out}\nnumpy:\n{comp}"
+    )
 
-    manual_grads, auto_grads = compute_grads(*args, func=loss_func)
+    manual_grads, auto_grads = compute_grads(*args, func=loss_func, exclude=exclude)
     for i, (manual, auto) in enumerate(zip(manual_grads, auto_grads)):
         if manual is None or auto is None:
             continue
         mask = ~(np.isnan(manual) | np.isnan(auto))
         assert np.allclose(
             manual[mask], auto[mask], rtol=backward_rtol, atol=backward_atol
-        ), f"❌ Gradient Test wrt {i}th parameter failed for {func}. \nmanual gradients:\n{manual}\nautomatic gradients:\n{auto}"
+        ), (
+            f"❌ Gradient Test wrt {i}th parameter failed for {func}. \nmanual gradients:\n{manual}\nautomatic gradients:\n{auto}"
+        )
 
 
 def test_ravel():
@@ -110,15 +113,17 @@ def test_max():
 
 def test_where():
     for _ in range(5):
+        indices = md.binomial(1, random.uniform(0, 1), (2, 2, 2, 2))
         perform_test(
             func=md.where,
             backend_func=np.where,
             args=[
-                md.binomial(1, random.uniform(0, 1), (2, 2, 2, 2)),
+                indices,
                 md.randn(2, 2, 2, 2, allow_grad=True),
                 md.randn(2, 2, 2, 2, allow_grad=True),
             ],
             kwargs={},
+            exclude=[indices],
         )
 
 
@@ -249,14 +254,16 @@ def test_copy():
 
 def test_getitem():
     for _ in range(5):
+        indices = md.randint(low=(0, 0, 0, 0), high=(2, 2, 2, 2))
         perform_test(
             func=md.getitem,
             backend_func=lambda x, key: x[key],
             args=[
                 md.randn(2, 2, 2, 2, allow_grad=True),
-                md.randint(low=(0, 0, 0, 0), high=(2, 2, 2, 2)),
+                indices,
             ],
             kwargs={},
+            exclude=[indices],
         )
 
 

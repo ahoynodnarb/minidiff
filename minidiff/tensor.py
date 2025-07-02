@@ -466,6 +466,10 @@ def full(shape: Sequence[int], allow_grad: py_bool = False, **kwargs) -> Tensor:
     return Tensor(np.full(shape, **kwargs), allow_grad=allow_grad)
 
 
+def isin(element, test_elements, **kwargs):
+    return np.isin(element, test_elements, **kwargs)
+
+
 def unravel_index(
     indices: mdt.TensorLike, shape: Sequence[int], allow_grad: py_bool = False, **kwargs
 ) -> Tensor:

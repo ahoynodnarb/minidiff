@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from typing import TYPE_CHECKING
 
 import graphviz
@@ -100,14 +101,27 @@ def draw_tensor_op_graph(
 
 
 def calculate_finite_differences(
-    *input_tensors: md.Tensor, func: mdt.GenericOp, h: float = 1e-7
+    *input_tensors: md.Tensor,
+    func: mdt.GenericOp,
+    h: float = 1e-7,
+    exclude: Optional[List[md.Tensor]] = None,
 ) -> List[md.Tensor]:
     manual_gradients = []
+    if exclude is None:
+        exclude = []
+    excluded_ids = [id(x) for x in exclude]
     with md.no_grad():
         for i, input_tensor in enumerate(input_tensors):
-            if not isinstance(input_tensor, md.Tensor) or not input_tensor.allow_grad:
+            if (
+                not isinstance(input_tensor, md.Tensor)
+                or not input_tensor.allow_grad
+                or id(input_tensor) in excluded_ids
+            ):
                 manual_gradients.append(None)
                 continue
+            print(input_tensor)
+            print(id(input_tensor))
+            print(excluded_ids)
             # this just computes the gradients from first principles
             left = input_tensors[:i]
             right = input_tensors[i + 1 :]
@@ -136,16 +150,32 @@ def calculate_finite_differences(
 
 # little helper function that just gives you the finite difference-calculated gradients and minidiff gradients
 def compute_grads(
-    *input_tensors: md.Tensor, func: mdt.GenericOp
+    *input_tensors: md.Tensor,
+    func: mdt.GenericOp,
+    h: float = 1e-7,
+    exclude: Optional[List[md.Tensor]] = None,
 ) -> Tuple[List[md.Tensor], List[md.Tensor]]:
-    input_tensors = [
-        x.detach(allow_grad=True) if isinstance(x, md.Tensor) else x
-        for x in input_tensors
-    ]
-    manual_gradients = calculate_finite_differences(*input_tensors, func=func)
-    computed = func(*input_tensors)
+    if exclude is None:
+        exclude = []
+
+    excluded_ids = [id(x) for x in exclude]
+    copied_input_tensors = []
+    copied_exclude = []
+
+    for t in input_tensors:
+        copied = t.detach(allow_grad=True) if isinstance(t, md.Tensor) else deepcopy(t)
+        copied_input_tensors.append(copied)
+        if id(t) in excluded_ids:
+            copied_exclude.append(copied)
+
+    manual_gradients = calculate_finite_differences(
+        *copied_input_tensors, func=func, h=h, exclude=copied_exclude
+    )
+
+    computed = func(*copied_input_tensors)
     computed.backward()
     automatic_gradients = [
-        t.grad if isinstance(t, md.Tensor) else None for t in input_tensors
+        t.grad if isinstance(t, md.Tensor) else None for t in copied_input_tensors
     ]
+
     return manual_gradients, automatic_gradients
