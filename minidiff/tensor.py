@@ -35,11 +35,23 @@ class no_grad:
         set_allow_grad(self.prev)
 
 
+class enable_grad:
+    def __init__(self, enable: py_bool):
+        self.enable = enable
+
+    def __enter__(self):
+        self.prev = _allow_grad.get()
+        set_allow_grad(self.enable)
+
+    def __exit__(self, type, value, traceback):
+        set_allow_grad(self.prev)
+
+
 def set_allow_grad(allow):
     _allow_grad.set(allow)
 
 
-def grad_allowed_():
+def grad_allowed_() -> py_bool:
     return _allow_grad.get()
 
 
@@ -73,9 +85,6 @@ class Tensor:
         self.graphed = False
         # don't store gradients unless we are user-created.
         self.grad = None
-        # self.grad = (
-        #     zeros_like(self, allow_grad=False) if self.is_leaf and allow_grad else None
-        # )
 
     @property
     def func_node(self) -> FuncNode:
@@ -102,13 +111,10 @@ class Tensor:
         if self._allow_grad == allow_grad:
             return
 
-        # any tensors who don't allow gradient-tracking don't track their gradients.
-        # intermediate non-leaf tensors do not have gradients because we don't care
+        # reset the gradient either way the state changes:
+        # if we're enabling grad tracking then this should essentially do nothing
+        # if we're disabling grad tracking this wipes the previous gradient from memory
         self.grad = None
-        # if not allow_grad or not self.is_leaf:
-        #     self.grad = None
-        # else:
-        #     self.grad = zeros_like(self, allow_grad=False)
 
         self._allow_grad = allow_grad
 
@@ -184,38 +190,37 @@ class Tensor:
         if reset_grads:
             for tensor in traversal_path:
                 tensor.grad = None
-                # if not tensor.is_leaf:
-                #     tensor.grad = None
-                #     continue
-                # tensor.grad = md.zeros_like(tensor, allow_grad=allow_higher_order)
 
-        self.grad = ones_like(self, allow_grad=allow_higher_order)
+        self.grad = ones_like(self)
 
-        for tensor in reversed(traversal_path):
-            # leaf tensors don't have any input tensors to update, so skip
-            if tensor.is_leaf:
-                continue
-            n = tensor.func_node
-            if allow_higher_order:
-                tensor.grad.allow_grad = True
-
-            n.update_grads(tensor.grad)
-            # we're only temporarily storing grads, so we need to remove any references when
-            # we're done for the sake of memory
-            if not retain_grads:
-                tensor.grad = None
-            if not retain_graph:
-                tensor.wipe()
+        with enable_grad(allow_higher_order):
+            for tensor in reversed(traversal_path):
+                # leaf tensors don't have any input tensors to update, so skip
+                if tensor.is_leaf:
+                    continue
+                # this should never be None since the final gradient (self's gradient) is manually set to ones
+                # first iteration updates input tensors who now have non-None grads too
+                # this continues for their input tensors, and those tensor's inputs, and so on and so forth
+                grad = tensor.grad
+                grad.allow_grad = allow_higher_order
+                node = tensor.func_node
+                node.update_grads(grad)
+                # we're only temporarily storing grads
+                # so we need to remove any references when we're done to save memory
+                if not retain_grads:
+                    tensor.grad = None
+                # this prevents memory leaks from storing intermediate gradients in memory somewhere
+                if not retain_graph:
+                    tensor.wipe()
 
     # destroy our portion of the graph
     def wipe(self):
         self.graphed = False
         self._func_node = None
 
-    # returns a copy that does not track gradients
+    # returns a view that does not have gradient history
     def detach(self, allow_grad: py_bool = False) -> Tensor:
-        detached = Tensor(self._data.copy(), allow_grad=allow_grad)
-        return detached
+        return Tensor(self._data, allow_grad=allow_grad)
 
     def ravel(self, order="C"):
         return md.ravel(self, order=order)
@@ -265,14 +270,17 @@ class Tensor:
     def _allow_mutation(self):
         return not (self.allow_grad and md.grad_allowed_() and self.graphed)
 
-    def __matmul__(self, other: Tensor) -> Tensor:
-        return md.matmul(self, other)
-
-    def __imatmul__(self, other: Tensor) -> Tensor:
+    def _validate_mutation(self):
         if not self._allow_mutation():
             raise ValueError(
                 "in-place operations are not allowed while tracking gradients"
             )
+
+    def __matmul__(self, other: Tensor) -> Tensor:
+        return md.matmul(self, other)
+
+    def __imatmul__(self, other: Tensor) -> Tensor:
+        self._validate_mutation()
 
         self._data = self._data @ other._data
         return self
@@ -284,10 +292,7 @@ class Tensor:
         return md.add(other, self)
 
     def __iadd__(self, other: mdt.TensorLike) -> Tensor:
-        if not self._allow_mutation():
-            raise ValueError(
-                "in-place operations are not allowed while tracking gradients"
-            )
+        self._validate_mutation()
 
         self._data += other._data if isinstance(other, Tensor) else other
 
@@ -300,10 +305,7 @@ class Tensor:
         return md.subtract(other, self)
 
     def __isub__(self, other: mdt.TensorLike) -> Tensor:
-        if not self._allow_mutation():
-            raise ValueError(
-                "in-place operations are not allowed while tracking gradients"
-            )
+        self._validate_mutation()
 
         self._data -= other._data if isinstance(other, Tensor) else other
 
@@ -316,10 +318,7 @@ class Tensor:
         return md.multiply(other, self)
 
     def __imul__(self, other: mdt.TensorLike) -> Tensor:
-        if not self._allow_mutation():
-            raise ValueError(
-                "in-place operations are not allowed while tracking gradients"
-            )
+        self._validate_mutation()
 
         self._data *= other._data if isinstance(other, Tensor) else other
 
@@ -332,10 +331,7 @@ class Tensor:
         return md.true_divide(other, self)
 
     def __itruediv__(self, other: mdt.TensorLike) -> Tensor:
-        if not self._allow_mutation():
-            raise ValueError(
-                "in-place operations are not allowed while tracking gradients"
-            )
+        self._validate_mutation()
 
         self._data /= other._data if isinstance(other, Tensor) else other
 
@@ -348,10 +344,7 @@ class Tensor:
         return md.floor_divide(other, self)
 
     def __ifloordiv__(self, other: mdt.TensorLike) -> Tensor:
-        if not self._allow_mutation():
-            raise ValueError(
-                "in-place operations are not allowed while tracking gradients"
-            )
+        self._validate_mutation()
 
         self._data //= other._data if isinstance(other, Tensor) else other
 
@@ -364,10 +357,7 @@ class Tensor:
         return md.power(other, self)
 
     def __ipow__(self, other: mdt.TensorLike) -> Tensor:
-        if not self._allow_mutation():
-            raise ValueError(
-                "in-place operations are not allowed while tracking gradients"
-            )
+        self._validate_mutation()
 
         self._data **= other._data if isinstance(other, Tensor) else other
 
@@ -386,10 +376,7 @@ class Tensor:
         return md.getitem(self, key)
 
     def __setitem__(self, key: Any, val: mdt.TensorLike):
-        if not self._allow_mutation():
-            raise ValueError(
-                "in-place operations are not allowed while tracking gradients"
-            )
+        self._validate_mutation()
 
         self._data[key] = val._data if isinstance(val, Tensor) else val
 
@@ -429,13 +416,12 @@ class Tensor:
     # numpy array specification requirements:
     @property
     def __array_interface__(self) -> Dict[str, Any]:
-        print("called")
         return self._data.__array_interface__
 
     def __array__(
         self, dtype: Optional[np.dtype] = None, copy: Optional[py_bool] = None
     ) -> npt.NDArray:
-        if dtype is not None and dtype != self.dtype:
+        if dtype != self._data.dtype:
             if not copy:
                 raise ValueError("attempted cast, but copies are not permitted")
             return self._data.astype(dtype=dtype)

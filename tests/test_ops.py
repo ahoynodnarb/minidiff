@@ -9,7 +9,7 @@ import minidiff as md
 from minidiff.utils import compute_grads
 
 if TYPE_CHECKING:
-    from typing import Any, Dict, List, Optional
+    from typing import Any, Dict, Optional, Sequence
 
     import minidiff.typing as mdt
 
@@ -17,13 +17,13 @@ if TYPE_CHECKING:
 def perform_test(
     func: mdt.GenericFunc,
     backend_func: mdt.GenericFunc,
-    args: List[Any],
+    args: Sequence[Any],
     kwargs: Dict[str, Any],
     forward_rtol: float = 1e-05,
     forward_atol: float = 1e-08,
     backward_rtol: float = 1e-02,
     backward_atol: float = 1e-05,
-    exclude: Optional[List[md.Tensor]] = None,
+    exclude: Optional[Sequence[md.Tensor]] = None,
 ):
     out = func(*args, **kwargs)._data
     comp = backend_func(*args, **kwargs)
