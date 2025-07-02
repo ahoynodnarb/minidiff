@@ -138,6 +138,10 @@ def calculate_finite_differences(
 def compute_grads(
     *input_tensors: md.Tensor, func: mdt.GenericOp
 ) -> Tuple[List[md.Tensor], List[md.Tensor]]:
+    input_tensors = [
+        x.detach(allow_grad=True) if isinstance(x, md.Tensor) else x
+        for x in input_tensors
+    ]
     manual_gradients = calculate_finite_differences(*input_tensors, func=func)
     computed = func(*input_tensors)
     computed.backward()

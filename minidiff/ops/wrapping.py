@@ -213,6 +213,9 @@ def create_stateless_op_func(
             # stateless op grads need inputs, grads, and kwargs, but the internal engine only provides grads
             # so create a wrapper that just automatically feeds those stored inputs and kwargs alongside grads
             def make_wrapped(grad_func):
+                if grad_func is None:
+                    return None
+
                 def wrapped_func(grad):
                     return grad_func(*self.func_args, grad, **backward_kwargs)
 
