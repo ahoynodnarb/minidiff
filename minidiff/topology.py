@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 import minidiff as md
 
 if TYPE_CHECKING:
-    from typing import Any, List, Optional
+    from typing import Any, Dict, Sequence, Optional
 
     import minidiff.typing as mdt
 
@@ -13,14 +13,36 @@ if TYPE_CHECKING:
 class FuncNode:
     def __init__(
         self,
-        op_inputs: List[Any],
-        grad_functions: List[Optional[mdt.GenericOpGrad]],
+        grad_functions: Sequence[Optional[mdt.GenericOpGrad]],
+        op_inputs: Sequence[Any],
+        op_kwargs: Optional[Dict[str, Any]] = None,
+        op_name: Optional[str] = None,
+        propagate_kwargs: bool = False,
     ):
-        self.op_inputs = op_inputs
-        self.input_tensors = [x for x in self.op_inputs if isinstance(x, md.Tensor)]
         self.grad_functions = grad_functions
 
-        self.op_name = None
+        self.op_inputs = op_inputs
+
+        if op_kwargs is None:
+            op_kwargs = {}
+        self.op_kwargs = op_kwargs
+
+        if op_name is None:
+            op_name = ""
+        self.op_name = op_name
+
+        self.propagate_kwargs = propagate_kwargs
+
+        self._input_tensors = None
+
+    @property
+    def input_tensors(self):
+        if self._input_tensors is None:
+            self._input_tensors = [
+                x for x in self.op_inputs if isinstance(x, md.Tensor)
+            ]
+
+        return self._input_tensors
 
     # this accumulates gradients for the input tensors through chain rule (reverse-mode)
     def update_grads(self, grad: md.Tensor):
@@ -33,7 +55,9 @@ class FuncNode:
                 continue
             if grad_function is None:
                 continue
-            grad_computation = grad_function(grad)
+
+            kwargs = self.op_kwargs if self.propagate_kwargs else {}
+            grad_computation = grad_function(*self.op_inputs, grad, **kwargs)
             # if broadcasting occured during the forward pass, we need to collect gradients
             # back in the backward pass so that the gradients are correctly distributed
             collected_grad = md.unbroadcast(grad_computation, op_input.shape)

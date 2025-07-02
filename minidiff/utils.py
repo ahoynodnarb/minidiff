@@ -8,7 +8,7 @@ import graphviz
 import minidiff as md
 
 if TYPE_CHECKING:
-    from typing import Dict, List, Optional, Tuple
+    from typing import Any, Dict, List, Optional, Sequence, Tuple
 
     import minidiff.typing as mdt
 
@@ -104,7 +104,7 @@ def calculate_finite_differences(
     *input_tensors: md.Tensor,
     func: mdt.GenericOp,
     h: float = 1e-7,
-    exclude: Optional[List[md.Tensor]] = None,
+    exclude: Optional[Sequence[md.Tensor]] = None,
 ) -> List[md.Tensor]:
     manual_gradients = []
     if exclude is None:
@@ -126,11 +126,11 @@ def calculate_finite_differences(
             flattened_grad = md.zeros_like(flattened_input_tensor)
             # this is the same as (f(x + h) - f(x - h)) / (2 * h), which is the definition of the derivative
             for x in range(input_tensor.size):
-                shifted_left = flattened_input_tensor.detach()
+                shifted_left = flattened_input_tensor.copy()
                 shifted_left[x] += h
                 shifted_left = shifted_left.reshape(input_tensor.shape)
 
-                shifted_right = flattened_input_tensor.detach()
+                shifted_right = flattened_input_tensor.copy()
                 shifted_right[x] -= h
                 shifted_right = shifted_right.reshape(input_tensor.shape)
 
@@ -150,7 +150,7 @@ def compute_grads(
     *input_tensors: md.Tensor,
     func: mdt.GenericOp,
     h: float = 1e-7,
-    exclude: Optional[List[md.Tensor]] = None,
+    exclude: Optional[Sequence[md.Tensor]] = None,
 ) -> Tuple[List[md.Tensor], List[md.Tensor]]:
     if exclude is None:
         exclude = []
@@ -160,7 +160,7 @@ def compute_grads(
     copied_exclude = []
 
     for t in input_tensors:
-        copied = t.detach(allow_grad=True) if isinstance(t, md.Tensor) else deepcopy(t)
+        copied = t.copy() if isinstance(t, md.Tensor) else deepcopy(t)
         copied_input_tensors.append(copied)
         if id(t) in excluded_ids:
             copied_exclude.append(copied)
@@ -176,3 +176,10 @@ def compute_grads(
     ]
 
     return manual_gradients, automatic_gradients
+
+
+def try_unwrap(t: Any):
+    try:
+        return t._data
+    except AttributeError:
+        return t

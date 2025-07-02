@@ -5,6 +5,7 @@ from builtins import bool as py_bool
 from typing import TYPE_CHECKING
 
 import minidiff as md
+from minidiff.utils import try_unwrap
 
 try:
     import cupy as np  # type: ignore
@@ -35,11 +36,23 @@ class no_grad:
         set_allow_grad(self.prev)
 
 
+class enable_grad:
+    def __init__(self, enable: py_bool):
+        self.enable = enable
+
+    def __enter__(self):
+        self.prev = _allow_grad.get()
+        set_allow_grad(self.enable)
+
+    def __exit__(self, type, value, traceback):
+        set_allow_grad(self.prev)
+
+
 def set_allow_grad(allow):
     _allow_grad.set(allow)
 
 
-def grad_allowed_():
+def grad_allowed_() -> py_bool:
     return _allow_grad.get()
 
 
@@ -72,9 +85,7 @@ class Tensor:
         # graphed means we are used in a gradient-tracked computation.
         self.graphed = False
         # don't store gradients unless we are user-created.
-        self.grad = (
-            zeros_like(self, allow_grad=False) if self.is_leaf and allow_grad else None
-        )
+        self.grad = None
 
     @property
     def func_node(self) -> FuncNode:
@@ -101,12 +112,10 @@ class Tensor:
         if self._allow_grad == allow_grad:
             return
 
-        # any tensors who don't allow gradient-tracking don't track their gradients.
-        # intermediate non-leaf tensors do not have gradients because we don't care
-        if not allow_grad or not self.is_leaf:
-            self.grad = None
-        else:
-            self.grad = zeros_like(self, allow_grad=False)
+        # reset the gradient either way the state changes:
+        # if we're enabling grad tracking then this should essentially do nothing
+        # if we're disabling grad tracking this wipes the previous gradient from memory
+        self.grad = None
 
         self._allow_grad = allow_grad
 
@@ -181,38 +190,38 @@ class Tensor:
 
         if reset_grads:
             for tensor in traversal_path:
-                if not tensor.is_leaf:
-                    tensor.grad = None
-                    continue
-                tensor.grad = md.zeros_like(tensor.grad, allow_grad=allow_higher_order)
-
-        self.grad = ones_like(self, allow_grad=allow_higher_order)
-
-        for tensor in reversed(traversal_path):
-            # leaf tensors don't have any input tensors to update, so skip
-            if tensor.is_leaf:
-                continue
-            n = tensor.func_node
-            if allow_higher_order:
-                tensor.grad.allow_grad = True
-
-            n.update_grads(tensor.grad)
-            # we're only temporarily storing grads, so we need to remove any references when
-            # we're done for the sake of memory
-            if not retain_grads:
                 tensor.grad = None
-            if not retain_graph:
-                tensor.wipe()
+
+        self.grad = ones_like(self)
+
+        with enable_grad(allow_higher_order):
+            for tensor in reversed(traversal_path):
+                # leaf tensors don't have any input tensors to update, so skip
+                if tensor.is_leaf:
+                    continue
+                # this should never be None since the final gradient (self's gradient) is manually set to ones
+                # first iteration updates input tensors who now have non-None grads too
+                # this continues for their input tensors, and those tensor's inputs, and so on and so forth
+                grad = tensor.grad
+                grad.allow_grad = allow_higher_order
+                node = tensor.func_node
+                node.update_grads(grad)
+                # we're only temporarily storing grads
+                # so we need to remove any references when we're done to save memory
+                if not retain_grads:
+                    tensor.grad = None
+                # this prevents memory leaks from storing intermediate gradients in memory somewhere
+                if not retain_graph:
+                    tensor.wipe()
 
     # destroy our portion of the graph
     def wipe(self):
         self.graphed = False
         self._func_node = None
 
-    # returns a copy that does not track gradients
+    # returns a view that does not have gradient history
     def detach(self, allow_grad: py_bool = False) -> Tensor:
-        detached = Tensor(self._data.copy(), allow_grad=allow_grad)
-        return detached
+        return Tensor(self._data, allow_grad=allow_grad)
 
     def ravel(self, order="C"):
         return md.ravel(self, order=order)
@@ -262,14 +271,17 @@ class Tensor:
     def _allow_mutation(self):
         return not (self.allow_grad and md.grad_allowed_() and self.graphed)
 
-    def __matmul__(self, other: Tensor) -> Tensor:
-        return md.matmul(self, other)
-
-    def __imatmul__(self, other: Tensor) -> Tensor:
+    def _validate_mutation(self):
         if not self._allow_mutation():
             raise ValueError(
                 "in-place operations are not allowed while tracking gradients"
             )
+
+    def __matmul__(self, other: Tensor) -> Tensor:
+        return md.matmul(self, other)
+
+    def __imatmul__(self, other: Tensor) -> Tensor:
+        self._validate_mutation()
 
         self._data = self._data @ other._data
         return self
@@ -281,12 +293,9 @@ class Tensor:
         return md.add(other, self)
 
     def __iadd__(self, other: mdt.TensorLike) -> Tensor:
-        if not self._allow_mutation():
-            raise ValueError(
-                "in-place operations are not allowed while tracking gradients"
-            )
+        self._validate_mutation()
 
-        self._data += other._data if isinstance(other, Tensor) else other
+        self._data += try_unwrap(other)
 
         return self
 
@@ -297,12 +306,9 @@ class Tensor:
         return md.subtract(other, self)
 
     def __isub__(self, other: mdt.TensorLike) -> Tensor:
-        if not self._allow_mutation():
-            raise ValueError(
-                "in-place operations are not allowed while tracking gradients"
-            )
+        self._validate_mutation()
 
-        self._data -= other._data if isinstance(other, Tensor) else other
+        self._data -= try_unwrap(other)
 
         return self
 
@@ -313,12 +319,9 @@ class Tensor:
         return md.multiply(other, self)
 
     def __imul__(self, other: mdt.TensorLike) -> Tensor:
-        if not self._allow_mutation():
-            raise ValueError(
-                "in-place operations are not allowed while tracking gradients"
-            )
+        self._validate_mutation()
 
-        self._data *= other._data if isinstance(other, Tensor) else other
+        self._data *= try_unwrap(other)
 
         return self
 
@@ -329,12 +332,9 @@ class Tensor:
         return md.true_divide(other, self)
 
     def __itruediv__(self, other: mdt.TensorLike) -> Tensor:
-        if not self._allow_mutation():
-            raise ValueError(
-                "in-place operations are not allowed while tracking gradients"
-            )
+        self._validate_mutation()
 
-        self._data /= other._data if isinstance(other, Tensor) else other
+        self._data /= try_unwrap(other)
 
         return self
 
@@ -345,12 +345,9 @@ class Tensor:
         return md.floor_divide(other, self)
 
     def __ifloordiv__(self, other: mdt.TensorLike) -> Tensor:
-        if not self._allow_mutation():
-            raise ValueError(
-                "in-place operations are not allowed while tracking gradients"
-            )
+        self._validate_mutation()
 
-        self._data //= other._data if isinstance(other, Tensor) else other
+        self._data //= try_unwrap(other)
 
         return self
 
@@ -361,12 +358,9 @@ class Tensor:
         return md.power(other, self)
 
     def __ipow__(self, other: mdt.TensorLike) -> Tensor:
-        if not self._allow_mutation():
-            raise ValueError(
-                "in-place operations are not allowed while tracking gradients"
-            )
+        self._validate_mutation()
 
-        self._data **= other._data if isinstance(other, Tensor) else other
+        self._data **= try_unwrap(other)
 
         return self
 
@@ -383,12 +377,9 @@ class Tensor:
         return md.getitem(self, key)
 
     def __setitem__(self, key: Any, val: mdt.TensorLike):
-        if not self._allow_mutation():
-            raise ValueError(
-                "in-place operations are not allowed while tracking gradients"
-            )
+        self._validate_mutation()
 
-        self._data[key] = val._data if isinstance(val, Tensor) else val
+        self._data[key] = try_unwrap(val)
 
     def __gt__(self, value: mdt.TensorLike) -> Tensor:
         return md.greater(self, value)
@@ -431,7 +422,7 @@ class Tensor:
     def __array__(
         self, dtype: Optional[np.dtype] = None, copy: Optional[py_bool] = None
     ) -> npt.NDArray:
-        if dtype is not None and dtype != self.dtype:
+        if dtype != self._data.dtype:
             if not copy:
                 raise ValueError("attempted cast, but copies are not permitted")
             return self._data.astype(dtype=dtype)
@@ -441,6 +432,8 @@ class Tensor:
 
 
 def ones_like(a: mdt.TensorLike, allow_grad: py_bool = False, **kwargs) -> Tensor:
+    a = try_unwrap(a)
+
     return Tensor(np.ones_like(a, **kwargs), allow_grad=allow_grad)
 
 
@@ -449,6 +442,8 @@ def ones(shape: Sequence[int], allow_grad: py_bool = False, **kwargs) -> Tensor:
 
 
 def zeros_like(a: mdt.TensorLike, allow_grad: py_bool = False, **kwargs) -> Tensor:
+    a = try_unwrap(a)
+
     return Tensor(np.zeros_like(a, **kwargs), allow_grad=allow_grad)
 
 
@@ -459,6 +454,9 @@ def zeros(shape: Sequence[int], allow_grad: py_bool = False, **kwargs) -> Tensor
 def full_like(
     a: Tensor, x: mdt.TensorLike, allow_grad: py_bool = False, **kwargs
 ) -> Tensor:
+    a = try_unwrap(a)
+    x = try_unwrap(x)
+
     return Tensor(np.full_like(a, x, **kwargs), allow_grad=allow_grad)
 
 
@@ -466,13 +464,20 @@ def full(shape: Sequence[int], allow_grad: py_bool = False, **kwargs) -> Tensor:
     return Tensor(np.full(shape, **kwargs), allow_grad=allow_grad)
 
 
-def isin(element, test_elements, **kwargs):
+def isin(
+    element: mdt.TensorLike, test_elements: List[mdt.TensorLike], **kwargs
+) -> py_bool:
+    element = try_unwrap(element)
+    test_elements = [try_unwrap(x) for x in test_elements]
+
     return np.isin(element, test_elements, **kwargs)
 
 
 def unravel_index(
     indices: mdt.TensorLike, shape: Sequence[int], allow_grad: py_bool = False, **kwargs
 ) -> Tensor:
+    indices = try_unwrap(indices)
+
     return Tensor(np.unravel_index(indices, shape, **kwargs), allow_grad=allow_grad)
 
 
@@ -482,9 +487,10 @@ def take_along_axis(
     axis: Optional[int] = None,
     allow_grad: py_bool = False,
 ) -> Tensor:
-    return Tensor(
-        np.take_along_axis(arr._data, indices._data, axis=axis), allow_grad=allow_grad
-    )
+    arr = arr._data
+    indices = indices._data
+
+    return Tensor(np.take_along_axis(arr, indices, axis=axis), allow_grad=allow_grad)
 
 
 def put_along_axis(
@@ -493,12 +499,11 @@ def put_along_axis(
     values: mdt.TensorLike,
     axis: Optional[int],
 ) -> Tensor:
-    np.put_along_axis(
-        arr._data,
-        indices._data,
-        values._data if isinstance(values, Tensor) else values,
-        axis,
-    )
+    arr = arr._data
+    indices = indices._data
+    values = try_unwrap(values)
+
+    np.put_along_axis(arr, indices, values, axis)
 
 
 def repeat(
@@ -507,12 +512,17 @@ def repeat(
     allow_grad: py_bool = False,
     axis: Optional[int] = None,
 ) -> Tensor:
+    a = try_unwrap(a)
+
     return Tensor(np.repeat(a, repeats, axis=axis), allow_grad=allow_grad)
 
 
 def tile(
     A: mdt.TensorLike, reps: mdt.TensorLike, allow_grad: py_bool = False
 ) -> Tensor:
+    A = try_unwrap(A)
+    reps = try_unwrap(reps)
+
     return Tensor(np.tile(A, reps), allow_grad=allow_grad)
 
 
@@ -520,13 +530,15 @@ def arange(*args: Union[int, float], allow_grad: py_bool = False, **kwargs) -> T
     return Tensor(np.arange(*args, **kwargs), allow_grad=allow_grad)
 
 
-def stack(
-    arrays: Sequence[mdt.TensorLike], allow_grad: py_bool = False, **kwargs
-) -> Tensor:
+def stack(arrays: Sequence[md.Tensor], allow_grad: py_bool = False, **kwargs) -> Tensor:
+    arrays = [x._data for x in arrays]
+
     return Tensor(np.stack(arrays, **kwargs), allow_grad=allow_grad)
 
 
 def save(file, arr: mdt.TensorLike, **kwargs):
+    arr = arr._data
+
     np.save(file, arr._data, **kwargs)
 
 
@@ -535,11 +547,14 @@ def load(file, allow_grad: py_bool = False, **kwargs) -> Tensor:
 
 
 def choice(
-    a: Union[mdt.TensorLike, int],
+    a: Union[int, mdt.TensorLike],
     size: Optional[Union[int, Sequence[int]]] = None,
     replace: py_bool = True,
     p: Optional[mdt.TensorLike] = None,
 ) -> md.Tensor:
+    a = try_unwrap(a)
+    p = try_unwrap(p)
+
     return Tensor(np.random.choice(a, size=size, replace=replace, p=p))
 
 
@@ -548,11 +563,14 @@ def rand(*dims: Optional[int], allow_grad: py_bool = False) -> Tensor:
 
 
 def randint(
-    low: Union[int, Sequence[int]],
-    high: Optional[Union[int, Sequence[int]]] = None,
+    low: Union[int, mdt.TensorLike],
+    high: Optional[Union[int, mdt.TensorLike]] = None,
     size: Optional[Union[int, Sequence[int]]] = None,
     allow_grad: py_bool = False,
 ) -> Tensor:
+    low = try_unwrap(low)
+    high = try_unwrap(high)
+
     return Tensor(np.random.randint(low, high=high, size=size), allow_grad=allow_grad)
 
 
@@ -561,15 +579,20 @@ def randn(*dims: Optional[int], allow_grad: py_bool = False) -> Tensor:
 
 
 def binomial(
-    n: Union[int, mdt.TensorLike[int]],
-    p: Union[float, mdt.TensorLike[float]],
-    size: Tuple[int] = None,
+    n: Union[int, Tensor[int]],
+    p: Union[float, Tensor[float]],
+    size: Optional[Tuple[int]] = None,
     allow_grad: py_bool = False,
 ) -> Tensor:
+    n = try_unwrap(n)
+    p = try_unwrap(p)
+
     return Tensor(np.random.binomial(n, p, size=size), allow_grad=allow_grad)
 
 
-def permutation(x: mdt.TensorLike, allow_grad: py_bool = False) -> Tensor:
+def permutation(x: Union[int, Tensor], allow_grad: py_bool = False) -> Tensor:
+    x = try_unwrap(x)
+
     return Tensor(np.random.permutation(x), allow_grad=allow_grad)
 
 
@@ -578,15 +601,20 @@ def shuffle(x: Tensor):
 
 
 def split(
-    ary: mdt.TensorLike,
+    ary: md.Tensor,
     indices_or_sections: Union[int, Sequence[int]],
     axis: int = 0,
     allow_grad: py_bool = False,
 ) -> md.Tensor:
+    ary = ary._data
+    indices_or_sections = try_unwrap(indices_or_sections)
+
     output_np = np.split(ary, indices_or_sections, axis=axis)
     output = [None] * len(output_np)
+
     for i, section in enumerate(output_np):
         output[i] = Tensor(section, allow_grad=allow_grad)
+
     return output
 
 

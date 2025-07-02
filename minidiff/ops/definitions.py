@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from math import prod as py_prod
 from typing import TYPE_CHECKING
 
 try:
@@ -137,6 +138,9 @@ def transpose_grad(
 # if broadcasting happened during the forward pass, you need to correctly
 # sum up the correct dimensions so that the gradients match up
 def unbroadcast_forward(a: md.Tensor, target_shape: Sequence[int]) -> md.Tensor:
+    a = a.detach()
+    if a.shape == target_shape:
+        return a
     # this collects the prepended axes
     # numpy inserts dimensions from the left when broadcasting
     # this just sums across those prepended dimensions
@@ -157,6 +161,9 @@ def unbroadcast_forward(a: md.Tensor, target_shape: Sequence[int]) -> md.Tensor:
         a = a.sum(axis=stretched_axes, keepdims=True)
 
     # final reshape operation that can upsample if necessary
+    if a.size == py_prod(target_shape):
+        return a.reshape(target_shape)
+
     return md.broadcast_to(a, target_shape)
 
 
