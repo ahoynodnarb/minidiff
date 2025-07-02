@@ -5,6 +5,7 @@ from builtins import bool as py_bool
 from typing import TYPE_CHECKING
 
 import minidiff as md
+from minidiff.utils import try_unwrap
 
 try:
     import cupy as np  # type: ignore
@@ -294,7 +295,7 @@ class Tensor:
     def __iadd__(self, other: mdt.TensorLike) -> Tensor:
         self._validate_mutation()
 
-        self._data += other._data if isinstance(other, Tensor) else other
+        self._data += try_unwrap(other)
 
         return self
 
@@ -307,7 +308,7 @@ class Tensor:
     def __isub__(self, other: mdt.TensorLike) -> Tensor:
         self._validate_mutation()
 
-        self._data -= other._data if isinstance(other, Tensor) else other
+        self._data -= try_unwrap(other)
 
         return self
 
@@ -320,7 +321,7 @@ class Tensor:
     def __imul__(self, other: mdt.TensorLike) -> Tensor:
         self._validate_mutation()
 
-        self._data *= other._data if isinstance(other, Tensor) else other
+        self._data *= try_unwrap(other)
 
         return self
 
@@ -333,7 +334,7 @@ class Tensor:
     def __itruediv__(self, other: mdt.TensorLike) -> Tensor:
         self._validate_mutation()
 
-        self._data /= other._data if isinstance(other, Tensor) else other
+        self._data /= try_unwrap(other)
 
         return self
 
@@ -346,7 +347,7 @@ class Tensor:
     def __ifloordiv__(self, other: mdt.TensorLike) -> Tensor:
         self._validate_mutation()
 
-        self._data //= other._data if isinstance(other, Tensor) else other
+        self._data //= try_unwrap(other)
 
         return self
 
@@ -359,7 +360,7 @@ class Tensor:
     def __ipow__(self, other: mdt.TensorLike) -> Tensor:
         self._validate_mutation()
 
-        self._data **= other._data if isinstance(other, Tensor) else other
+        self._data **= try_unwrap(other)
 
         return self
 
@@ -378,7 +379,7 @@ class Tensor:
     def __setitem__(self, key: Any, val: mdt.TensorLike):
         self._validate_mutation()
 
-        self._data[key] = val._data if isinstance(val, Tensor) else val
+        self._data[key] = try_unwrap(val)
 
     def __gt__(self, value: mdt.TensorLike) -> Tensor:
         return md.greater(self, value)
@@ -431,7 +432,9 @@ class Tensor:
 
 
 def ones_like(a: mdt.TensorLike, allow_grad: py_bool = False, **kwargs) -> Tensor:
-    return Tensor(np.ones_like(a._data, **kwargs), allow_grad=allow_grad)
+    a = try_unwrap(a)
+
+    return Tensor(np.ones_like(a, **kwargs), allow_grad=allow_grad)
 
 
 def ones(shape: Sequence[int], allow_grad: py_bool = False, **kwargs) -> Tensor:
@@ -439,7 +442,9 @@ def ones(shape: Sequence[int], allow_grad: py_bool = False, **kwargs) -> Tensor:
 
 
 def zeros_like(a: mdt.TensorLike, allow_grad: py_bool = False, **kwargs) -> Tensor:
-    return Tensor(np.zeros_like(a._data, **kwargs), allow_grad=allow_grad)
+    a = try_unwrap(a)
+
+    return Tensor(np.zeros_like(a, **kwargs), allow_grad=allow_grad)
 
 
 def zeros(shape: Sequence[int], allow_grad: py_bool = False, **kwargs) -> Tensor:
@@ -449,20 +454,30 @@ def zeros(shape: Sequence[int], allow_grad: py_bool = False, **kwargs) -> Tensor
 def full_like(
     a: Tensor, x: mdt.TensorLike, allow_grad: py_bool = False, **kwargs
 ) -> Tensor:
-    return Tensor(np.full_like(a._data, x, **kwargs), allow_grad=allow_grad)
+    a = try_unwrap(a)
+    x = try_unwrap(x)
+
+    return Tensor(np.full_like(a, x, **kwargs), allow_grad=allow_grad)
 
 
 def full(shape: Sequence[int], allow_grad: py_bool = False, **kwargs) -> Tensor:
     return Tensor(np.full(shape, **kwargs), allow_grad=allow_grad)
 
 
-def isin(element, test_elements, **kwargs):
+def isin(
+    element: mdt.TensorLike, test_elements: List[mdt.TensorLike], **kwargs
+) -> py_bool:
+    element = try_unwrap(element)
+    test_elements = [try_unwrap(x) for x in test_elements]
+
     return np.isin(element, test_elements, **kwargs)
 
 
 def unravel_index(
     indices: mdt.TensorLike, shape: Sequence[int], allow_grad: py_bool = False, **kwargs
 ) -> Tensor:
+    indices = try_unwrap(indices)
+
     return Tensor(np.unravel_index(indices, shape, **kwargs), allow_grad=allow_grad)
 
 
@@ -472,9 +487,10 @@ def take_along_axis(
     axis: Optional[int] = None,
     allow_grad: py_bool = False,
 ) -> Tensor:
-    return Tensor(
-        np.take_along_axis(arr._data, indices._data, axis=axis), allow_grad=allow_grad
-    )
+    arr = arr._data
+    indices = indices._data
+
+    return Tensor(np.take_along_axis(arr, indices, axis=axis), allow_grad=allow_grad)
 
 
 def put_along_axis(
@@ -483,12 +499,11 @@ def put_along_axis(
     values: mdt.TensorLike,
     axis: Optional[int],
 ) -> Tensor:
-    np.put_along_axis(
-        arr._data,
-        indices._data,
-        values._data if isinstance(values, Tensor) else values,
-        axis,
-    )
+    arr = arr._data
+    indices = indices._data
+    values = try_unwrap(values)
+
+    np.put_along_axis(arr, indices, values, axis)
 
 
 def repeat(
@@ -497,12 +512,17 @@ def repeat(
     allow_grad: py_bool = False,
     axis: Optional[int] = None,
 ) -> Tensor:
+    a = try_unwrap(a)
+
     return Tensor(np.repeat(a, repeats, axis=axis), allow_grad=allow_grad)
 
 
 def tile(
     A: mdt.TensorLike, reps: mdt.TensorLike, allow_grad: py_bool = False
 ) -> Tensor:
+    A = try_unwrap(A)
+    reps = try_unwrap(reps)
+
     return Tensor(np.tile(A, reps), allow_grad=allow_grad)
 
 
@@ -510,13 +530,15 @@ def arange(*args: Union[int, float], allow_grad: py_bool = False, **kwargs) -> T
     return Tensor(np.arange(*args, **kwargs), allow_grad=allow_grad)
 
 
-def stack(
-    arrays: Sequence[mdt.TensorLike], allow_grad: py_bool = False, **kwargs
-) -> Tensor:
+def stack(arrays: Sequence[md.Tensor], allow_grad: py_bool = False, **kwargs) -> Tensor:
+    arrays = [x._data for x in arrays]
+
     return Tensor(np.stack(arrays, **kwargs), allow_grad=allow_grad)
 
 
 def save(file, arr: mdt.TensorLike, **kwargs):
+    arr = arr._data
+
     np.save(file, arr._data, **kwargs)
 
 
@@ -525,11 +547,14 @@ def load(file, allow_grad: py_bool = False, **kwargs) -> Tensor:
 
 
 def choice(
-    a: Union[mdt.TensorLike, int],
+    a: Union[int, mdt.TensorLike],
     size: Optional[Union[int, Sequence[int]]] = None,
     replace: py_bool = True,
     p: Optional[mdt.TensorLike] = None,
 ) -> md.Tensor:
+    a = try_unwrap(a)
+    p = try_unwrap(p)
+
     return Tensor(np.random.choice(a, size=size, replace=replace, p=p))
 
 
@@ -538,11 +563,14 @@ def rand(*dims: Optional[int], allow_grad: py_bool = False) -> Tensor:
 
 
 def randint(
-    low: Union[int, Sequence[int]],
-    high: Optional[Union[int, Sequence[int]]] = None,
+    low: Union[int, mdt.TensorLike],
+    high: Optional[Union[int, mdt.TensorLike]] = None,
     size: Optional[Union[int, Sequence[int]]] = None,
     allow_grad: py_bool = False,
 ) -> Tensor:
+    low = try_unwrap(low)
+    high = try_unwrap(high)
+
     return Tensor(np.random.randint(low, high=high, size=size), allow_grad=allow_grad)
 
 
@@ -551,15 +579,20 @@ def randn(*dims: Optional[int], allow_grad: py_bool = False) -> Tensor:
 
 
 def binomial(
-    n: Union[int, mdt.TensorLike[int]],
-    p: Union[float, mdt.TensorLike[float]],
-    size: Tuple[int] = None,
+    n: Union[int, Tensor[int]],
+    p: Union[float, Tensor[float]],
+    size: Optional[Tuple[int]] = None,
     allow_grad: py_bool = False,
 ) -> Tensor:
+    n = try_unwrap(n)
+    p = try_unwrap(p)
+
     return Tensor(np.random.binomial(n, p, size=size), allow_grad=allow_grad)
 
 
-def permutation(x: mdt.TensorLike, allow_grad: py_bool = False) -> Tensor:
+def permutation(x: Union[int, Tensor], allow_grad: py_bool = False) -> Tensor:
+    x = try_unwrap(x)
+
     return Tensor(np.random.permutation(x), allow_grad=allow_grad)
 
 
@@ -568,15 +601,20 @@ def shuffle(x: Tensor):
 
 
 def split(
-    ary: mdt.TensorLike,
+    ary: md.Tensor,
     indices_or_sections: Union[int, Sequence[int]],
     axis: int = 0,
     allow_grad: py_bool = False,
 ) -> md.Tensor:
+    ary = ary._data
+    indices_or_sections = try_unwrap(indices_or_sections)
+
     output_np = np.split(ary, indices_or_sections, axis=axis)
     output = [None] * len(output_np)
+
     for i, section in enumerate(output_np):
         output[i] = Tensor(section, allow_grad=allow_grad)
+
     return output
 
 

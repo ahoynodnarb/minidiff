@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 import minidiff as md
 from minidiff.topology import FuncNode
+from minidiff.utils import try_unwrap
 
 if TYPE_CHECKING:
     from typing import Any, Callable, Optional, ParamSpec, Sequence
@@ -17,6 +18,7 @@ def _should_allow_grad(op_inputs: Sequence[Any]):
     for x in op_inputs:
         if isinstance(x, md.Tensor) and x.allow_grad:
             return True
+
     return False
 
 
@@ -79,7 +81,7 @@ def op_func(
     **kwargs,
 ) -> Callable[[Callable[P, md.Tensor]], Callable[P, md.Tensor]]:
     def wrapper(func: Callable[P, md.Tensor]) -> Callable[P, md.Tensor]:
-        return create_stateless_op_func(forward_func=func, **kwargs)
+        return create_op_func(forward_func=func, **kwargs)
 
     return wrapper
 
@@ -116,11 +118,8 @@ def as_minidiff(func: Callable[..., Any]) -> Callable[..., md.Tensor]:
     def wrapper(*args, **kwargs):
         allow_grad = _should_allow_grad(args)
 
-        wrapped_args = [x._data if isinstance(x, md.Tensor) else x for x in args]
-        wrapped_kwargs = {
-            key: (val._data if isinstance(val, md.Tensor) else val)
-            for key, val in kwargs.items()
-        }
+        wrapped_args = [try_unwrap(x) for x in args]
+        wrapped_kwargs = {key: try_unwrap(val) for key, val in kwargs.items()}
 
         output = func(*wrapped_args, **wrapped_kwargs)
         as_tensor = md.Tensor(output, allow_grad=allow_grad)
@@ -183,41 +182,6 @@ def create_op_func(
     return minidiff_func
 
 
-# for ops who don't need to be a class (i.e. don't manage their own state)
-def create_stateless_op_func(
-    forward_func: Callable[P, md.Tensor],
-    grad_funcs: Sequence[Optional[mdt.GenericOpGrad]],
-    **kwargs,
-) -> Callable[P, md.Tensor]:
-    return create_op_func(forward_func, grad_funcs, **kwargs)
-    # class StatelessOpClass(OpClass):
-    #     def __init__(self, *func_args, **func_kwargs):
-    #         self.func_args = func_args
-    #         self.func_kwargs = func_kwargs
-
-    #     def create_forward(self) -> mdt.GenericFunc:
-    #         def forward():
-    #             return forward_func(*self.func_args, **self.func_kwargs)
-
-    #         return forward
-
-    #     def create_grads(self) -> Sequence[Optional[mdt.GenericOpGrad]]:
-    #         backward_kwargs = self.func_kwargs if propagate_kwargs else {}
-
-    #         # stateless op grads need inputs, grads, and kwargs, but the internal engine only provides grads
-    #         # so create a wrapper that just automatically feeds those stored inputs and kwargs alongside grads
-    #         wrapped_grad_funcs = _wrap_grad_funcs(
-    #             grad_funcs, self.func_args, backward_kwargs
-    #         )
-
-    #         return wrapped_grad_funcs
-
-    # if "op_name" not in kwargs:
-    #     kwargs = dict(kwargs, op_name=forward_func.__name__)
-
-    # return create_op_func(op_class=StatelessOpClass, **kwargs)
-
-
 # single argument
 def create_unary_op_func(
     forward_func: Callable[P, md.Tensor],
@@ -225,9 +189,7 @@ def create_unary_op_func(
     **kwargs,
 ) -> Callable[P, md.Tensor]:
     kwargs = dict(kwargs, tensor_only=True)
-    return create_stateless_op_func(
-        forward_func=forward_func, grad_funcs=[grad], **kwargs
-    )
+    return create_op_func(forward_func=forward_func, grad_funcs=[grad], **kwargs)
 
 
 # two arguments
@@ -237,7 +199,7 @@ def create_binary_op_func(
     grad_b: Optional[mdt.BinaryOpGrad] = None,
     **kwargs,
 ) -> Callable[P, md.Tensor]:
-    return create_stateless_op_func(
+    return create_op_func(
         forward_func=forward_func, grad_funcs=[grad_a, grad_b], **kwargs
     )
 
@@ -250,7 +212,7 @@ def create_ternary_op_func(
     grad_c: Optional[mdt.TernaryOpGrad] = None,
     **kwargs,
 ) -> Callable[P, md.Tensor]:
-    return create_stateless_op_func(
+    return create_op_func(
         forward_func=forward_func, grad_funcs=[grad_a, grad_b, grad_c], **kwargs
     )
 
@@ -266,7 +228,7 @@ __all__ = [
     "ternary_op_func",
     "as_minidiff",
     "create_op_func",
-    "create_stateless_op_func",
+    "create_op_func",
     "create_unary_op_func",
     "create_binary_op_func",
     "create_ternary_op_func",

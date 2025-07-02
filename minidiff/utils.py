@@ -8,7 +8,7 @@ import graphviz
 import minidiff as md
 
 if TYPE_CHECKING:
-    from typing import Dict, List, Optional, Sequence, Tuple
+    from typing import Any, Dict, List, Optional, Sequence, Tuple
 
     import minidiff.typing as mdt
 
@@ -176,3 +176,10 @@ def compute_grads(
     ]
 
     return manual_gradients, automatic_gradients
+
+
+def try_unwrap(t: Any):
+    try:
+        return t._data
+    except AttributeError:
+        return t

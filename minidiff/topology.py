@@ -41,6 +41,7 @@ class FuncNode:
             self._input_tensors = [
                 x for x in self.op_inputs if isinstance(x, md.Tensor)
             ]
+
         return self._input_tensors
 
     # this accumulates gradients for the input tensors through chain rule (reverse-mode)
