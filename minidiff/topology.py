@@ -17,10 +17,19 @@ class FuncNode:
         grad_functions: List[Optional[mdt.GenericOpGrad]],
     ):
         self.op_inputs = op_inputs
-        self.input_tensors = [x for x in self.op_inputs if isinstance(x, md.Tensor)]
+        self._input_tensors = None
+        # self.input_tensors = [x for x in self.op_inputs if isinstance(x, md.Tensor)]
         self.grad_functions = grad_functions
 
         self.op_name = None
+
+    @property
+    def input_tensors(self):
+        if self._input_tensors is None:
+            self._input_tensors = [
+                x for x in self.op_inputs if isinstance(x, md.Tensor)
+            ]
+        return self._input_tensors
 
     # this accumulates gradients for the input tensors through chain rule (reverse-mode)
     def update_grads(self, grad: md.Tensor):

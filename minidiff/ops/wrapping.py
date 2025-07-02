@@ -8,7 +8,7 @@ import minidiff as md
 from minidiff.topology import FuncNode
 
 if TYPE_CHECKING:
-    from typing import Any, Callable, List, Optional, ParamSpec, Sequence
+    from typing import Any, Callable, Optional, ParamSpec, Sequence
 
     P = ParamSpec("P")
 
@@ -87,14 +87,25 @@ def ternary_op_func(
 # the generator functions expect Tensor functions, this just turns numpy-like to Tensor
 def as_minidiff(func: Callable[..., Any]) -> Callable[..., md.Tensor]:
     def wrapper(*args, **kwargs):
-        allow_grad = py_any([isinstance(x, md.Tensor) and x.allow_grad for x in args])
+        # allow_grad = py_any([isinstance(x, md.Tensor) and x.allow_grad for x in args])
+        allow_grad = False
+        for x in args:
+            if isinstance(x, md.Tensor) and x.allow_grad:
+                allow_grad = True
+                break
+
         wrapped_args = [x._data if isinstance(x, md.Tensor) else x for x in args]
+        # print([x._data if isinstance(x, md.Tensor) else x for x in args])
+        # print([x._data.dtype if isinstance(x, md.Tensor) else x for x in args])
         wrapped_kwargs = {
             key: (val._data if isinstance(val, md.Tensor) else val)
             for key, val in kwargs.items()
         }
 
         output = func(*wrapped_args, **wrapped_kwargs)
+        # print(func)
+        # print(output.dtype)
+        # print(output)
         as_tensor = md.Tensor(output, allow_grad=allow_grad)
 
         return as_tensor
@@ -108,32 +119,13 @@ def as_minidiff(func: Callable[..., Any]) -> Callable[..., md.Tensor]:
 
 
 def create_op_func(
-    op_class: Callable[P, None],
+    op_class: Callable[P, OpClass],
     is_differentiable: bool = True,
     tensor_only: bool = False,
     op_name: Optional[str] = None,
 ) -> Callable[P, md.Tensor]:
     if op_name is None:
         op_name = op_class.__name__
-
-    # just sets the func_node property of op_output to the correct FuncNode
-    def create_func_node(
-        grad_funcs: List[mdt.GenericOpGrad], op_inputs: List[Any], op_name: str
-    ) -> md.FuncNode:
-        grads_allowed = [isinstance(x, md.Tensor) and x.allow_grad for x in op_inputs]
-        # obviously tensors who don't want their gradients to be checked have no gradient function
-        filtered_grad_funcs = [
-            grad_func if grad_allowed else None
-            for grad_func, grad_allowed in zip(grad_funcs, grads_allowed)
-        ]
-
-        func_node = FuncNode(
-            op_inputs=op_inputs,
-            grad_functions=filtered_grad_funcs,
-        )
-        func_node.op_name = op_name
-
-        return func_node
 
     # this is the actual op function create_op_func returns
     def minidiff_func(*op_inputs: P.args, **forward_kwargs: P.kwargs) -> md.Tensor:
@@ -148,9 +140,14 @@ def create_op_func(
             raise ValueError("This function only supports minidiff Tensors")
 
         # allow gradient tracking if at least one of the input tensors allows a gradient
-        allow_grad = py_any(
-            [isinstance(x, md.Tensor) and x.allow_grad for x in op_inputs]
-        )
+        allow_grad = False
+        for x in op_inputs:
+            if isinstance(x, md.Tensor) and x.allow_grad:
+                allow_grad = True
+                break
+        # allow_grad = py_any(
+        #     [isinstance(x, md.Tensor) and x.allow_grad for x in op_inputs]
+        # )
 
         instance = op_class(*op_inputs, **forward_kwargs)
         forward_func = instance.create_forward()
@@ -164,19 +161,16 @@ def create_op_func(
             # if the function is not differentiable, we still want to propagate the gradient to avoid breaking the
             # graph, but it is smarter to just zero out the gradients.
             if not is_differentiable:
-                grad_funcs = [
-                    lambda grad: md.zeros_like(grad) for _ in range(len(grad_funcs))
-                ]
+                grad_funcs = [None for _ in range(len(grad_funcs))]
 
-            func_node = create_func_node(
-                grad_funcs=grad_funcs,
+            func_node = FuncNode(
                 op_inputs=op_inputs,
-                op_name=op_name,
+                grad_functions=grad_funcs,
             )
+            func_node.op_name = op_name
 
             output._func_node = func_node
             output.graphed = True
-
             for op_input in op_inputs:
                 if isinstance(op_input, md.Tensor):
                     op_input.graphed = True
@@ -187,6 +181,29 @@ def create_op_func(
     minidiff_func.__qualname__ = f"<op func '{op_name}'>"
 
     return minidiff_func
+
+
+def _wrap_grad_funcs(grad_funcs, func_args, backward_kwargs):
+    # wrapped_grad_funcs = [None] * len(grad_funcs)
+    # for i, grad_func in enumerate(grad_funcs):
+    #     if grad_func is None:
+    #         continue
+    #     wrapped_grad_funcs[i] = lambda grad: grad_func(
+    #         *func_args, grad, **backward_kwargs
+    #     )
+
+    # return wrapped_grad_funcs
+    def make_wrapped(grad_func):
+        def wrapped_func(grad):
+            return grad_func(*func_args, grad, **backward_kwargs)
+
+        return wrapped_func
+
+    wrapped_grads = [
+        None if grad_func is None else make_wrapped(grad_func)
+        for grad_func in grad_funcs
+    ]
+    return wrapped_grads
 
 
 # for ops who don't need to be a class (i.e. don't manage their own state)
@@ -212,18 +229,21 @@ def create_stateless_op_func(
 
             # stateless op grads need inputs, grads, and kwargs, but the internal engine only provides grads
             # so create a wrapper that just automatically feeds those stored inputs and kwargs alongside grads
-            def make_wrapped(grad_func):
-                if grad_func is None:
-                    return None
+            # def make_wrapped(grad_func):
+            #     if grad_func is None:
+            #         return None
 
-                def wrapped_func(grad):
-                    return grad_func(*self.func_args, grad, **backward_kwargs)
+            #     def wrapped_func(grad):
+            #         return grad_func(*self.func_args, grad, **backward_kwargs)
 
-                return wrapped_func
+            #     return wrapped_func
 
-            wrapped_grads = [make_wrapped(grad_func) for grad_func in grad_funcs]
+            # wrapped_grads = [make_wrapped(grad_func) for grad_func in grad_funcs]
+            wrapped_grad_funcs = _wrap_grad_funcs(
+                grad_funcs, self.func_args, backward_kwargs
+            )
 
-            return wrapped_grads
+            return wrapped_grad_funcs
 
     if "op_name" not in kwargs:
         kwargs = dict(kwargs, op_name=forward_func.__name__)

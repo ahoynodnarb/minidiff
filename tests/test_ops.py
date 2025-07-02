@@ -34,9 +34,9 @@ def perform_test(
         return md.sum((expected - actual) ** 2) / 2
 
     mask = ~(np.isnan(out) | np.isnan(comp))
-    assert np.allclose(out[mask], comp[mask], rtol=forward_rtol, atol=forward_atol), (
-        f"❌ Forward Test failed for {func}. Compared against {backend_func}\nminidiff:\n{out}\nnumpy:\n{comp}"
-    )
+    assert np.allclose(
+        out[mask], comp[mask], rtol=forward_rtol, atol=forward_atol
+    ), f"❌ Forward Test failed for {func}. Compared against {backend_func}\nminidiff:\n{out}\nnumpy:\n{comp}"
 
     manual_grads, auto_grads = compute_grads(*args, func=loss_func, exclude=exclude)
     for i, (manual, auto) in enumerate(zip(manual_grads, auto_grads)):
@@ -45,9 +45,7 @@ def perform_test(
         mask = ~(np.isnan(manual) | np.isnan(auto))
         assert np.allclose(
             manual[mask], auto[mask], rtol=backward_rtol, atol=backward_atol
-        ), (
-            f"❌ Gradient Test wrt {i}th parameter failed for {func}. \nmanual gradients:\n{manual}\nautomatic gradients:\n{auto}"
-        )
+        ), f"❌ Gradient Test wrt {i}th parameter failed for {func}. \nmanual gradients:\n{manual}\nautomatic gradients:\n{auto}"
 
 
 def test_ravel():

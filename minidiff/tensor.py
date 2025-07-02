@@ -72,9 +72,10 @@ class Tensor:
         # graphed means we are used in a gradient-tracked computation.
         self.graphed = False
         # don't store gradients unless we are user-created.
-        self.grad = (
-            zeros_like(self, allow_grad=False) if self.is_leaf and allow_grad else None
-        )
+        self.grad = None
+        # self.grad = (
+        #     zeros_like(self, allow_grad=False) if self.is_leaf and allow_grad else None
+        # )
 
     @property
     def func_node(self) -> FuncNode:
@@ -103,10 +104,11 @@ class Tensor:
 
         # any tensors who don't allow gradient-tracking don't track their gradients.
         # intermediate non-leaf tensors do not have gradients because we don't care
-        if not allow_grad or not self.is_leaf:
-            self.grad = None
-        else:
-            self.grad = zeros_like(self, allow_grad=False)
+        self.grad = None
+        # if not allow_grad or not self.is_leaf:
+        #     self.grad = None
+        # else:
+        #     self.grad = zeros_like(self, allow_grad=False)
 
         self._allow_grad = allow_grad
 
@@ -181,10 +183,11 @@ class Tensor:
 
         if reset_grads:
             for tensor in traversal_path:
-                if not tensor.is_leaf:
-                    tensor.grad = None
-                    continue
-                tensor.grad = md.zeros_like(tensor.grad, allow_grad=allow_higher_order)
+                tensor.grad = None
+                # if not tensor.is_leaf:
+                #     tensor.grad = None
+                #     continue
+                # tensor.grad = md.zeros_like(tensor, allow_grad=allow_higher_order)
 
         self.grad = ones_like(self, allow_grad=allow_higher_order)
 
@@ -426,6 +429,7 @@ class Tensor:
     # numpy array specification requirements:
     @property
     def __array_interface__(self) -> Dict[str, Any]:
+        print("called")
         return self._data.__array_interface__
 
     def __array__(
@@ -441,7 +445,7 @@ class Tensor:
 
 
 def ones_like(a: mdt.TensorLike, allow_grad: py_bool = False, **kwargs) -> Tensor:
-    return Tensor(np.ones_like(a, **kwargs), allow_grad=allow_grad)
+    return Tensor(np.ones_like(a._data, **kwargs), allow_grad=allow_grad)
 
 
 def ones(shape: Sequence[int], allow_grad: py_bool = False, **kwargs) -> Tensor:
@@ -449,7 +453,7 @@ def ones(shape: Sequence[int], allow_grad: py_bool = False, **kwargs) -> Tensor:
 
 
 def zeros_like(a: mdt.TensorLike, allow_grad: py_bool = False, **kwargs) -> Tensor:
-    return Tensor(np.zeros_like(a, **kwargs), allow_grad=allow_grad)
+    return Tensor(np.zeros_like(a._data, **kwargs), allow_grad=allow_grad)
 
 
 def zeros(shape: Sequence[int], allow_grad: py_bool = False, **kwargs) -> Tensor:
@@ -459,7 +463,7 @@ def zeros(shape: Sequence[int], allow_grad: py_bool = False, **kwargs) -> Tensor
 def full_like(
     a: Tensor, x: mdt.TensorLike, allow_grad: py_bool = False, **kwargs
 ) -> Tensor:
-    return Tensor(np.full_like(a, x, **kwargs), allow_grad=allow_grad)
+    return Tensor(np.full_like(a._data, x, **kwargs), allow_grad=allow_grad)
 
 
 def full(shape: Sequence[int], allow_grad: py_bool = False, **kwargs) -> Tensor:
