@@ -139,7 +139,7 @@ def transpose_grad(
 # sum up the correct dimensions so that the gradients match up
 def unbroadcast_forward(a: md.Tensor, target_shape: Sequence[int]) -> md.Tensor:
     if a.shape == target_shape:
-        return a.copy()
+        return a.detach()
     # this collects the prepended axes
     # numpy inserts dimensions from the left when broadcasting
     # this just sums across those prepended dimensions
@@ -161,7 +161,7 @@ def unbroadcast_forward(a: md.Tensor, target_shape: Sequence[int]) -> md.Tensor:
 
     # final reshape operation that can upsample if necessary
     if a.size == py_prod(target_shape):
-        return a.reshape(target_shape).copy()
+        return a.reshape(target_shape).detach()
 
     return md.broadcast_to(a, target_shape)
 
