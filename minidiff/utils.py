@@ -119,9 +119,6 @@ def calculate_finite_differences(
             ):
                 manual_gradients.append(None)
                 continue
-            print(input_tensor)
-            print(id(input_tensor))
-            print(excluded_ids)
             # this just computes the gradients from first principles
             left = input_tensors[:i]
             right = input_tensors[i + 1 :]
