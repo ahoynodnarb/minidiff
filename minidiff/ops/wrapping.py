@@ -44,38 +44,6 @@ def _validate_op_inputs(op_inputs: Sequence[Any], tensor_only: bool):
     raise ValueError(error_msg)
 
 
-class OpClass:
-    def create_forward(self) -> mdt.GenericFunc:
-        raise NotImplementedError
-
-    def create_grads(self) -> Sequence[Optional[mdt.GenericOpGrad]]:
-        raise NotImplementedError
-
-
-class UnaryOpClass(OpClass):
-    def create_forward(self) -> mdt.UnaryFunc:
-        raise NotImplementedError
-
-    def create_grads(self) -> Sequence[Optional[mdt.UnaryOpGrad]]:
-        raise NotImplementedError
-
-
-class BinaryOpClass(OpClass):
-    def create_forward(self) -> mdt.BinaryFunc:
-        raise NotImplementedError
-
-    def create_grads(self) -> Sequence[Optional[mdt.BinaryOpGrad]]:
-        raise NotImplementedError
-
-
-class TernaryOpClass(OpClass):
-    def create_forward(self) -> mdt.TernaryFunc:
-        raise NotImplementedError
-
-    def create_grads(self) -> Sequence[Optional[mdt.TernaryOpGrad]]:
-        raise NotImplementedError
-
-
 # decorators which just convert a generic function to an op
 def op_func(
     **kwargs,
