@@ -69,7 +69,6 @@ class Tensor:
         data: npt.ArrayLike,
         allow_grad: py_bool = False,
         dtype: Optional[mdt.dtype] = None,
-        func_node: Optional[FuncNode] = None,
     ):
         if isinstance(data, np.ndarray):
             self._data = data
@@ -80,19 +79,13 @@ class Tensor:
             self._data = self._data.astype(dtype)
 
         self._allow_grad = allow_grad
-        # tensors not created by ops are leafs. this property is immutable
-        self._func_node = func_node
+        self.graph_refs = 0
         # graphed means we are used in a gradient-tracked computation.
         self.graphed = False
-        # don't store gradients unless we are user-created.
-        self.grad = None
+        self.grad: Optional[Tensor] = None
+        self.func_node: Optional[FuncNode] = None
 
-    @property
-    def func_node(self) -> FuncNode:
-        return self._func_node
-
-    # we're a leaf if we have no gradient history
-    # whether we're part of a gradient-tracked computation or not.
+    # tensors not created by ops are leafs. this property is immutable
     @property
     def is_leaf(self) -> py_bool:
         return self.func_node is None
@@ -148,13 +141,13 @@ class Tensor:
         # go all the way down to the leaf tensors, skipping tensors we've already seen
         # after getting all the way to the base, finally push ourselves onto the stack
         # rinse and repeat for the input tensors, their input tensors, etc.
-        def dfs(op_output):
+        def dfs(op_output: Tensor):
             if id(op_output) in seen:
                 return
             seen.add(id(op_output))
             if not op_output.is_leaf:
-                root = op_output.func_node
-                for op_input in root.input_tensors:
+                node = op_output.func_node
+                for op_input in node.tensor_inputs:
                     dfs(op_input)
             traversal_path.append(op_output)
 
@@ -172,7 +165,7 @@ class Tensor:
         reset_grads: py_bool = True,
     ):
         # can't call backward if we're not tracking gradients or we have no gradient history
-        if not self.allow_grad:
+        if not self._allow_grad:
             return
 
         if self.is_leaf:
@@ -194,6 +187,20 @@ class Tensor:
 
         self.grad = ones_like(self)
 
+        # the algorithm this library uses to count references and free tensors when possible is actually quite simple
+        # every time a tensor is used in an operation, increment its `graph_refs` by 1
+        # before we do any backprop, recursively backwards dfs traverse the graph
+        # for every func_node, decrement each of its tensor_inputs' `graph_refs` by 1
+        # if the tensor has 0 `graph_refs` then move down to its corresponding func_node and continue
+        # otherwise do not continue traversing down that portion of the subgraph
+        # afterwards, all tensors unique to the forward function will have `graph_refs` of 0
+        # every other tensor will have some non-zero whole number
+        # during the actual backprop, check if a tensor has 0 `graph_refs`, if so then destroy it
+        # this way, only portions of the graph not used anywhere else are destroyed and we can safely free up memory
+        # the whole thing is sort of like a DAG-optimized reference counting system
+        if not retain_graph:
+            self.mark_subgraph_dirty()
+
         with enable_grad(allow_higher_order):
             for tensor in reversed(traversal_path):
                 # leaf tensors don't have any input tensors to update, so skip
@@ -211,13 +218,24 @@ class Tensor:
                 if not retain_grads:
                     tensor.grad = None
                 # this prevents memory leaks from storing intermediate gradients in memory somewhere
-                if not retain_graph:
+                # if nothing requires this edge to exist anymore, then destory the edge
+                if not retain_graph and tensor.graph_refs == 0:
                     tensor.wipe()
+
+    def mark_subgraph_dirty(self):
+        node = self.func_node
+        if self.graph_refs > 0 or node is None:
+            return
+
+        for tensor in node.tensor_inputs:
+            tensor.graph_refs -= 1
+            if tensor.graph_refs == 0:
+                tensor.mark_subgraph_dirty()
 
     # destroy our portion of the graph
     def wipe(self):
         self.graphed = False
-        self._func_node = None
+        self.func_node = None
 
     # returns a view that does not have gradient history
     def detach(self, allow_grad: py_bool = False) -> Tensor:
@@ -269,7 +287,7 @@ class Tensor:
         return md.multiply(self, other, **kwargs)
 
     def _allow_mutation(self):
-        return not (self.allow_grad and md.grad_allowed_() and self.graphed)
+        return not (self._allow_grad and md.grad_allowed_() and self.graphed)
 
     def _validate_mutation(self):
         if not self._allow_mutation():

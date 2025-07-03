@@ -138,7 +138,6 @@ def transpose_grad(
 # if broadcasting happened during the forward pass, you need to correctly
 # sum up the correct dimensions so that the gradients match up
 def unbroadcast_forward(a: md.Tensor, target_shape: Sequence[int]) -> md.Tensor:
-    a = a.detach()
     if a.shape == target_shape:
         return a
     # this collects the prepended axes
@@ -164,7 +163,7 @@ def unbroadcast_forward(a: md.Tensor, target_shape: Sequence[int]) -> md.Tensor:
     if a.size == py_prod(target_shape):
         return a.reshape(target_shape)
 
-    return md.broadcast_to(a, target_shape)
+    return broadcast_to(a, target_shape)
 
 
 def getitem_grad(a: md.Tensor, key: Any, grad: md.Tensor) -> md.Tensor:

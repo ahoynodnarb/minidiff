@@ -157,11 +157,15 @@ def create_op_func(
         allow_grad = _should_allow_grad(op_inputs)
 
         output = forward_func(*op_inputs, **op_kwargs)
+        # output returned a view of something already gradient-tracked
+        if output.func_node is not None:
+            output = output.detach()
+
         output.allow_grad = allow_grad
 
         # only attach a node if we're allowed to track gradients right now, and the tensor wants to track its gradient
         if md.grad_allowed_() and allow_grad:
-            output._func_node = FuncNode(
+            output.func_node = FuncNode(
                 grad_functions=grad_funcs,
                 op_inputs=op_inputs,
                 op_kwargs=op_kwargs,

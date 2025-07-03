@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 import minidiff as md
 
 if TYPE_CHECKING:
-    from typing import Any, Dict, Sequence, Optional
+    from typing import Any, Dict, Optional, Sequence
 
     import minidiff.typing as mdt
 
@@ -33,16 +33,10 @@ class FuncNode:
 
         self.propagate_kwargs = propagate_kwargs
 
-        self._input_tensors = None
+        self.tensor_inputs = [x for x in op_inputs if isinstance(x, md.Tensor)]
 
-    @property
-    def input_tensors(self):
-        if self._input_tensors is None:
-            self._input_tensors = [
-                x for x in self.op_inputs if isinstance(x, md.Tensor)
-            ]
-
-        return self._input_tensors
+        for tensor in self.tensor_inputs:
+            tensor.graph_refs += 1
 
     # this accumulates gradients for the input tensors through chain rule (reverse-mode)
     def update_grads(self, grad: md.Tensor):
