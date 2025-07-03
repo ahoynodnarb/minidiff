@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 import minidiff as md
-from minidiff.utils import compute_grads
+from minidiff.utils import compute_grads, try_unwrap
 
 if TYPE_CHECKING:
     from typing import Any, Dict, Optional, Sequence
@@ -26,7 +26,9 @@ def perform_test(
     exclude: Optional[Sequence[md.Tensor]] = None,
 ):
     out = func(*args, **kwargs)._data
-    comp = backend_func(*args, **kwargs)
+    comp = backend_func(
+        *[try_unwrap(x) for x in args], **{k: try_unwrap(v) for k, v in kwargs.items()}
+    )
 
     def loss_func(*loss_args):
         actual = func(*loss_args, **kwargs)

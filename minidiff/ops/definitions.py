@@ -10,6 +10,7 @@ except ImportError:
 
 import minidiff as md
 import minidiff.ops.wrapping as wrapping
+from minidiff.utils import try_unwrap
 
 if TYPE_CHECKING:
     from typing import Any, Callable, Optional, Sequence, Tuple, Union
@@ -168,7 +169,7 @@ def unbroadcast_forward(a: md.Tensor, target_shape: Sequence[int]) -> md.Tensor:
 
 def getitem_grad(a: md.Tensor, key: Any, grad: md.Tensor) -> md.Tensor:
     ret = md.zeros_like(a)
-    np.add.at(ret._data, key, grad._data)
+    np.add.at(ret._data, try_unwrap(key), grad._data)
     return ret
 
 
