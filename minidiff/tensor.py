@@ -13,7 +13,7 @@ except ImportError:
     import numpy as np
 
 if TYPE_CHECKING:
-    from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+    from typing import Any, Dict, List, Optional, Sequence, Tuple, Union, Literal
 
     try:
         import cupy.typing as npt  # type: ignore
@@ -164,8 +164,8 @@ class Tensor:
     # I mostly just referenced this Wikipedia page: https://en.wikipedia.org/wiki/Automatic_differentiation
     def backward(
         self,
-        retain_graph: py_bool = False,
         retain_grads: py_bool = False,
+        cleanup_mode: Literal["keep", "prune", "destroy"] = "prune",
         allow_higher_order: py_bool = False,
         reset_grads: py_bool = True,
     ):
@@ -184,7 +184,7 @@ class Tensor:
         # will almost always be necessary so those have to be kept in memory too
         if allow_higher_order:
             retain_grads = True
-            retain_graph = True
+            cleanup_mode = "keep"
 
         if reset_grads:
             for tensor in traversal_path:
@@ -205,7 +205,7 @@ class Tensor:
         # this also works for cyclic graphs since each cycle will just increment the `graph_refs` by 1 and decrement the way down
         # for a topologically sorted graph or a DAG, you can aggressively garbage collect during the backwards traversal
         # since we're guaranteed to have already consumed any tensor/operation requiring the current tensor already
-        if not retain_graph:
+        if cleanup_mode == "prune":
             self.mark_subgraph_dirty()
 
         with enable_grad(allow_higher_order):
@@ -226,7 +226,9 @@ class Tensor:
                     tensor.grad = None
                 # this prevents memory leaks from storing intermediate gradients in memory somewhere
                 # if nothing requires this edge to exist anymore, then destory the edge
-                if not retain_graph and tensor.graph_refs == 0:
+                force_destruction = cleanup_mode == "destroy"
+                prunable = cleanup_mode == "prune" and tensor.graph_refs == 0
+                if force_destruction or prunable:
                     tensor.wipe()
 
     def mark_subgraph_dirty(self):
