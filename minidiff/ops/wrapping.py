@@ -171,11 +171,6 @@ def create_op_func(
                     propagate_kwargs=propagate_kwargs,
                 )
 
-            output.graphed = True
-            for op_input in op_inputs:
-                if isinstance(op_input, md.Tensor):
-                    op_input.graphed = True
-
         return output
 
     minidiff_func.__name__ = op_name

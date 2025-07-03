@@ -80,10 +80,15 @@ class Tensor:
 
         self._allow_grad = allow_grad
         self.graph_refs = 0
-        # graphed means we are used in a gradient-tracked computation.
-        self.graphed = False
         self.grad: Optional[Tensor] = None
         self.func_node: Optional[FuncNode] = None
+
+    # graphed means we are used in a gradient-tracked computation.
+    # this means either there is some portion of the graph referencing us
+    # or we are referencing some portion of the graph
+    @property
+    def graphed(self) -> py_bool:
+        return self.graph_refs > 0 or self.func_node is not None
 
     # tensors not created by ops are leafs. this property is immutable
     @property
@@ -236,7 +241,6 @@ class Tensor:
 
     # destroy our portion of the graph
     def wipe(self):
-        self.graphed = False
         self.func_node = None
 
     # returns a view that does not have gradient history
