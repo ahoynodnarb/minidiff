@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     import minidiff.typing as mdt
 
 
+# FuncNodes represent operations on the computation graph, with incoming edges being the input tensors, and outgoing the output tensors
 class FuncNode:
     def __init__(
         self,
