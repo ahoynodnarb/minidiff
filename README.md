@@ -45,14 +45,14 @@ See [`minidiff/ops/definitions.py`](https://github.com/ahoynodnarb/minidiff/blob
 ## Project Structure
 Feel free to explore around the repo, it's structured as follows:
 
-[`minidiff/tensor.py`](https://github.com/ahoynodnarb/minidiff/blob/master/minidiff/tensor.py): Contains all the basic tensor code including tensor creation and the actual backward pass
+[`minidiff/tensor.py`](https://github.com/ahoynodnarb/minidiff/blob/master/minidiff/tensor.py): Contains all the basic tensor code which includes a few convenient tensor creation functions and the actual backward pass
 
-[`minidiff/topology.py`](https://github.com/ahoynodnarb/minidiff/blob/master/minidiff/topology.py): The `FuncNode` class is defined here; it mostly acts as a dataclass for graph nodes while handling gradient accumulation
+[`minidiff/topology.py`](https://github.com/ahoynodnarb/minidiff/blob/master/minidiff/topology.py): The `FuncNode` class is defined here; it mostly acts as a dataclass for graph nodes, but also handles gradient accumulation
 
 [`minidiff/typing.py`](https://github.com/ahoynodnarb/minidiff/blob/master/minidiff/typing.py): Just extra types for convenience to keep type hinting clean and readable
 
-[`minidiff/utils.py`](https://github.com/ahoynodnarb/minidiff/blob/master/minidiff/utils.py): A few utilities I use throughout the codebase ranging from finite-difference testing to a graph visualization tool
+[`minidiff/utils.py`](https://github.com/ahoynodnarb/minidiff/blob/master/minidiff/utils.py): A few utilities used throughout the codebase ranging from finite-difference testing to a graph visualization tool
 
-[`minidiff/ops/definitions.py`](https://github.com/ahoynodnarb/minidiff/blob/master/minidiff/ops/definitions.py): Every operation exported by minidiff is defined here including their forward and backward passes
+[`minidiff/ops/definitions.py`](https://github.com/ahoynodnarb/minidiff/blob/master/minidiff/ops/definitions.py): Every operation exported by minidiff is defined here, including their forward and backward passes
 
-[`minidiff/ops/wrapping.py`](https://github.com/ahoynodnarb/minidiff/blob/master/minidiff/ops/wrapping.py): This file mostly contains code that helps users wrap NumPy functions as `Tensor` functions and add automatic differentiability to those resulting `Tensor` functions
+[`minidiff/ops/wrapping.py`](https://github.com/ahoynodnarb/minidiff/blob/master/minidiff/ops/wrapping.py): This file mostly contains code that allows wraping NumPy functions as `Tensor` functions and automatic differentiability to those resulting `Tensor` functions
