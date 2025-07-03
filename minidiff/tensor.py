@@ -197,7 +197,9 @@ class Tensor:
         # every other tensor will have some non-zero whole number
         # during the actual backprop, check if a tensor has 0 `graph_refs`, if so then destroy it
         # this way, only portions of the graph not used anywhere else are destroyed and we can safely free up memory
-        # the whole thing is sort of like a DAG-optimized reference counting system
+        # this also works for cyclic graphs since each cycle will just increment the `graph_refs` by 1 and decrement the way down
+        # for a topologically sorted graph or a DAG, you can aggressively garbage collect during the backwards traversal
+        # since we're guaranteed to have already consumed any tensor/operation requiring the current tensor already
         if not retain_graph:
             self.mark_subgraph_dirty()
 
