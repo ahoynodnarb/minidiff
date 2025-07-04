@@ -295,7 +295,9 @@ class Tensor:
         return md.multiply(self, other, **kwargs)
 
     def _allow_mutation(self):
-        return not (self._allow_grad and md.grad_allowed_() and self.graphed)
+        return self.is_leaf or not (
+            self._allow_grad and md.grad_allowed_() and self.graphed
+        )
 
     def _validate_mutation(self):
         if not self._allow_mutation():
