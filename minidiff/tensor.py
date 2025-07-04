@@ -192,18 +192,18 @@ class Tensor:
 
         self.grad = ones_like(self)
 
-        # the algorithm this library uses to count references and free `func_node`s when possible is actually quite simple
-        # every time a tensor is used in an operation, increment its `graph_refs` by 1
+        # the algorithm this library uses to count references and destroy func_node references when possible is actually quite simple
+        # every time a tensor is used in an operation, increment its graph_refs by 1 - Note: graph_refs will not be implemented by actual references to a tensor
         # before we do any backprop, recursively backwards dfs traverse the graph
-        # for every `func_node`, decrement each of its `tensor_inputs`' `graph_refs` by 1
-        # if the tensor has 0 `graph_refs` then move down to its corresponding func_node and continue
-        # otherwise do not continue traversing down that portion of the subgraph
-        # afterwards, all tensors unique to the forward function will have `graph_refs` of 0
+        # for every func_node, decrement each of its tensor_inputs' graph_refs by 1
+        # if the tensor has 0 graph_refs then move down to its corresponding func_node and continue
+        # otherwise do not continue traversing down that portion of the subgraph and return early so we don't waste time
+        # afterwards, all tensors unique to the subgraph used to construct what backward()'s being called on will have graph_refs of 0
         # every other tensor will have some non-zero whole number
-        # during the actual backprop, check if a tensor has 0 `graph_refs`, if so then free its `func_node`
-        # this way, only portions of the graph not used anywhere else are destroyed, safely freeing up memory
-        # this also works for cyclic graphs since each cycle will just increment the `graph_refs` by 1 and be decremented equally
-        # for a topologically sorted graph or a DAG, you can aggressively destroy func_nodes
+        # during the actual backprop, check if a tensor has 0 graph_refs. if so then destroy reference to its func_node
+        # this way, only subgraphs not used anywhere else are destroyed, are no longer referenced by anything, and Python GC cleans it up
+        # this also works for cyclic graphs since each cycle will just increment the graph_refs by 1 and be decremented equally in the first pass
+        # for a topologically sorted graph/DAG, you can aggressively destroy references to func_nodes
         # since we're guaranteed to have already consumed any tensor/operation requiring the current tensor already
         if cleanup_mode == "prune":
             self.mark_subgraph_dirty()
