@@ -203,7 +203,7 @@ class Tensor:
         # during the actual backprop, check if a tensor has 0 `graph_refs`, if so then free its `func_node`
         # this way, only portions of the graph not used anywhere else are destroyed, safely freeing up memory
         # this also works for cyclic graphs since each cycle will just increment the `graph_refs` by 1 and be decremented equally
-        # for a topologically sorted graph or a DAG, you can aggressively garbage collect during the backwards traversal
+        # for a topologically sorted graph or a DAG, you can aggressively destroy func_nodes
         # since we're guaranteed to have already consumed any tensor/operation requiring the current tensor already
         if cleanup_mode == "prune":
             self.mark_subgraph_dirty()
