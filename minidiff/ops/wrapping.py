@@ -188,7 +188,6 @@ __all__ = [
     "ternary_op_func",
     "as_minidiff",
     "create_op_func",
-    "create_op_func",
     "create_unary_op_func",
     "create_binary_op_func",
     "create_ternary_op_func",

@@ -122,7 +122,7 @@ def prod_grad(
         return grad.reshape(a.shape)
     multiplied = prod(a, axis=axis, keepdims=True)
     grad = grad.reshape(multiplied.shape)
-    return md.where(a == 0, grad * multiplied, grad * multiplied / a)
+    return grad * multiplied / a
 
 
 def transpose_grad(
