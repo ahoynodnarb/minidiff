@@ -232,14 +232,16 @@ class Tensor:
                     tensor.wipe()
 
     def mark_subgraph_dirty(self):
-        node = self.func_node
-        if self.graph_refs > 0 or node is None:
-            return
-
-        for tensor in node.tensor_inputs:
-            tensor.graph_refs -= 1
-            if tensor.graph_refs == 0:
-                tensor.mark_subgraph_dirty()
+        stack = [self]
+        while len(stack) != 0:
+            tensor = stack.pop()
+            node = tensor.func_node
+            if tensor.graph_refs > 0 or node is None:
+                continue
+            for t in node.tensor_inputs:
+                t.graph_refs -= 1
+                if t.graph_refs == 0:
+                    stack.append(t)
 
     # destroy our portion of the graph
     def wipe(self):

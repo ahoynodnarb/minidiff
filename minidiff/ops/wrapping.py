@@ -124,7 +124,6 @@ def create_op_func(
         # allow gradient tracking if at least one of the input tensors allows a gradient
         allow_grad = _should_allow_grad(op_inputs)
         output = forward_func(*op_inputs, **op_kwargs)
-
         output.allow_grad = allow_grad
 
         # only attach a node if we're allowed to track gradients right now, and the tensor wants to track its gradient
