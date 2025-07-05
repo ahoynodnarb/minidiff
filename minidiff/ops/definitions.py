@@ -122,7 +122,8 @@ def prod_grad(
         return grad.reshape(a.shape)
     multiplied = prod(a, axis=axis, keepdims=True)
     grad = grad.reshape(multiplied.shape)
-    return grad * multiplied / a
+    # will be zero anyway over axes where an element is 0, just do this for numerical stability
+    return md.where(a == 0, 0, grad * multiplied / a)
 
 
 def transpose_grad(
