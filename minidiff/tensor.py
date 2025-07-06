@@ -13,7 +13,7 @@ except ImportError:
     import numpy as np
 
 if TYPE_CHECKING:
-    from typing import Any, Dict, List, Optional, Sequence, Tuple, Union, Literal
+    from typing import Any, Dict, List, Literal, Optional, Sequence, Tuple, Union
 
     try:
         import cupy.typing as npt  # type: ignore
