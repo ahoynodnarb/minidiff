@@ -44,6 +44,38 @@ def _validate_op_inputs(op_inputs: Sequence[Any], tensor_only: bool):
     raise ValueError(error_msg)
 
 
+class OpClass:
+    def create_forward(self) -> mdt.GenericFunc:
+        raise NotImplementedError
+
+    def create_grads(self) -> Sequence[Optional[mdt.GenericOpGrad]]:
+        raise NotImplementedError
+
+
+class UnaryOpClass(OpClass):
+    def create_forward(self) -> mdt.UnaryFunc:
+        raise NotImplementedError
+
+    def create_grads(self) -> Sequence[Optional[mdt.UnaryOpGrad]]:
+        raise NotImplementedError
+
+
+class BinaryOpClass(OpClass):
+    def create_forward(self) -> mdt.BinaryFunc:
+        raise NotImplementedError
+
+    def create_grads(self) -> Sequence[Optional[mdt.BinaryOpGrad]]:
+        raise NotImplementedError
+
+
+class TernaryOpClass(OpClass):
+    def create_forward(self) -> mdt.TernaryFunc:
+        raise NotImplementedError
+
+    def create_grads(self) -> Sequence[Optional[mdt.TernaryOpGrad]]:
+        raise NotImplementedError
+
+
 # decorators which just convert a generic function to an op
 def op_func(
     **kwargs,
@@ -146,6 +178,48 @@ def create_op_func(
     return minidiff_func
 
 
+def create_stateful_op_func(
+    op_class: OpClass,
+    propagate_kwargs: bool = False,
+    tensor_only: bool = False,
+    op_name: Optional[str] = None,
+) -> mdt.GenericOp:
+    # if the function is not differentiable, we still want to propagate the gradient to avoid breaking the
+    # graph, but it is smarter to just zero out the gradients.
+    if op_name is None:
+        op_name = op_class.__name__
+
+    # this is the actual op function create_op_func returns
+    def minidiff_func(*op_inputs: P.args, **op_kwargs: P.kwargs) -> md.Tensor:
+        _validate_op_inputs(op_inputs, tensor_only)
+        # allow gradient tracking if at least one of the input tensors allows a gradient
+        allow_grad = _should_allow_grad(op_inputs)
+        instance = op_class()
+        forward = instance.create_forward()
+        output = forward(*op_inputs, **op_kwargs)
+        output.allow_grad = allow_grad
+
+        # only attach a node if we're allowed to track gradients right now, and the tensor wants to track its gradient
+        if allow_grad and md.grad_allowed_():
+            grad_funcs = instance.create_grads()
+            # the output already is part of some graph, so we just adopt it into this one
+            if output.func_node is None:
+                output.func_node = FuncNode(
+                    grad_functions=grad_funcs,
+                    op_inputs=op_inputs,
+                    op_kwargs=op_kwargs,
+                    op_name=op_name,
+                    propagate_kwargs=propagate_kwargs,
+                )
+
+        return output
+
+    minidiff_func.__name__ = op_name
+    minidiff_func.__qualname__ = f"<op func '{op_name}'>"
+
+    return minidiff_func
+
+
 # single argument
 def create_unary_op_func(
     forward_func: Callable[P, md.Tensor],
@@ -188,6 +262,7 @@ __all__ = [
     "ternary_op_func",
     "as_minidiff",
     "create_op_func",
+    "create_stateful_op_func",
     "create_unary_op_func",
     "create_binary_op_func",
     "create_ternary_op_func",
