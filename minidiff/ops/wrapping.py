@@ -27,22 +27,17 @@ def _validate_op_inputs(op_inputs: Sequence[Any], tensor_only: bool):
     success = False
     for t in op_inputs:
         is_tensor = isinstance(t, md.Tensor)
-
-        success = is_tensor
-        if success and not tensor_only:
-            break
-        if not success and tensor_only:
+        if is_tensor ^ tensor_only:
+            success = is_tensor
             break
 
     if success:
         return
 
-    error_msg = (
-        "This function only supports minidiff Tensors"
-        if tensor_only
-        else "This function requires at least one minidiff Tensor argument"
-    )
-    raise ValueError(error_msg)
+    if tensor_only:
+        raise ValueError("This function only supports minidiff Tensors")
+    else:
+        raise ValueError("This function requires at least one minidiff Tensor argument")
 
 
 class OpClass:
