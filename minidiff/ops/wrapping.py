@@ -27,7 +27,9 @@ def _validate_op_inputs(op_inputs: Sequence[Any], tensor_only: bool):
     success = False
     for t in op_inputs:
         is_tensor = isinstance(t, md.Tensor)
-        if is_tensor ^ tensor_only:
+        # if it's a tensor and we only require one tensor, then success and we can early return
+        # if it's not a tensor and we require all tensors, then failure and we can early return
+        if (is_tensor and not tensor_only) or (not is_tensor and tensor_only):
             success = is_tensor
             break
 
