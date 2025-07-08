@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     import minidiff.typing as mdt
 
 
+# allow gradient tracking if at least one of the input tensors allows a gradient
 def _should_allow_grad(op_inputs: Sequence[Any]):
     for x in op_inputs:
         if isinstance(x, md.Tensor) and x.allow_grad:
@@ -150,10 +151,8 @@ def create_op_func(
     if op_name is None:
         op_name = forward_func.__name__
 
-    # this is the actual op function create_op_func returns
     def minidiff_func(*op_inputs: P.args, **op_kwargs: P.kwargs) -> md.Tensor:
         _validate_op_inputs(op_inputs, tensor_only)
-        # allow gradient tracking if at least one of the input tensors allows a gradient
         allow_grad = _should_allow_grad(op_inputs)
         output = forward_func(*op_inputs, **op_kwargs)
         output.allow_grad = allow_grad
@@ -184,15 +183,11 @@ def create_stateful_op_func(
     tensor_only: bool = False,
     op_name: Optional[str] = None,
 ) -> mdt.GenericOp:
-    # if the function is not differentiable, we still want to propagate the gradient to avoid breaking the
-    # graph, but it is smarter to just zero out the gradients.
     if op_name is None:
         op_name = op_class.__name__
 
-    # this is the actual op function create_op_func returns
     def minidiff_func(*op_inputs: P.args, **op_kwargs: P.kwargs) -> md.Tensor:
         _validate_op_inputs(op_inputs, tensor_only)
-        # allow gradient tracking if at least one of the input tensors allows a gradient
         allow_grad = _should_allow_grad(op_inputs)
         instance = op_class()
         forward = instance.create_forward()

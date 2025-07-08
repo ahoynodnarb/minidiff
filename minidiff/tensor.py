@@ -70,13 +70,11 @@ class Tensor:
         allow_grad: py_bool = False,
         dtype: Optional[mdt.dtype] = None,
     ):
-        if isinstance(data, np.ndarray):
-            self._data = data
-        else:
-            self._data = np.array(data)
-
+        if not isinstance(data, np.ndarray):
+            data = np.array(data)
         if dtype is not None:
-            self._data = self._data.astype(dtype)
+            data = data.astype(dtype)
+        self._data = data
 
         self._allow_grad = allow_grad
         self.graph_refs = 0
@@ -101,10 +99,11 @@ class Tensor:
 
     @allow_grad.setter
     def allow_grad(self, allow_grad: py_bool):
-        # if we're trying to turn off gradient tracking while we're graphed and an intermediate tensor, then error
-        if not allow_grad and (self.graphed and not self.is_leaf):
+        # turning off gradient tracking for intermediate tensors means gradients will definitely not propagate correctly
+        # that means zeroed out gradients for an unclear reason, so it's better to fail fast
+        if not allow_grad and not self.is_leaf:
             raise ValueError(
-                "Tensors can only stop tracking gradients if they are not part of a computational graph or are a leaf"
+                "Turning off gradient tracking for intermediate tensors will almost always break chain rule in backprop"
             )
 
         if self._allow_grad == allow_grad:
@@ -197,7 +196,7 @@ class Tensor:
         traversal_path = self.toposort()
 
         # computing higher order derivatives means partially re-traversing the subgraph for whichever variable
-        # we're computing the higher order derivative of, so the graph needs to remain
+        # we're computing the higher order derivative of, so the graph needs to remain.
         # in accumulating gradients when calling backward() the second time, gradients from intermediates
         # will almost always be necessary so those have to be kept in memory too
         if allow_higher_order:
@@ -210,19 +209,6 @@ class Tensor:
 
         self.grad = ones_like(self)
 
-        # the algorithm this library uses to count references and destroy func_node references when possible is actually quite simple
-        # every time a tensor is used in an operation, increment its graph_refs by 1 - Note: graph_refs will not be incremented by actual references to a tensor
-        # before we do any backprop, recursively backwards dfs traverse the graph
-        # for every func_node, decrement each of its tensor_inputs' graph_refs by 1
-        # if the tensor has 0 graph_refs then move down to its corresponding func_node and continue
-        # otherwise do not continue traversing down that portion of the subgraph and return early so we don't waste time
-        # afterwards, all tensors unique to the subgraph used to construct what backward()'s being called on will have graph_refs of 0
-        # every other tensor will have some non-zero whole number
-        # during the actual backprop, check if a tensor has 0 graph_refs. if so then destroy reference to its func_node
-        # this way, only subgraphs not used anywhere else are destroyed, are no longer referenced by anything, and Python GC cleans it up
-        # this also works for cyclic graphs since each cycle will just increment the graph_refs by 1 and be decremented equally in the first pass
-        # for a topologically sorted graph/DAG, you can aggressively destroy references to func_nodes
-        # since we're guaranteed to have already consumed any tensor/operation requiring the current tensor already
         if cleanup_mode == "prune":
             self.mark_subgraph_dirty()
 
@@ -249,6 +235,19 @@ class Tensor:
                 if force_destruction or prunable:
                     tensor.wipe()
 
+    # the algorithm minidiff uses to count references and destroy func_node references when possible is actually quite simple
+    # every time a tensor is used in an operation, increment its graph_refs by 1 - Note: graph_refs will not be incremented by actual references to a tensor
+    # before we do any backprop, recursively backwards dfs traverse the graph
+    # for every func_node, decrement each of its tensor_inputs' graph_refs by 1
+    # if the tensor has 0 graph_refs then move down to its corresponding func_node and continue
+    # otherwise do not continue traversing down that portion of the subgraph and return early so we don't waste time
+    # afterwards, all tensors unique to the subgraph used to construct what backward()'s being called on will have graph_refs of 0
+    # every other tensor will have some non-zero whole number
+    # during the actual backprop, check if a tensor has 0 graph_refs. if so then destroy reference to its func_node
+    # this way, only subgraphs not used anywhere else are destroyed, are no longer referenced by anything, and Python GC cleans it up
+    # this also works for cyclic graphs since each cycle will just increment the graph_refs by 1 and be decremented equally in the first pass
+    # for a topologically sorted graph/DAG, you can aggressively destroy references to func_nodes
+    # since we're guaranteed to have already consumed any tensor/operation requiring the current tensor already
     def mark_subgraph_dirty(self):
         stack = [self]
         while len(stack) != 0:
@@ -284,7 +283,7 @@ class Tensor:
     def item(self) -> mdt.dtype:
         if self.size != 1:
             raise ValueError(
-                "only Tensors with a single element can be reduced to a Python scalar"
+                "Only Tensors with a single element can be reduced to a Python scalar"
             )
 
         return self._data.item()
@@ -314,13 +313,13 @@ class Tensor:
     def multiply(self, other: mdt.TensorLike, **kwargs) -> Tensor:
         return md.multiply(self, other, **kwargs)
 
-    def _allow_mutation(self):
-        return not (self._allow_grad and md.grad_allowed_() and self.graphed)
+    def _graph_tracking(self):
+        return self._allow_grad and md.grad_allowed_() and self.graphed
 
     def _validate_mutation(self):
-        if not self._allow_mutation():
+        if self._graph_tracking():
             raise ValueError(
-                "in-place operations are not allowed while tracking gradients"
+                "In-place operations can break computation graphs during backprop"
             )
 
     def __matmul__(self, other: Tensor) -> Tensor:
@@ -330,6 +329,7 @@ class Tensor:
         self._validate_mutation()
 
         self._data = self._data @ other._data
+
         return self
 
     def __add__(self, other: mdt.TensorLike) -> Tensor:

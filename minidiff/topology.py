@@ -56,10 +56,9 @@ class FuncNode:
             # if broadcasting occured during the forward pass, we need to collect gradients
             # back in the backward pass so that the gradients are correctly distributed
             collected_grad = md.unbroadcast(grad_computation, op_input.shape)
-            if op_input.grad is None:
-                op_input.grad = collected_grad
-            else:
-                op_input.grad = op_input.grad + collected_grad
+            if op_input.grad is not None:
+                collected_grad = op_input.grad + collected_grad
+            op_input.grad = collected_grad
 
     def __repr__(self) -> str:
         return f"{self.op_name}({', '.join([str(x) for x in self.op_inputs])})"
