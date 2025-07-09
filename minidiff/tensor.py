@@ -201,7 +201,8 @@ class Tensor:
         # will almost always be necessary so those have to be kept in memory too
         if allow_higher_order:
             retain_grads = True
-            cleanup_mode = "prune"
+            if cleanup_mode == "destroy":
+                cleanup_mode = "prune"
 
         if reset_grads:
             for tensor in traversal_path:
