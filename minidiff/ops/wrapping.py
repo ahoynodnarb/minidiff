@@ -29,8 +29,8 @@ def _validate_op_inputs(op_inputs: Sequence[Any], tensor_only: bool):
         is_tensor = isinstance(t, md.Tensor)
         # if it's a tensor and we only require one tensor, then success and we can early return
         # if it's not a tensor and we require all tensors, then failure and we can early return
+        success = is_tensor
         if (is_tensor and not tensor_only) or (not is_tensor and tensor_only):
-            success = is_tensor
             break
 
     if success:
@@ -152,19 +152,20 @@ def create_op_func(
         _validate_op_inputs(op_inputs, tensor_only)
         allow_grad = _should_allow_grad(op_inputs)
         output = forward_func(*op_inputs, **op_kwargs)
+        # the output already is part of some graph, so we just adopt it into this one
+        if output.func_node is not None:
+            output = output.detach()
         output.allow_grad = allow_grad
 
         # only attach a node if we're allowed to track gradients right now, and the tensor wants to track its gradient
         if allow_grad and md.grad_allowed_():
-            # the output already is part of some graph, so we just adopt it into this one
-            if output.func_node is None:
-                output.func_node = FuncNode(
-                    grad_functions=grad_funcs,
-                    op_inputs=op_inputs,
-                    op_kwargs=op_kwargs,
-                    op_name=op_name,
-                    propagate_kwargs=propagate_kwargs,
-                )
+            output.func_node = FuncNode(
+                grad_functions=grad_funcs,
+                op_inputs=op_inputs,
+                op_kwargs=op_kwargs,
+                op_name=op_name,
+                propagate_kwargs=propagate_kwargs,
+            )
 
         return output
 
