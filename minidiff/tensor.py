@@ -307,6 +307,9 @@ class Tensor:
     def dot(self, other: mdt.TensorLike, **kwargs) -> Tensor:
         return md.dot(self, other, **kwargs)
 
+    def matmul(self, other: mdt.TensorLike, **kwargs) -> Tensor:
+        return md.matmul(self, other, **kwargs)
+
     def add(self, other: mdt.TensorLike, **kwargs) -> Tensor:
         return md.add(self, other, **kwargs)
 

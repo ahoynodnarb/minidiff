@@ -160,7 +160,11 @@ def compute_grads(
     copied_exclude = []
 
     for t in input_tensors:
-        copied = t.copy() if isinstance(t, md.Tensor) else deepcopy(t)
+        copied = (
+            t.copy().detach(allow_grad=True)
+            if isinstance(t, md.Tensor)
+            else deepcopy(t)
+        )
         copied_input_tensors.append(copied)
         if id(t) in excluded_ids:
             copied_exclude.append(copied)

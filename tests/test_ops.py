@@ -42,7 +42,7 @@ def perform_test(
 
     manual_grads, auto_grads = compute_grads(*args, func=loss_func, exclude=exclude)
     for i, (manual, auto) in enumerate(zip(manual_grads, auto_grads)):
-        if manual is None or auto is None:
+        if manual is None and auto is None:
             continue
         mask = ~(np.isnan(manual) | np.isnan(auto))
         assert np.allclose(
@@ -507,3 +507,7 @@ def test_absolute():
             args=[md.randn(2, 2, 2, 2, allow_grad=True)],
             kwargs={},
         )
+
+
+if __name__ == "__main__":
+    test_add()
