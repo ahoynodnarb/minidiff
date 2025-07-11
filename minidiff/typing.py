@@ -29,14 +29,6 @@ if TYPE_CHECKING:
     GenericFunc = Callable[..., md.Tensor]
     GenericOp = GenericFunc
     GenericOpGrad = Callable[..., md.Tensor]
-    # class GenericFunc(Protocol):
-    #     def __call__(self, *args: Any) -> md.Tensor: ...
-
-    # class GenericOp(Protocol):
-    #     def __call__(self, *args: Any) -> md.Tensor: ...
-
-    # class GenericOpGrad(Protocol):
-    #     def __call__(self, *args: md.Tensor) -> md.Tensor: ...
 
     UnaryFunc = Callable[[md.Tensor], md.Tensor]
     UnaryOp = UnaryFunc

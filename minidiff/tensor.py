@@ -246,8 +246,7 @@ class Tensor:
     # every other tensor will have some non-zero whole number
     # during the actual backprop, check if a tensor has 0 graph_refs. if so then destroy reference to its func_node
     # this way, only subgraphs not used anywhere else are destroyed, are no longer referenced by anything, and Python GC cleans it up
-    # this also works for cyclic graphs since each cycle will just increment the graph_refs by 1 and be decremented equally in the first pass
-    # for a topologically sorted graph/DAG, you can aggressively destroy references to func_nodes
+    # this assumes a for a topologically sorted graph for a DAG, so you can aggressively destroy references to func_nodes
     # since we're guaranteed to have already consumed any tensor/operation requiring the current tensor already
     def mark_subgraph_dirty(self):
         stack = [self]

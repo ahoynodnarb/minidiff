@@ -7,7 +7,7 @@ from minidiff.topology import FuncNode
 from minidiff.utils import try_unwrap
 
 if TYPE_CHECKING:
-    from typing import Any, Callable, Optional, ParamSpec, Sequence
+    from typing import Any, Callable, Optional, ParamSpec, Sequence, Type
 
     P = ParamSpec("P")
 
@@ -176,7 +176,7 @@ def create_op_func(
 
 
 def create_stateful_op_func(
-    op_class: OpClass,
+    op_class: Type[OpClass],
     propagate_kwargs: bool = False,
     tensor_only: bool = False,
     op_name: Optional[str] = None,
@@ -190,25 +190,25 @@ def create_stateful_op_func(
         instance = op_class()
         forward = instance.create_forward()
         output = forward(*op_inputs, **op_kwargs)
+        if output.func_node is not None:
+            output = output.detach()
         output.allow_grad = allow_grad
 
         # only attach a node if we're allowed to track gradients right now, and the tensor wants to track its gradient
         if allow_grad and md.grad_allowed_():
             grad_funcs = instance.create_grads()
-            # the output already is part of some graph, so we just adopt it into this one
-            if output.func_node is None:
-                output.func_node = FuncNode(
-                    grad_functions=grad_funcs,
-                    op_inputs=op_inputs,
-                    op_kwargs=op_kwargs,
-                    op_name=op_name,
-                    propagate_kwargs=propagate_kwargs,
-                )
+            output.func_node = FuncNode(
+                grad_functions=grad_funcs,
+                op_inputs=op_inputs,
+                op_kwargs=op_kwargs,
+                op_name=op_name,
+                propagate_kwargs=propagate_kwargs,
+            )
 
         return output
 
     minidiff_func.__name__ = op_name
-    minidiff_func.__qualname__ = f"<op func '{op_name}'>"
+    minidiff_func.__qualname__ = f"<stateful op func '{op_name}'>"
 
     return minidiff_func
 
