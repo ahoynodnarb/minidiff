@@ -426,6 +426,13 @@ matmul: Callable[[md.Tensor, md.Tensor], md.Tensor] = wrapping.create_binary_op_
     grad_b=lambda a, b, grad: matmul(a.T, grad),
     tensor_only=True,
 )
+mod: Callable[[mdt.TensorLike, mdt.TensorLike], md.Tensor] = (
+    wrapping.create_binary_op_func(
+        forward_func=wrapping.as_minidiff(np.mod),
+        grad_a=lambda a, b, grad: md.where(a % b == 0, 0, grad),
+        grad_b=lambda a, b, grad: md.where(a % b == 0, 0, grad),
+    )
+)
 multiply: Callable[[mdt.TensorLike, mdt.TensorLike], md.Tensor] = (
     wrapping.create_binary_op_func(
         forward_func=wrapping.as_minidiff(np.multiply),
@@ -556,6 +563,7 @@ __all__ = [
     "logical_or",
     "logical_xor",
     "matmul",
+    "mod",
     "multiply",
     "not_equal",
     "power",

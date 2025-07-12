@@ -325,6 +325,16 @@ class Tensor:
                 "In-place operations can break computation graphs during backprop"
             )
 
+    def __mod__(self, other: mdt.TensorLike) -> Tensor:
+        return md.mod(self, other)
+
+    def __imod__(self, other: mdt.TensorLike) -> Tensor:
+        self._validate_mutation()
+
+        self._data = self._data % try_unwrap(other)
+
+        return self
+
     def __matmul__(self, other: Tensor) -> Tensor:
         return md.matmul(self, other)
 
@@ -486,7 +496,9 @@ def ones_like(a: mdt.TensorLike, allow_grad: py_bool = False, **kwargs) -> Tenso
     return Tensor(np.ones_like(a, **kwargs), allow_grad=allow_grad)
 
 
-def ones(shape: Sequence[int], allow_grad: py_bool = False, **kwargs) -> Tensor:
+def ones(
+    shape: Union[int, Sequence[int]], allow_grad: py_bool = False, **kwargs
+) -> Tensor:
     return Tensor(np.ones(shape, **kwargs), allow_grad=allow_grad)
 
 
@@ -496,7 +508,9 @@ def zeros_like(a: mdt.TensorLike, allow_grad: py_bool = False, **kwargs) -> Tens
     return Tensor(np.zeros_like(a, **kwargs), allow_grad=allow_grad)
 
 
-def zeros(shape: Sequence[int], allow_grad: py_bool = False, **kwargs) -> Tensor:
+def zeros(
+    shape: Union[int, Sequence[int]], allow_grad: py_bool = False, **kwargs
+) -> Tensor:
     return Tensor(np.zeros(shape, **kwargs), allow_grad=allow_grad)
 
 
@@ -509,7 +523,9 @@ def full_like(
     return Tensor(np.full_like(a, x, **kwargs), allow_grad=allow_grad)
 
 
-def full(shape: Sequence[int], allow_grad: py_bool = False, **kwargs) -> Tensor:
+def full(
+    shape: Union[int, Sequence[int]], allow_grad: py_bool = False, **kwargs
+) -> Tensor:
     return Tensor(np.full(shape, **kwargs), allow_grad=allow_grad)
 
 
