@@ -476,7 +476,7 @@ power: Callable[[mdt.TensorLike, mdt.TensorLike], md.Tensor] = (
         grad_b=lambda a, b, grad: grad * log(a) * a**b,
     )
 )
-reshape: Callable[[md.Tensor, Sequence[int]], md.Tensor] = (
+reshape: Callable[[md.Tensor, Union[int, Sequence[int]]], md.Tensor] = (
     wrapping.create_binary_op_func(
         forward_func=wrapping.as_minidiff(np.reshape),
         grad_a=lambda a, b, grad: grad.reshape(a.shape),
