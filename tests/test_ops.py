@@ -111,6 +111,18 @@ def test_max():
         )
 
 
+def test_min():
+    for _ in range(5):
+        perform_test(
+            func=md.min,
+            backend_func=np.min,
+            args=[
+                md.randn(2, 2, 2, 2, allow_grad=True),
+            ],
+            kwargs={"axis": random.randint(0, 3)},
+        )
+
+
 def test_where():
     for _ in range(5):
         indices = md.binomial(1, random.uniform(0, 1), (2, 2, 2, 2))
@@ -300,8 +312,8 @@ def test_matmul():
             func=md.matmul,
             backend_func=np.matmul,
             args=[
-                md.randn(2, 2, allow_grad=True),
-                md.randn(2, 2, allow_grad=True),
+                md.randn(10, 30, allow_grad=True),
+                md.randn(30, 20, allow_grad=True),
             ],
             kwargs={},
         )

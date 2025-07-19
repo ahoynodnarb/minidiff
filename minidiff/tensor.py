@@ -438,7 +438,7 @@ class Tensor:
     def __setitem__(self, key: Any, val: mdt.TensorLike):
         self._validate_mutation()
 
-        self._data[key] = try_unwrap(val)
+        self._data[try_unwrap(key)] = try_unwrap(val)
 
     def __gt__(self, value: mdt.TensorLike) -> Tensor:
         return md.greater(self, value)
@@ -604,7 +604,7 @@ def stack(arrays: Sequence[md.Tensor], allow_grad: py_bool = False, **kwargs) ->
 def save(file, arr: mdt.TensorLike, **kwargs):
     arr = arr._data
 
-    np.save(file, arr._data, **kwargs)
+    np.save(file, arr, **kwargs)
 
 
 def load(file, allow_grad: py_bool = False, **kwargs) -> Tensor:

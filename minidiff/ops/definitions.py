@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from builtins import min as py_min
 from math import prod as py_prod
 from typing import TYPE_CHECKING
 
@@ -112,6 +113,19 @@ def max_grad(
     return ret
 
 
+def min_grad(
+    a: md.Tensor,
+    grad: md.Tensor,
+    axis: Optional[Union[int, Tuple[int]]] = None,
+    **kwargs,
+) -> md.Tensor:
+    min_indices = argmin(a, axis=axis, keepdims=True)
+    grad = grad.reshape(min_indices.shape)
+    ret = md.zeros_like(a)
+    md.put_along_axis(ret, min_indices, grad, axis=axis)
+    return ret
+
+
 def prod_grad(
     a: md.Tensor,
     grad: md.Tensor,
@@ -154,7 +168,7 @@ def unbroadcast_forward(a: md.Tensor, target_shape: Sequence[int]) -> md.Tensor:
     # numpy will "stretch" dimensions so that dimensions of size 1 are tiled
     # so that they match the greater dimension.
     # we can undo this by just summing across those dimensions until we reach size 1 again
-    ndims = min(len(target_shape), a.ndim)
+    ndims = py_min(len(target_shape), a.ndim)
     stretched_axes = tuple(
         i for i in range(ndims) if a.shape[i] > 1 and target_shape[i] == 1
     )
@@ -207,6 +221,10 @@ any: Callable[[md.Tensor], md.Tensor] = wrapping.create_unary_op_func(
 )
 argmax: Callable[[md.Tensor], md.Tensor] = wrapping.create_unary_op_func(
     forward_func=wrapping.as_minidiff(np.argmax),
+    is_differentiable=False,
+)
+argmin: Callable[[md.Tensor], md.Tensor] = wrapping.create_unary_op_func(
+    forward_func=wrapping.as_minidiff(np.argmin),
     is_differentiable=False,
 )
 argwhere: Callable[[md.Tensor], md.Tensor] = wrapping.create_unary_op_func(
@@ -278,6 +296,11 @@ max: Callable[[md.Tensor], md.Tensor] = wrapping.create_unary_op_func(
 mean: Callable[[md.Tensor], md.Tensor] = wrapping.create_unary_op_func(
     forward_func=wrapping.as_minidiff(np.mean),
     grad=mean_grad,
+    propagate_kwargs=True,
+)
+min: Callable[[md.Tensor], md.Tensor] = wrapping.create_unary_op_func(
+    forward_func=wrapping.as_minidiff(np.min),
+    grad=min_grad,
     propagate_kwargs=True,
 )
 prod: Callable[[md.Tensor], md.Tensor] = wrapping.create_unary_op_func(
@@ -518,6 +541,7 @@ __all__ = [
     "all",
     "any",
     "argmax",
+    "argmin",
     "argwhere",
     "atleast_1d",
     "atleast_2d",
@@ -534,6 +558,7 @@ __all__ = [
     "log",
     "logical_not",
     "max",
+    "min",
     "mean",
     "prod",
     "ravel",
