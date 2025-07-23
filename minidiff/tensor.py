@@ -119,19 +119,19 @@ class Tensor:
 
     @property
     def shape(self) -> Tuple[int, ...]:
-        return self._data.shape
+        return backend.tensor_shape(self._data)
 
     @property
     def size(self) -> int:
-        return self._data.size
+        return backend.tensor_size(self._data)
 
     @property
     def ndim(self) -> int:
-        return self._data.ndim
+        return backend.tensor_ndim(self._data)
 
     @property
     def dtype(self) -> mdt.dtype:
-        return self._data.dtype
+        return backend.tensor_dtype(self._data)
 
     def toposort(self) -> List[Tensor]:
         seen = set()
@@ -277,13 +277,13 @@ class Tensor:
     def transpose(self, axes: Optional[Union[int, Sequence[int]]] = None):
         return md.transpose(self, axes=axes)
 
-    def item(self) -> mdt.dtype:
+    def item(self) -> Any:
         if self.size != 1:
             raise ValueError(
                 "Only Tensors with a single element can be reduced to a Python scalar"
             )
 
-        return self._data.item()
+        return backend.tensor_item(self._data)
 
     def sum(self, **kwargs) -> Tensor:
         return md.sum(self, **kwargs)
@@ -424,10 +424,10 @@ class Tensor:
         return -1 * self
 
     def __repr__(self) -> str:
-        return self._data.__repr__()
+        return backend.repr(self._data)
 
     def __len__(self) -> int:
-        return self._data.__len__()
+        return backend.len(self._data)
 
     def __getitem__(self, key: Any) -> Tensor:
         return md.getitem(self, key)
@@ -473,18 +473,12 @@ class Tensor:
     # numpy array specification requirements:
     @property
     def __array_interface__(self) -> Dict[str, Any]:
-        return self._data.__array_interface__
+        return backend.array_interface(self._data)
 
     def __array__(
         self, dtype: Optional[backend.dtype] = None, copy: Optional[py_bool] = None
     ) -> backend.tensor_class:
-        if dtype != self._data.dtype:
-            if not copy:
-                raise ValueError("attempted cast, but copies are not permitted")
-            return self._data.astype(dtype=dtype)
-        if copy:
-            return self._data.copy()
-        return self._data
+        return backend.array(self._data, dtype=dtype, copy=copy)
 
 
 def ones_like(a: mdt.TensorLike, allow_grad: py_bool = False, **kwargs) -> Tensor:

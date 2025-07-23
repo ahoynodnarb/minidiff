@@ -1,3 +1,9 @@
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from typing import Any, Dict, Optional, Tuple
+
 import numpy as np
 
 tensor_constructor = np.array
@@ -106,6 +112,54 @@ binomial = np.random.binomial
 permutation = np.random.permutation
 shuffle = np.random.shuffle
 split = np.split
+
+
+# tensor properties
+def tensor_shape(data: np.ndarray) -> Tuple[int, ...]:
+    return data.shape
+
+
+def tensor_size(data: np.ndarray) -> int:
+    return data.size
+
+
+def tensor_ndim(data: np.ndarray) -> int:
+    return data.ndim
+
+
+def tensor_dtype(data: np.ndarray) -> dtype:
+    return data.dtype
+
+
+def tensor_item(data: np.ndarray) -> Any:
+    return data.item()
+
+
+def repr(data: np.ndarray) -> str:
+    return data.__repr__()
+
+
+def len(data: np.ndarray) -> int:
+    return data.__len__()
+
+
+def array_interface(data: np.ndarray) -> Dict[str, Any]:
+    return data.__array_interface__
+
+
+def array(
+    data: np.ndarray,
+    dtype: Optional[np.dtype] = None,
+    copy: Optional[bool] = None,
+) -> np.ndarray:
+    if dtype != data.dtype:
+        if not copy:
+            raise ValueError("attempted cast, but copies are not permitted")
+        return data.astype(dtype=dtype)
+    if copy:
+        return data.copy()
+    return data
+
 
 # dtypes
 dtype = np.dtype
