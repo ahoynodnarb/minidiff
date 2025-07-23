@@ -1,2 +1,2 @@
-from minidiff.ops.definitions import *
-from minidiff.ops.wrapping import *
+from .definitions import *
+from .wrapping import *
