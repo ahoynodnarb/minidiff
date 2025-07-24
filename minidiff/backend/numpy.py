@@ -1,4 +1,5 @@
 from __future__ import annotations
+from builtins import bool as py_bool
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -26,7 +27,7 @@ cosh = np.cosh
 exp = np.exp
 
 
-def flatten(a, order="C"):
+def flatten(a: np.ndarray, order="C"):
     return a.flatten(order=order)
 
 
@@ -41,7 +42,7 @@ min = np.min
 prod = np.prod
 
 
-def ravel(a, order="C"):
+def ravel(a: np.ndarray, order="C"):
     return a.ravel(order=order)
 
 
@@ -62,7 +63,7 @@ expand_dims = np.expand_dims
 floor_divide = np.floor_divide
 
 
-def getitem(a, key):
+def getitem(a: np.ndarray, key: Any):
     return a[key]
 
 
@@ -150,7 +151,7 @@ def array_interface(data: np.ndarray) -> Dict[str, Any]:
 def array(
     data: np.ndarray,
     dtype: Optional[np.dtype] = None,
-    copy: Optional[bool] = None,
+    copy: Optional[py_bool] = None,
 ) -> np.ndarray:
     if dtype != data.dtype:
         if not copy:

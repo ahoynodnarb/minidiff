@@ -9,11 +9,6 @@ from minidiff.utils import try_unwrap
 
 import minidiff.backend as backend
 
-# try:
-#     import cupy as np  # type: ignore
-# except ImportError:
-#     import numpy as np
-
 if TYPE_CHECKING:
     from typing import Any, Dict, List, Literal, Optional, Sequence, Tuple, Union
 
@@ -430,6 +425,7 @@ class Tensor:
         return backend.len(self._data)
 
     def __getitem__(self, key: Any) -> Tensor:
+        key = try_unwrap(key)
         return md.getitem(self, key)
 
     def __setitem__(self, key: Any, val: mdt.TensorLike):
@@ -477,7 +473,7 @@ class Tensor:
 
     def __array__(
         self, dtype: Optional[backend.dtype] = None, copy: Optional[py_bool] = None
-    ) -> backend.tensor_class:
+    ) -> np.array:
         return backend.array(self._data, dtype=dtype, copy=copy)
 
 
