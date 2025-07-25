@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 from builtins import bool as py_bool
 from typing import TYPE_CHECKING
 

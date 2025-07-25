@@ -4,9 +4,8 @@ from builtins import min as py_min
 from math import prod as py_prod
 from typing import TYPE_CHECKING
 
-import minidiff.backend as backend
-
 import minidiff as md
+import minidiff.backend as backend
 import minidiff.ops.wrapping as wrapping
 
 if TYPE_CHECKING:
@@ -351,6 +350,8 @@ transpose: Callable[[md.Tensor], md.Tensor] = wrapping.create_unary_op_func(
     grad=transpose_grad,
     propagate_kwargs=True,
 )
+
+
 # -------------------- BINARY FUNCS --------------------
 add: Callable[[mdt.TensorLike, mdt.TensorLike], md.Tensor] = (
     wrapping.create_binary_op_func(

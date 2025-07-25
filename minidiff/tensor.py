@@ -4,10 +4,11 @@ import contextvars
 from builtins import bool as py_bool
 from typing import TYPE_CHECKING
 
-import minidiff as md
-from minidiff.utils import try_unwrap
+from numpy import ndarray
 
+import minidiff as md
 import minidiff.backend as backend
+from minidiff.utils import try_unwrap
 
 if TYPE_CHECKING:
     from typing import Any, Dict, List, Literal, Optional, Sequence, Tuple, Union
@@ -17,6 +18,17 @@ if TYPE_CHECKING:
 
 
 _allow_grad = contextvars.ContextVar("allow_grad", default=True)
+
+
+def _validate_bounds(a: md.Tensor, key: Any):
+    if not isinstance(key, md.Tensor):
+        key = md.Tensor(key)
+    lower_bound = md.all(key >= 0).item()
+    upper_bound = md.all(key < md.Tensor(a.shape)).item()
+    if not (lower_bound and upper_bound):
+        raise IndexError(
+            f"first index {key} is out of bounds for Tensor of shape {a.shape}"
+        )
 
 
 class no_grad:
@@ -425,10 +437,11 @@ class Tensor:
         return backend.len(self._data)
 
     def __getitem__(self, key: Any) -> Tensor:
-        key = try_unwrap(key)
+        _validate_bounds(self, key)
         return md.getitem(self, key)
 
     def __setitem__(self, key: Any, val: mdt.TensorLike):
+        _validate_bounds(self, key)
         self._validate_mutation()
 
         self._data[try_unwrap(key)] = try_unwrap(val)
@@ -473,7 +486,7 @@ class Tensor:
 
     def __array__(
         self, dtype: Optional[backend.dtype] = None, copy: Optional[py_bool] = None
-    ) -> np.array:
+    ) -> ndarray:
         return backend.array(self._data, dtype=dtype, copy=copy)
 
 
@@ -671,10 +684,10 @@ def split(
     ary = ary._data
     indices_or_sections = try_unwrap(indices_or_sections)
 
-    output_np = backend.split(ary, indices_or_sections, axis=axis)
-    output = [None] * len(output_np)
+    backend_output = backend.split(ary, indices_or_sections, axis=axis)
+    output = [None] * len(backend_output)
 
-    for i, section in enumerate(output_np):
+    for i, section in enumerate(backend_output):
         output[i] = Tensor(section, allow_grad=allow_grad)
 
     return output

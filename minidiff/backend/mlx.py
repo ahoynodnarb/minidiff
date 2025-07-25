@@ -1,19 +1,19 @@
 from __future__ import annotations
+
 from builtins import bool as py_bool
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from typing import Any, Dict, Optional, Sequence, Tuple, Union
 
-import numpy as np
 import mlx.core as mx
+import numpy as np
 
 
 def tensor_constructor(*args, **kwargs) -> mx.array:
     return mx.stop_gradient(mx.array(*args, **kwargs))
 
 
-# tensor_constructor = mx.array
 tensor_class = mx.array
 
 # op functions
@@ -97,7 +97,13 @@ def astype(a: mx.array, dtype: mx.Dtype) -> mx.array:
 
 
 broadcast_to = mx.broadcast_to
-dot = mx.tensordot
+
+
+def dot(a: mx.array, b: mx.array):
+    return mx.matmul(a, b.T)
+
+
+# dot = mx.tensordot
 equal = mx.equal
 expand_dims = mx.expand_dims
 floor_divide = mx.floor_divide
@@ -119,7 +125,12 @@ mod = mx.remainder
 multiply = mx.multiply
 not_equal = mx.not_equal
 power = mx.power
-reshape = mx.reshape
+
+
+def reshape(*args, order="C", **kwargs) -> mx.array:
+    return mx.reshape(*args, **kwargs)
+
+
 subtract = mx.subtract
 tensordot = mx.tensordot
 true_divide = mx.divide
@@ -142,7 +153,9 @@ full = mx.full
 
 
 def index_add(a: mx.array, indices: mx.array, b: Optional[mx.array] = None):
-    a.at[indices].add(b)
+    accumulated = mx.zeros_like(a)
+    accumulated = accumulated.at[indices].add(b)
+    a += accumulated
 
 
 # isin = mx.isin
@@ -172,10 +185,21 @@ def rand(*dims) -> mx.array:
     return mx.random.uniform(shape=dims)
 
 
-randint = mx.random.randint
+def randint(
+    low: Union[int, Sequence[int]],
+    high: Optional[Union[int, Sequence[int]]] = None,
+    size: Optional[Union[int, Sequence[int]]] = None,
+):
+    if not isinstance(low, mx.array):
+        low = mx.array(low)
+    if not isinstance(high, mx.array):
+        high = mx.array(high)
+    if size is None:
+        size = low.shape
+    return mx.random.randint(low, high, shape=size)
 
 
-def randn(*dims) -> mx.array:
+def randn(*dims: int) -> mx.array:
     return mx.random.normal(dims)
 
 

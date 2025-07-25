@@ -36,11 +36,14 @@ def perform_test(
         expected = md.zeros_like(actual)
         return md.sum((expected - actual) ** 2) / 2
 
-    mask = backend.tensor_constructor(
-        (~(np.isnan(np.array(out)) | np.isnan(np.array(comp)))).astype(np.int32)
-    )
+    if out.size != 1:
+        forward_mask = backend.tensor_constructor(
+            ~(np.isnan(np.array(out)) | np.isnan(np.array(comp)))
+        )
+        out = out * forward_mask
+        comp = comp * forward_mask
     assert np.allclose(
-        out[mask], comp[mask], rtol=forward_rtol, atol=forward_atol
+        out, comp, rtol=forward_rtol, atol=forward_atol
     ), f"❌ Forward Test failed for {func}. Compared against {backend_func}\nminidiff:\n{out}\nnumpy:\n{comp}"
 
     manual_grads, auto_grads = compute_grads(
@@ -49,11 +52,14 @@ def perform_test(
     for i, (manual, auto) in enumerate(zip(manual_grads, auto_grads)):
         if manual is None and auto is None:
             continue
-        mask = backend.tensor_constructor(
-            (~(np.isnan(np.array(manual)) | np.isnan(np.array(auto)))).astype(np.int32)
-        )
+        if manual.size != 1:
+            grad_mask = backend.tensor_constructor(
+                ~(np.isnan(np.array(manual)) | np.isnan(np.array(auto)))
+            )
+            manual = manual * grad_mask
+            auto = auto * grad_mask
         assert np.allclose(
-            manual[mask], auto[mask], rtol=backward_rtol, atol=backward_atol
+            manual, auto, rtol=backward_rtol, atol=backward_atol
         ), f"❌ Gradient Test wrt {i}th parameter failed for {func}. \nmanual gradients:\n{manual}\nautomatic gradients:\n{auto}"
 
 
@@ -161,13 +167,15 @@ def test_prod():
 
 def test_transpose():
     for _ in range(5):
+        axes = md.permutation(md.arange(4))
+        # print(axes)
         perform_test(
             func=md.transpose,
             backend_func=backend.transpose,
             args=[
                 md.randn(2, 2, 2, 2, allow_grad=True),
             ],
-            kwargs={"axes": md.permutation(range(4))},
+            kwargs={"axes": axes},
         )
 
 
@@ -529,4 +537,41 @@ def test_absolute():
 
 
 if __name__ == "__main__":
+    test_ravel()
+    test_flatten()
+    test_squeeze()
+    test_expand_dims()
+    test_max()
+    test_min()
+    test_where()
+    test_prod()
+    test_transpose()
+    test_swapaxes()
+    test_flip()
+    test_dot()
+    test_broadcast_to()
+    test_atleast_1d()
+    test_atleast_2d()
+    test_atleast_3d()
+    test_copy()
+    test_getitem()
+    test_clip()
+    test_reshape()
+    test_matmul()
+    test_tensordot()
     test_add()
+    test_subtract()
+    test_multiply()
+    test_true_divide()
+    test_power()
+    test_cos()
+    test_sin()
+    test_tan()
+    test_cosh()
+    test_sinh()
+    test_tanh()
+    test_exp()
+    test_log()
+    test_sum()
+    test_mean()
+    test_absolute()
