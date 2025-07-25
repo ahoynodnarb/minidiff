@@ -20,17 +20,6 @@ if TYPE_CHECKING:
 _allow_grad = contextvars.ContextVar("allow_grad", default=True)
 
 
-def _validate_bounds(a: md.Tensor, key: Any):
-    if not isinstance(key, md.Tensor):
-        key = md.Tensor(key)
-    lower_bound = md.all(key >= 0).item()
-    upper_bound = md.all(key < md.Tensor(a.shape)).item()
-    if not (lower_bound and upper_bound):
-        raise IndexError(
-            f"first index {key} is out of bounds for Tensor of shape {a.shape}"
-        )
-
-
 class no_grad:
     def __enter__(self):
         self.prev = _allow_grad.get()
@@ -79,6 +68,12 @@ class Tensor:
         if dtype is not None:
             data = data.astype(dtype)
         self._data = data
+
+        data_size = backend.tensor_size(data)
+        self._iterator = TensorIterator(
+            data,
+            len(self) if data_size > 1 else data_size,
+        )
 
         self._allow_grad = allow_grad
         self.graph_refs = 0
@@ -437,11 +432,9 @@ class Tensor:
         return backend.len(self._data)
 
     def __getitem__(self, key: Any) -> Tensor:
-        _validate_bounds(self, key)
         return md.getitem(self, key)
 
     def __setitem__(self, key: Any, val: mdt.TensorLike):
-        _validate_bounds(self, key)
         self._validate_mutation()
 
         self._data[try_unwrap(key)] = try_unwrap(val)
@@ -479,6 +472,9 @@ class Tensor:
     def __invert__(self) -> Tensor:
         return md.invert(self)
 
+    def __iter__(self) -> TensorIterator:
+        return self._iterator
+
     # numpy array specification requirements:
     @property
     def __array_interface__(self) -> Dict[str, Any]:
@@ -488,6 +484,23 @@ class Tensor:
         self, dtype: Optional[backend.dtype] = None, copy: Optional[py_bool] = None
     ) -> ndarray:
         return backend.array(self._data, dtype=dtype, copy=copy)
+
+
+class TensorIterator:
+    def __init__(self, data, length):
+        self.data = data
+        self.length = length
+        self.index = 0
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        if self.index >= self.length:
+            raise StopIteration
+        item = self.data[self.index]
+        self.index += 1
+        return item
 
 
 def ones_like(a: mdt.TensorLike, allow_grad: py_bool = False, **kwargs) -> Tensor:
@@ -555,8 +568,8 @@ def unravel_index(
 
 
 def take_along_axis(
-    arr: md.Tensor,
-    indices: md.Tensor,
+    arr: Tensor,
+    indices: Tensor,
     axis: Optional[int] = None,
     allow_grad: py_bool = False,
 ) -> Tensor:
@@ -569,8 +582,8 @@ def take_along_axis(
 
 
 def put_along_axis(
-    arr: md.Tensor,
-    indices: md.Tensor,
+    arr: Tensor,
+    indices: Tensor,
     values: mdt.TensorLike,
     axis: Optional[int],
 ) -> Tensor:
@@ -605,7 +618,7 @@ def arange(*args: Union[int, float], allow_grad: py_bool = False, **kwargs) -> T
     return Tensor(backend.arange(*args, **kwargs), allow_grad=allow_grad)
 
 
-def stack(arrays: Sequence[md.Tensor], allow_grad: py_bool = False, **kwargs) -> Tensor:
+def stack(arrays: Sequence[Tensor], allow_grad: py_bool = False, **kwargs) -> Tensor:
     arrays = [x._data for x in arrays]
 
     return Tensor(backend.stack(arrays, **kwargs), allow_grad=allow_grad)
@@ -626,7 +639,7 @@ def choice(
     size: Optional[Union[int, Sequence[int]]] = None,
     replace: py_bool = True,
     p: Optional[mdt.TensorLike] = None,
-) -> md.Tensor:
+) -> Tensor:
     a = try_unwrap(a)
     p = try_unwrap(p)
 
@@ -676,11 +689,11 @@ def shuffle(x: Tensor):
 
 
 def split(
-    ary: md.Tensor,
+    ary: Tensor,
     indices_or_sections: Union[int, Sequence[int]],
     axis: int = 0,
     allow_grad: py_bool = False,
-) -> md.Tensor:
+) -> Tensor:
     ary = ary._data
     indices_or_sections = try_unwrap(indices_or_sections)
 
