@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import collections.abc as abc
 from copy import deepcopy
 from typing import TYPE_CHECKING
 
@@ -122,7 +123,7 @@ def calculate_finite_differences(
             # this just computes the gradients from first principles
             left = input_tensors[:i]
             right = input_tensors[i + 1 :]
-            flattened_input_tensor = input_tensor.reshape(-1)
+            flattened_input_tensor = input_tensor.flatten()
             flattened_grad = md.zeros_like(flattened_input_tensor)
             # this is the same as (f(x + h) - f(x - h)) / (2 * h), which is the definition of the derivative
             for x in range(input_tensor.size):
@@ -183,7 +184,10 @@ def compute_grads(
 
 
 def try_unwrap(t: Any):
-    try:
+    if isinstance(t, md.Tensor):
         return t._data
-    except AttributeError:
-        return t
+    if isinstance(t, tuple):
+        return tuple([try_unwrap(x) for x in t])
+    if isinstance(t, list):
+        return [try_unwrap(x) for x in t]
+    return t
