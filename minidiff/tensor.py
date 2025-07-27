@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextvars
+import math
 from builtins import bool as py_bool
 from typing import TYPE_CHECKING
 
@@ -8,7 +9,6 @@ from numpy import ndarray
 
 import minidiff as md
 import minidiff.backend as backend
-from minidiff.utils import try_unwrap
 
 if TYPE_CHECKING:
     from typing import Any, Dict, List, Literal, Optional, Sequence, Tuple, Union
@@ -49,6 +49,17 @@ def grad_allowed_() -> py_bool:
     return _allow_grad.get()
 
 
+def try_unwrap(t: Any):
+    if isinstance(t, Tensor):
+        return t._data
+    elif isinstance(t, tuple):
+        return tuple([try_unwrap(x) for x in t])
+    elif isinstance(t, list):
+        return [try_unwrap(x) for x in t]
+    else:
+        return t
+
+
 # compute from left to right, dy/dw2 then dw2/dw1 to get dy/dw1 and finally dw1/dx to get dy/dx
 # dy/dw2 would just be the loss gradient
 
@@ -59,10 +70,12 @@ def grad_allowed_() -> py_bool:
 class Tensor:
     def __init__(
         self,
-        data: Union[int, float, backend.tensor_class],
+        data: Optional[Union[int, float, backend.tensor_class]],
         allow_grad: py_bool = False,
         dtype: Optional[mdt.dtype] = None,
     ):
+        if data is None:
+            data = backend.tensor_constructor([])
         if not isinstance(data, backend.tensor_class):
             data = backend.tensor_constructor(data)
         if dtype is not None:
@@ -486,6 +499,172 @@ class Tensor:
         return backend.array(self._data, dtype=dtype, copy=copy)
 
 
+class SparseTensor(Tensor):
+    def __init__(
+        self,
+        data: backend.tensor_class,
+        allow_grad: py_bool = False,
+        dtype: Optional[mdt.dtype] = None,
+    ):
+        super().__init__(None, allow_grad=allow_grad, dtype=dtype)
+
+        if data is None:
+            data = backend.tensor_constructor([])
+        if not isinstance(data, backend.tensor_class):
+            data = backend.tensor_constructor(data)
+        if dtype is not None:
+            data = data.astype(dtype)
+
+        self._shape = backend.tensor_shape(data)
+        self._size = math.prod(self._shape)
+        self._ndim = len(self._shape)
+        if dtype is None:
+            dtype = backend.tensor_dtype(data)
+        self._dtype = dtype
+
+        self._materialized = False
+        self._create_sparse_expr(data)
+
+    # ultimately just sets the sparse_indices to be an array of form (i, j, k, ..., A) where [i, j, k, ...] are the indices and A is the element
+    # sorted by indices as if the original tensor were flattened
+    def _create_sparse_expr(self, data: backend.tensor_class):
+        populated_indices = backend.argwhere(data != 0)
+        indexable = tuple(backend.transpose(populated_indices))
+        populated_elements = backend.expand_dims(data[indexable], -1)
+        sparse_indices = backend.concatenate(
+            (populated_indices, populated_elements), axis=1
+        )
+        self.sparse_indices = sparse_indices
+
+    def _materialize(self):
+        populated_indices = self.sparse_indices[..., : self._ndim]
+        populated_elements = self.sparse_indices[..., -1]
+        indexable = tuple(backend.transpose(populated_indices))
+        self._materialized_data = backend.zeros(self._shape)
+        self._materialized_data[indexable] = populated_elements
+
+    @property
+    def _data(self) -> backend.tensor_class:
+        if not self._materialized:
+            self._materialize()
+            self._materialized = True
+
+        return self._materialized_data
+
+    @_data.setter
+    def _data(self, _data: backend.tensor_class):
+        self._create_sparse_expr(_data)
+        self._materialized = False
+
+    # have to fix this for nested tuples
+    # either format them the same way as backend tensors
+    # or just go the nuclear route and not format backend tensors or tuples
+    # and just pass them as is to __getitem__ where that function can deal with formatting
+    def _format_key(
+        self, key: Union[int, backend.tensor_class, slice, tuple]
+    ) -> tuple[Union[int, backend.tensor_class, slice, tuple], ...]:
+        if isinstance(key, (int, backend.tensor_class, slice)):
+            key = (key,)
+        elif not isinstance(key, tuple):
+            raise ValueError(f"Indexing does not support the type {type(key)}")
+        if len(key) > self._ndim:
+            raise ValueError("Key depth greater than tensor depth")
+
+        formatted_key = [None] * len(key)
+        for axis, (original_dim, index) in enumerate(zip(self._shape, key)):
+            if isinstance(index, int):
+                if index < 0:
+                    index = original_dim + index
+                formatted_key[axis] = index
+                continue
+            if isinstance(index, backend.tensor_class):
+                index = backend.where(index < 0, original_dim + index, index)
+                formatted_key[axis] = index
+                continue
+            if isinstance(index, slice):
+                step = index.step
+                if step == 0:
+                    raise ValueError("step cannot be 0")
+                if step is None:
+                    step = 1
+
+                start = index.start
+                if start is None:
+                    start = 0 if step >= 0 else original_dim - 1
+                if start < 0:
+                    start = original_dim + start
+                # clamp to correct indices
+                start = max(0, min(original_dim - 1, start))
+
+                stop = index.stop
+                if stop is None:
+                    stop = original_dim if step >= 0 else -original_dim - 1
+                if stop < 0:
+                    stop = original_dim + stop
+                # clamp to correct lengths
+                stop = max(0, min(original_dim, stop))
+                formatted_key[axis] = slice(start, stop, step)
+                continue
+
+            # all else failed, key is invalid
+            raise ValueError(f"Indexing does not support the type {type(index)}")
+
+        return tuple(formatted_key)
+
+    # accepts only formatted keys
+    def _get_indexed_shape(
+        self, key: Union[int, backend.tensor_class, slice, tuple]
+    ) -> Tuple[int, ...]:
+        out_shape = []
+        for axis, original_dim in enumerate(self._shape):
+            if axis >= len(key):
+                out_shape.append(original_dim)
+                continue
+            index = key[axis]
+            if isinstance(index, int):
+                continue
+            # this is indexing using another tensor
+            # that takes the form of [[x0, x1, x2, ..., xn-1], [y0, y1, y2, ..., yn-1], [z0, z1, z2, ..., zn-1]]
+            # where n is the amount of elements we want to access
+            if isinstance(index, backend.tensor_class):
+                dim_size = backend.tensor_shape(index)[-1]
+                out_shape.append(dim_size)
+                continue
+            if isinstance(index, slice):
+                start = index.start
+                stop = index.stop
+                step = index.step
+                # if we start from a low point but need to go lower we can't and if we start from a high point and need to go higher we can't
+                if (start <= stop) == (step <= 0):
+                    out_shape.append(0)
+                    continue
+                # https://numpy.org/devdocs/user/basics.indexing.html
+                q, r = divmod(stop - start, step)
+                m = q
+                if r != 0:
+                    m += 1
+                out_shape.append(m)
+                continue
+
+        return tuple(out_shape)
+
+    # worry about differentiability later
+    # probably just define an op for this
+    def __getitem__(self, key: Union[int, backend.tensor_class, slice, tuple]) -> Any:
+        key = self._format_key(key)
+        out_shape = self._get_indexed_shape(key)
+        out = backend.zeros(out_shape)
+        # binary search for the start and end pointers for the first dimension of the key
+        # do linear searches for the starts and ends from there using two pointer?
+        # linear searches should be faster since they're only O(n) and we can continue the search from the end of the previous search
+        # if we continued binary search it would be ~O(nlogn) while this optimized linear search should be O(n)
+        # note that since the search pool is smaller each time, repeated binary search will probably be a little faster than O(nlogn)
+        # still should not scale well for large tensors though, and linear search should be better
+        # for index in key:
+
+        return super().__getitem__(key)
+
+
 class TensorIterator:
     def __init__(self, data, length):
         self.data = data
@@ -542,10 +721,23 @@ def full(
     return Tensor(backend.full(shape, **kwargs), allow_grad=allow_grad)
 
 
+def concatenate(
+    arrays: Sequence[mdt.TensorLike],
+    axis: Optional[int] = 0,
+    allow_grad: py_bool = False,
+) -> Tensor:
+    arrays = try_unwrap(arrays)
+    return Tensor(backend.concatenate(arrays, axis=axis), allow_grad=allow_grad)
+
+
 def index_add(
     a: mdt.TensorLike, indices: mdt.TensorLike, b: Optional[mdt.TensorLike] = None
 ):
-    backend.index_add(try_unwrap(a), try_unwrap(indices), try_unwrap(b))
+    a = try_unwrap(a)
+    indices = try_unwrap(indices)
+    b = try_unwrap(b)
+
+    backend.index_add(a, indices, b)
 
 
 def isin(

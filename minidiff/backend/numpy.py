@@ -95,6 +95,7 @@ zeros_like = np.zeros_like
 zeros = np.zeros
 full_like = np.full_like
 full = np.full
+concatenate = np.concatenate
 index_add = np.add.at
 isin = np.isin
 unravel_index = np.unravel_index
