@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import collections.abc as abc
 from copy import deepcopy
 from typing import TYPE_CHECKING
 
@@ -181,13 +180,3 @@ def compute_grads(
     ]
 
     return manual_gradients, automatic_gradients
-
-
-def try_unwrap(t: Any):
-    if isinstance(t, md.Tensor):
-        return t._data
-    if isinstance(t, tuple):
-        return tuple([try_unwrap(x) for x in t])
-    if isinstance(t, list):
-        return [try_unwrap(x) for x in t]
-    return t

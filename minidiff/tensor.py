@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextvars
+import math
 from builtins import bool as py_bool
 from typing import TYPE_CHECKING
 
@@ -8,7 +9,6 @@ from numpy import ndarray
 
 import minidiff as md
 import minidiff.backend as backend
-from minidiff.utils import try_unwrap
 
 if TYPE_CHECKING:
     from typing import Any, Dict, List, Literal, Optional, Sequence, Tuple, Union
@@ -49,6 +49,17 @@ def grad_allowed_() -> py_bool:
     return _allow_grad.get()
 
 
+def try_unwrap(t: Any):
+    if isinstance(t, Tensor):
+        return t._data
+    elif isinstance(t, tuple):
+        return tuple([try_unwrap(x) for x in t])
+    elif isinstance(t, list):
+        return [try_unwrap(x) for x in t]
+    else:
+        return t
+
+
 # compute from left to right, dy/dw2 then dw2/dw1 to get dy/dw1 and finally dw1/dx to get dy/dx
 # dy/dw2 would just be the loss gradient
 
@@ -59,10 +70,12 @@ def grad_allowed_() -> py_bool:
 class Tensor:
     def __init__(
         self,
-        data: Union[int, float, backend.tensor_class],
+        data: Optional[Union[int, float, backend.tensor_class]],
         allow_grad: py_bool = False,
         dtype: Optional[mdt.dtype] = None,
     ):
+        if data is None:
+            data = backend.tensor_constructor([])
         if not isinstance(data, backend.tensor_class):
             data = backend.tensor_constructor(data)
         if dtype is not None:
@@ -542,10 +555,23 @@ def full(
     return Tensor(backend.full(shape, **kwargs), allow_grad=allow_grad)
 
 
+def concatenate(
+    arrays: Sequence[mdt.TensorLike],
+    axis: Optional[int] = 0,
+    allow_grad: py_bool = False,
+) -> Tensor:
+    arrays = try_unwrap(arrays)
+    return Tensor(backend.concatenate(arrays, axis=axis), allow_grad=allow_grad)
+
+
 def index_add(
     a: mdt.TensorLike, indices: mdt.TensorLike, b: Optional[mdt.TensorLike] = None
 ):
-    backend.index_add(try_unwrap(a), try_unwrap(indices), try_unwrap(b))
+    a = try_unwrap(a)
+    indices = try_unwrap(indices)
+    b = try_unwrap(b)
+
+    backend.index_add(a, indices, b)
 
 
 def isin(

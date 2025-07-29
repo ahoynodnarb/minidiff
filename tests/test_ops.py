@@ -7,7 +7,7 @@ import numpy as np
 
 import minidiff as md
 import minidiff.backend as backend
-from minidiff.utils import compute_grads, try_unwrap
+from minidiff.utils import compute_grads
 
 if TYPE_CHECKING:
     from typing import Any, Dict, Optional, Sequence
@@ -28,7 +28,8 @@ def perform_test(
 ):
     out = func(*args, **kwargs)._data
     comp = backend_func(
-        *[try_unwrap(x) for x in args], **{k: try_unwrap(v) for k, v in kwargs.items()}
+        *[md.try_unwrap(x) for x in args],
+        **{k: md.try_unwrap(v) for k, v in kwargs.items()},
     )
 
     def loss_func(*loss_args):

@@ -25,7 +25,12 @@ argmin = mx.argmin
 
 
 def argwhere(a: mx.array) -> mx.array:
-    return mx.transpose(mx.nonzero(a))
+    flat_indices = mx.repeat(mx.arange(a.size)[:, None], a.ndim, axis=1)
+    shape = mx.array(a.shape)
+    divisor = a.size // mx.cumprod(shape)
+    modulo = divisor * shape
+    indices = (flat_indices % modulo) // divisor
+    return mx.array([index for index, x in zip(indices, a.flatten()) if x])
 
 
 # argwhere = mx.argwhere
@@ -150,6 +155,8 @@ def full_like(a: mx.array, fill_value, dtype: mx.Dtype) -> mx.array:
 
 
 full = mx.full
+
+concatenate = mx.concatenate
 
 
 def index_add(a: mx.array, indices: mx.array, b: Optional[mx.array] = None):
