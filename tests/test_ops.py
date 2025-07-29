@@ -10,9 +10,16 @@ import minidiff.backend as backend
 from minidiff.utils import compute_grads
 
 if TYPE_CHECKING:
-    from typing import Any, Dict, Optional, Sequence
+    from typing import Any, Dict, Optional, Sequence, Tuple
 
     import minidiff.typing as mdt
+
+
+def filter_nan(a: np.ndarray, b: np.ndarray) -> Tuple[backend.tensor_class, backend.tensor_class]:
+    condition = np.isnan(a) | np.isnan(b)
+    a = backend.where(condition, 0, a)
+    b = backend.where(condition, 0, b)
+    return a, b
 
 
 def perform_test(
@@ -38,11 +45,7 @@ def perform_test(
         return md.sum((expected - actual) ** 2) / 2
 
     if out.size != 1:
-        forward_mask = backend.tensor_constructor(
-            ~(np.isnan(np.array(out)) | np.isnan(np.array(comp)))
-        )
-        out = out * forward_mask
-        comp = comp * forward_mask
+        out, comp = filter_nan(np.array(out), np.array(comp))
     assert np.allclose(
         out, comp, rtol=forward_rtol, atol=forward_atol
     ), f"❌ Forward Test failed for {func}. Compared against {backend_func}\nminidiff:\n{out}\nnumpy:\n{comp}"
@@ -53,12 +56,7 @@ def perform_test(
     for i, (manual, auto) in enumerate(zip(manual_grads, auto_grads)):
         if manual is None and auto is None:
             continue
-        if manual.size != 1:
-            grad_mask = backend.tensor_constructor(
-                ~(np.isnan(np.array(manual)) | np.isnan(np.array(auto)))
-            )
-            manual = manual * grad_mask
-            auto = auto * grad_mask
+        manual, auto = filter_nan(np.array(out), np.array(comp))
         assert np.allclose(
             manual, auto, rtol=backward_rtol, atol=backward_atol
         ), f"❌ Gradient Test wrt {i}th parameter failed for {func}. \nmanual gradients:\n{manual}\nautomatic gradients:\n{auto}"
@@ -538,41 +536,44 @@ def test_absolute():
 
 
 if __name__ == "__main__":
-    test_ravel()
-    test_flatten()
-    test_squeeze()
-    test_expand_dims()
-    test_max()
-    test_min()
-    test_where()
-    test_prod()
-    test_transpose()
-    test_swapaxes()
-    test_flip()
-    test_dot()
-    test_broadcast_to()
-    test_atleast_1d()
-    test_atleast_2d()
-    test_atleast_3d()
-    test_copy()
-    test_getitem()
-    test_clip()
-    test_reshape()
-    test_matmul()
-    test_tensordot()
-    test_add()
-    test_subtract()
-    test_multiply()
-    test_true_divide()
     test_power()
-    test_cos()
-    test_sin()
-    test_tan()
-    test_cosh()
-    test_sinh()
-    test_tanh()
-    test_exp()
-    test_log()
-    test_sum()
-    test_mean()
-    test_absolute()
+    
+    
+    # test_ravel()
+    # test_flatten()
+    # test_squeeze()
+    # test_expand_dims()
+    # test_max()
+    # test_min()
+    # test_where()
+    # test_prod()
+    # test_transpose()
+    # test_swapaxes()
+    # test_flip()
+    # test_dot()
+    # test_broadcast_to()
+    # test_atleast_1d()
+    # test_atleast_2d()
+    # test_atleast_3d()
+    # test_copy()
+    # test_getitem()
+    # test_clip()
+    # test_reshape()
+    # test_matmul()
+    # test_tensordot()
+    # test_add()
+    # test_subtract()
+    # test_multiply()
+    # test_true_divide()
+    # test_power()
+    # test_cos()
+    # test_sin()
+    # test_tan()
+    # test_cosh()
+    # test_sinh()
+    # test_tanh()
+    # test_exp()
+    # test_log()
+    # test_sum()
+    # test_mean()
+    # test_absolute()

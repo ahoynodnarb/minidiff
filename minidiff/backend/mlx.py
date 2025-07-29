@@ -283,3 +283,5 @@ int32 = mx.int32
 int16 = mx.int16
 int8 = mx.int8
 bool = mx.bool_
+
+nan = mx.nan

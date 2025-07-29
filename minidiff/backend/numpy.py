@@ -178,3 +178,5 @@ int32 = np.int32
 int16 = np.int16
 int8 = np.int8
 bool = np.bool
+
+nan = np.nan
