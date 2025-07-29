@@ -502,7 +502,7 @@ class Tensor:
 class SparseTensor(Tensor):
     def __init__(
         self,
-        data: backend.tensor_class,
+        data: Optional[backend.tensor_class],
         allow_grad: py_bool = False,
         dtype: Optional[mdt.dtype] = None,
     ):
@@ -528,6 +528,9 @@ class SparseTensor(Tensor):
     # ultimately just sets the sparse_indices to be an array of form (i, j, k, ..., A) where [i, j, k, ...] are the indices and A is the element
     # sorted by indices as if the original tensor were flattened
     def _create_sparse_expr(self, data: backend.tensor_class):
+        if backend.tensor_size(data) == 0:
+            self.sparse_indices = backend.tensor_constructor([])
+            return
         populated_indices = backend.argwhere(data != 0)
         indexable = tuple(backend.transpose(populated_indices))
         populated_elements = backend.expand_dims(data[indexable], -1)
