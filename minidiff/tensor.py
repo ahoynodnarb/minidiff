@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import contextvars
-import math
 from builtins import bool as py_bool
 from typing import TYPE_CHECKING
 
@@ -147,6 +146,9 @@ class Tensor:
     @property
     def dtype(self) -> mdt.dtype:
         return backend.tensor_dtype(self._data)
+    
+    def as_numpy(self) -> ndarray:
+        return backend.as_numpy(self._data)
 
     def toposort(self) -> List[Tensor]:
         seen = set()

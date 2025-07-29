@@ -15,10 +15,10 @@ if TYPE_CHECKING:
     import minidiff.typing as mdt
 
 
-def filter_nan(a: np.ndarray, b: np.ndarray) -> Tuple[backend.tensor_class, backend.tensor_class]:
+def filter_nan(a: np.ndarray, b: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     condition = np.isnan(a) | np.isnan(b)
-    a = backend.where(condition, 0, a)
-    b = backend.where(condition, 0, b)
+    a = np.where(condition, 0, a)
+    b = np.where(condition, 0, b)
     return a, b
 
 
@@ -45,7 +45,7 @@ def perform_test(
         return md.sum((expected - actual) ** 2) / 2
 
     if out.size != 1:
-        out, comp = filter_nan(np.array(out), np.array(comp))
+        out, comp = filter_nan(backend.as_numpy(out), backend.as_numpy(comp))
     assert np.allclose(
         out, comp, rtol=forward_rtol, atol=forward_atol
     ), f"❌ Forward Test failed for {func}. Compared against {backend_func}\nminidiff:\n{out}\nnumpy:\n{comp}"
@@ -56,7 +56,7 @@ def perform_test(
     for i, (manual, auto) in enumerate(zip(manual_grads, auto_grads)):
         if manual is None and auto is None:
             continue
-        manual, auto = filter_nan(np.array(out), np.array(comp))
+        manual, auto = filter_nan(backend.as_numpy(out), backend.as_numpy(comp))
         assert np.allclose(
             manual, auto, rtol=backward_rtol, atol=backward_atol
         ), f"❌ Gradient Test wrt {i}th parameter failed for {func}. \nmanual gradients:\n{manual}\nautomatic gradients:\n{auto}"
@@ -167,14 +167,13 @@ def test_prod():
 def test_transpose():
     for _ in range(5):
         axes = md.permutation(md.arange(4))
-        # print(axes)
         perform_test(
             func=md.transpose,
             backend_func=backend.transpose,
             args=[
                 md.randn(2, 2, 2, 2, allow_grad=True),
             ],
-            kwargs={"axes": axes},
+            kwargs={"axes": tuple(backend.as_numpy(axes._data))},
         )
 
 
@@ -536,7 +535,7 @@ def test_absolute():
 
 
 if __name__ == "__main__":
-    test_power()
+    test_transpose()
     
     
     # test_ravel()

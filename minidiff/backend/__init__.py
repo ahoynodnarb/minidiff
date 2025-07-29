@@ -15,12 +15,19 @@ def import_selected_backend(selected_backend, package_name=None):
 
 found_backend = False
 
-# if not found_backend:
-#     try:
-#         import_selected_backend("minidiff.backend.mlx")
-#         found_backend = True
-#     except ImportError:
-#         pass
+if not found_backend:
+    try:
+        import_selected_backend("minidiff.backend.cupy")
+        found_backend = True
+    except ImportError:
+        pass
+    
+if not found_backend:
+    try:
+        import_selected_backend("minidiff.backend.mlx")
+        found_backend = True
+    except ImportError:
+        pass
 
 if not found_backend:
     try:
