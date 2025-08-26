@@ -146,7 +146,7 @@ class Tensor:
     @property
     def dtype(self) -> mdt.dtype:
         return backend.tensor_dtype(self._data)
-    
+
     def as_numpy(self) -> ndarray:
         return backend.as_numpy(self._data)
 

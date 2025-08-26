@@ -21,7 +21,7 @@ if not found_backend:
         found_backend = True
     except ImportError:
         pass
-    
+
 if not found_backend:
     try:
         import_selected_backend("minidiff.backend.mlx")

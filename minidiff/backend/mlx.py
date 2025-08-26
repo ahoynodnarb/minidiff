@@ -286,5 +286,6 @@ bool = mx.bool_
 
 nan = mx.nan
 
+
 def as_numpy(a: mx.array) -> np.array:
     return np.array(a)

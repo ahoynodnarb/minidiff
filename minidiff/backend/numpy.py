@@ -181,5 +181,6 @@ bool = np.bool
 
 nan = np.nan
 
+
 def as_numpy(a: np.ndarray) -> np.ndarray:
     return a
