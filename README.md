@@ -1,7 +1,7 @@
-# minidiff: A NumPy/CuPy-Compatible Reverse-Mode Automatic Differentiation Engine
+# minidiff: A NumPy-like Reverse-Mode Automatic Differentiation Engine
 
 A lightweight automatic differentiation library with PyTorch-like API, supporting higher-order gradients and eager memory management. 
-Designed as a drop-in replacement for NumPy/CuPy with readability and clarity as a top priority.
+Designed as a drop-in replacement for NumPy with readability and clarity as a top priority.
 
 This codebase does assume the reader has some existing requisite knowledge about multivariable calculus and linear algebra, but it's meant to be as readable as possible with that in mind. You can find great resources for both of those topics pretty much anywhere on the internet!
 
@@ -38,7 +38,7 @@ print(y.grad)
 ## Custom Functions
 Implementing your own differentiable operations is also pretty simple. 
 
-Helper functions like `create_op_func()` and `as_minidiff()` automatically wrap NumPy functions as minidiff functions and manage computation graphs, respectively. 
+Helper functions like `create_op_func()` and `as_minidiff()` automatically wrap backend functions as minidiff functions and manage computation graphs, respectively. 
 
 See [`minidiff/ops/definitions.py`](https://github.com/ahoynodnarb/minidiff/blob/master/minidiff/ops/definitions.py) for some examples.
 
@@ -55,4 +55,6 @@ Feel free to explore around the repo, it's structured as follows:
 
 [`minidiff/ops/definitions.py`](https://github.com/ahoynodnarb/minidiff/blob/master/minidiff/ops/definitions.py): Every operation exported by minidiff is defined here, including their forward and backward passes
 
-[`minidiff/ops/wrapping.py`](https://github.com/ahoynodnarb/minidiff/blob/master/minidiff/ops/wrapping.py): This file mostly contains code that allows wraping NumPy functions as `Tensor` functions and automatic differentiability to those resulting `Tensor` functions
+[`minidiff/ops/wrapping.py`](https://github.com/ahoynodnarb/minidiff/blob/master/minidiff/ops/wrapping.py): This file mostly contains code that allows wrapping backend functions as `Tensor` functions and automatic differentiability to those resulting `Tensor` functions
+
+[`minidiff/backend/`](https://github.com/ahoynodnarb/minidiff/blob/master/minidiff/backend): Submodule containing logic for selecting a suitable backend and exporting functions from the backend. Currently contains CuPy, NumPy, and MLX

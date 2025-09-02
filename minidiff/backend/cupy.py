@@ -4,25 +4,25 @@ from builtins import bool as py_bool
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from typing import Any, Dict, Optional, Tuple, Union, Sequence
+    from typing import Any, Dict, Optional, Sequence, Tuple, Union
+
     import cupy.typing as cpt
 
-from cupy.lib._shape_base import internal
 import cupy as cp
+from cupy.lib._shape_base import internal
+
 
 # https://github.com/cupy/cupy/blob/main/cupy/lib/_shape_base.py#L156
 def _make_along_axis_idx(arr_shape, indices, axis):
     # compute dimensions to iterate over
 
     if not cp.issubdtype(indices.dtype, cp.integer):
-        raise IndexError('`indices` must be an integer array')
+        raise IndexError("`indices` must be an integer array")
     if len(arr_shape) != indices.ndim:
-        raise ValueError(
-            "`indices` and `arr` must have the same number of dimensions")
+        raise ValueError("`indices` and `arr` must have the same number of dimensions")
 
-    shape_ones = (1, ) * indices.ndim
-    dest_dims = list(range(axis)) + [None] + \
-        list(range(axis + 1, indices.ndim))
+    shape_ones = (1,) * indices.ndim
+    dest_dims = list(range(axis)) + [None] + list(range(axis + 1, indices.ndim))
 
     # build a fancy index, consisting of orthogonal cupy.arange calls,
     # with the requested index inserted at the right location
@@ -31,10 +31,11 @@ def _make_along_axis_idx(arr_shape, indices, axis):
         if dim is None:
             fancy_index.append(indices)
         else:
-            ind_shape = shape_ones[:dim] + (-1,) + shape_ones[dim+1:]
+            ind_shape = shape_ones[:dim] + (-1,) + shape_ones[dim + 1 :]
             fancy_index.append(cp.arange(n).reshape(ind_shape))
 
     return tuple(fancy_index)
+
 
 # print(cp.__version__)
 
@@ -95,8 +96,12 @@ def astype(x: cp.array, dtype: cp.dtype, **kwargs):
 broadcast_to = cp.broadcast_to
 dot = cp.dot
 equal = cp.equal
+
+
 def expand_dims(a: cp.array, axis: Union[int, Sequence[int]]) -> cp.array:
     return cp.expand_dims(a, tuple(axis))
+
+
 # expand_dims = cp.expand_dims
 floor_divide = cp.floor_divide
 
@@ -138,14 +143,14 @@ isin = cp.isin
 unravel_index = cp.unravel_index
 take_along_axis = cp.take_along_axis
 
+
 # https://github.com/cupy/cupy/blob/main/cupy/lib/_shape_base.py#L182
 def put_along_axis(
     arr: cp.ndarray, indices: cp.ndarray, values: cpt.ArrayLike, axis: Optional[int]
 ):
     if axis is None:
         if indices.ndim != 1:
-            raise NotImplementedError(
-                "Tuple setitem isn't supported for flatiter.")
+            raise NotImplementedError("Tuple setitem isn't supported for flatiter.")
         # put is roughly equivalent to a.flat[ind] = values
         cp.put(arr, indices, values)
     else:

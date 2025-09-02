@@ -536,8 +536,7 @@ def test_absolute():
 
 if __name__ == "__main__":
     test_transpose()
-    
-    
+
     # test_ravel()
     # test_flatten()
     # test_squeeze()

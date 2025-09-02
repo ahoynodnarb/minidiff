@@ -8,7 +8,7 @@ import graphviz
 import minidiff as md
 
 if TYPE_CHECKING:
-    from typing import Any, Dict, List, Optional, Sequence, Tuple
+    from typing import Dict, List, Optional, Sequence, Tuple
 
     import minidiff.typing as mdt
 
