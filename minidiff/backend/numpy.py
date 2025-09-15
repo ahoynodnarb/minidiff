@@ -56,7 +56,12 @@ tan = np.tan
 tanh = np.tanh
 transpose = np.transpose
 add = np.add
-astype = np.astype
+
+
+def astype(a: np.ndarray, *args, **kwargs) -> np.ndarray:
+    return a.astype(*args, **kwargs)
+
+
 broadcast_to = np.broadcast_to
 dot = np.dot
 equal = np.equal
@@ -177,7 +182,7 @@ int64 = np.int64
 int32 = np.int32
 int16 = np.int16
 int8 = np.int8
-bool = np.bool
+bool = np.bool_
 
 nan = np.nan
 

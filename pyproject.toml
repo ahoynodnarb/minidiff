@@ -6,5 +6,5 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "graphviz>=0.21",
-    "numpy>=2.3.1",
+    "numpy>=1.26",
 ]
