@@ -207,6 +207,9 @@ class Tensor:
         if self.is_leaf:
             return
 
+        if cleanup_mode not in ["keep", "prune", "destroy"]:
+            cleanup_mode = "prune"
+
         traversal_path = self.toposort()
 
         # computing higher order derivatives means partially re-traversing the subgraph for whichever variable
