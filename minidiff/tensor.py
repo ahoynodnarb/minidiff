@@ -227,9 +227,6 @@ class Tensor:
 
         self.grad = ones_like(self)
 
-        if cleanup_mode == "prune":
-            self.mark_subgraph_dirty()
-
         with enable_grad(allow_higher_order):
             for tensor in reversed(traversal_path):
                 # leaf tensors don't have any input tensors to update, so skip
@@ -246,36 +243,21 @@ class Tensor:
                 # so we need to remove any references when we're done to save memory
                 if not retain_grads:
                     tensor.grad = None
-                # this prevents memory leaks from storing intermediate gradients in memory somewhere
-                # if nothing requires this edge to exist anymore, then destory the edge
-                force_destruction = cleanup_mode == "destroy"
-                prunable = cleanup_mode == "prune" and tensor.graph_refs == 0
-                if force_destruction or prunable:
-                    tensor.wipe()
 
-    # the algorithm minidiff uses to count references and destroy func_node references when possible is actually quite simple
-    # every time a tensor is used in an operation, increment its graph_refs by 1 - Note: graph_refs will not be incremented by actual references to a tensor
-    # before we do any backprop, recursively backwards dfs traverse the graph
-    # for every func_node, decrement each of its tensor_inputs' graph_refs by 1
-    # if the tensor has 0 graph_refs then move down to its corresponding func_node and continue
-    # otherwise do not continue traversing down that portion of the subgraph and return early so we don't waste time
-    # afterwards, all tensors unique to the subgraph used to construct what backward()'s being called on will have graph_refs of 0
-    # every other tensor will have some non-zero whole number
-    # during the actual backprop, check if a tensor has 0 graph_refs. if so then destroy reference to its func_node
-    # this way, only subgraphs not used anywhere else are destroyed, are no longer referenced by anything, and Python GC cleans it up
-    # this assumes a for a topologically sorted graph for a DAG, so you can aggressively destroy references to func_nodes
-    # since we're guaranteed to have already consumed any tensor/operation requiring the current tensor already
-    def mark_subgraph_dirty(self):
-        stack = [self]
-        while len(stack) != 0:
-            tensor = stack.pop()
-            node = tensor.func_node
-            if tensor.graph_refs > 0 or node is None:
-                continue
-            for t in node.tensor_inputs:
-                t.graph_refs -= 1
-                if t.graph_refs == 0:
-                    stack.append(t)
+                if cleanup_mode == "keep":
+                    continue
+
+                if cleanup_mode == "destroy":
+                    tensor.wipe()
+                    continue
+
+                if tensor.graph_refs > 0:
+                    continue
+
+                for child in node.tensor_inputs:
+                    child.graph_refs -= 1
+
+                tensor.wipe()
 
     # destroy our portion of the graph
     def wipe(self):
