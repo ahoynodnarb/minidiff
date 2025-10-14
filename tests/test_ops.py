@@ -29,8 +29,8 @@ def perform_test(
     kwargs: Dict[str, Any],
     forward_rtol: float = 1e-05,
     forward_atol: float = 1e-08,
-    backward_rtol: float = 1e-02,
-    backward_atol: float = 1e-05,
+    backward_rtol: float = 1e-05,
+    backward_atol: float = 1e-08,
     exclude: Optional[Sequence[md.Tensor]] = None,
 ):
     out = func(*args, **kwargs)._data
@@ -56,7 +56,7 @@ def perform_test(
     for i, (manual, auto) in enumerate(zip(manual_grads, auto_grads)):
         if manual is None and auto is None:
             continue
-        manual, auto = filter_nan(backend.as_numpy(out), backend.as_numpy(comp))
+        manual, auto = filter_nan(backend.as_numpy(manual), backend.as_numpy(auto))
         assert np.allclose(
             manual, auto, rtol=backward_rtol, atol=backward_atol
         ), f"❌ Gradient Test wrt {i}th parameter failed for {func}. \nmanual gradients:\n{manual}\nautomatic gradients:\n{auto}"
@@ -160,7 +160,7 @@ def test_prod():
                 md.randn(2, 2, 2, 2, allow_grad=True),
             ],
             kwargs={"axis": tuple(random.sample(range(4), k=random.randint(0, 4)))},
-            backward_rtol=1e-01,
+            # backward_rtol=1e-01,
         )
 
 
@@ -394,8 +394,8 @@ def test_true_divide():
                 md.randn(2, 2, 2, 2, allow_grad=True),
             ],
             kwargs={},
-            backward_rtol=1e-01,
-            backward_atol=1e-05,
+            # backward_rtol=1e-01,
+            # backward_atol=1e-05,
         )
 
 
@@ -419,8 +419,8 @@ def test_cos():
             backend_func=backend.cos,
             args=[md.randn(2, 2, 2, 2, allow_grad=True)],
             kwargs={},
-            backward_rtol=1e-01,
-            backward_atol=1e-04,
+            # backward_rtol=1e-01,
+            # backward_atol=1e-04,
         )
 
 
@@ -431,8 +431,8 @@ def test_sin():
             backend_func=backend.sin,
             args=[md.randn(2, 2, 2, 2, allow_grad=True)],
             kwargs={},
-            backward_rtol=1e-01,
-            backward_atol=1e-04,
+            # backward_rtol=1e-01,
+            # backward_atol=1e-04,
         )
 
 
@@ -443,8 +443,8 @@ def test_tan():
             backend_func=backend.tan,
             args=[md.randn(2, 2, 2, 2, allow_grad=True)],
             kwargs={},
-            backward_rtol=1e-01,
-            backward_atol=1e-04,
+            # backward_rtol=1e-01,
+            # backward_atol=1e-04,
         )
 
 
@@ -455,8 +455,8 @@ def test_cosh():
             backend_func=backend.cosh,
             args=[md.randn(2, 2, 2, 2, allow_grad=True)],
             kwargs={},
-            backward_rtol=1e-01,
-            backward_atol=1e-04,
+            # backward_rtol=1e-01,
+            # backward_atol=1e-04,
         )
 
 
@@ -467,8 +467,8 @@ def test_sinh():
             backend_func=backend.sinh,
             args=[md.randn(2, 2, 2, 2, allow_grad=True)],
             kwargs={},
-            backward_rtol=1e-01,
-            backward_atol=1e-04,
+            # backward_rtol=1e-01,
+            # backward_atol=1e-04,
         )
 
 
@@ -479,8 +479,8 @@ def test_tanh():
             backend_func=backend.tanh,
             args=[md.randn(2, 2, 2, 2, allow_grad=True)],
             kwargs={},
-            backward_rtol=1e-01,
-            backward_atol=1e-04,
+            # backward_rtol=1e-01,
+            # backward_atol=1e-04,
         )
 
 
@@ -535,7 +535,7 @@ def test_absolute():
 
 
 if __name__ == "__main__":
-    test_transpose()
+    test_ravel()
 
     # test_ravel()
     # test_flatten()

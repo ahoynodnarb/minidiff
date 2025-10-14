@@ -37,8 +37,6 @@ def _make_along_axis_idx(arr_shape, indices, axis):
     return tuple(fancy_index)
 
 
-# print(cp.__version__)
-
 tensor_constructor = cp.array
 tensor_class = cp.ndarray
 
