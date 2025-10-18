@@ -333,6 +333,12 @@ squeeze: Callable[[md.Tensor], md.Tensor] = wrapping.create_unary_op_func(
     forward_func=wrapping.as_minidiff(backend.squeeze),
     grad=squeeze_grad,
 )
+std: Callable[[md.Tensor], md.Tensor] = wrapping.create_unary_op_func(
+    forward_func=wrapping.as_minidiff(backend.std),
+    grad=lambda a, grad, axis=None, **kwargs: grad
+    * (a - mean(a, axis=axis))
+    / (std(a, axis=axis, **kwargs) * prod(a.shape[axis])),
+)
 sum: Callable[[md.Tensor], md.Tensor] = wrapping.create_unary_op_func(
     forward_func=wrapping.as_minidiff(backend.sum),
     grad=lambda a, grad: grad,
@@ -565,6 +571,7 @@ __all__ = [
     "sqrt",
     "square",
     "squeeze",
+    "std",
     "sum",
     "tan",
     "tanh",

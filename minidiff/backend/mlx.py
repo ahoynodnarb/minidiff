@@ -87,6 +87,7 @@ sign = mx.sign
 sin = mx.sin
 sinh = mx.sinh
 squeeze = mx.squeeze
+std = mx.std
 sum = mx.sum
 tan = mx.tan
 tanh = mx.tanh

@@ -51,6 +51,7 @@ sign = np.sign
 sin = np.sin
 sinh = np.sinh
 squeeze = np.squeeze
+std = np.std
 sum = np.sum
 tan = np.tan
 tanh = np.tanh

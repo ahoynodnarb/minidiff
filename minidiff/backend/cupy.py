@@ -80,6 +80,7 @@ sign = cp.sign
 sin = cp.sin
 sinh = cp.sinh
 squeeze = cp.squeeze
+std = cp.std
 sum = cp.sum
 tan = cp.tan
 tanh = cp.tanh
@@ -159,7 +160,6 @@ def put_along_axis(
         arr[_make_along_axis_idx(arr_shape, indices, axis)] = values
 
 
-# put_along_axis = cp.put
 repeat = cp.repeat
 tile = cp.tile
 arange = cp.arange
