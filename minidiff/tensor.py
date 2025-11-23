@@ -608,10 +608,10 @@ def unravel_index(
 
 def vmap(fun: mdt.UnaryFunc) -> mdt.UnaryFunc:
     def backend_func(arr, *args, **kwargs):
-        args = [md.Tensor(x) for x in args]
-        kwargs = {key: md.Tensor(val) for key, val in kwargs.items()}
+        args = [Tensor(x) for x in args]
+        kwargs = {key: Tensor(val) for key, val in kwargs.items()}
         val = fun(
-            md.Tensor(arr),
+            Tensor(arr),
             *args,
             **kwargs,
         )
@@ -619,10 +619,10 @@ def vmap(fun: mdt.UnaryFunc) -> mdt.UnaryFunc:
 
     vmap_func = current_backend.vmap(backend_func)
 
-    def wrapper(*args, **kwargs):
+    def wrapper(*args, **kwargs) -> Tensor:
         args = try_unwrap(args)
         kwargs = try_unwrap(kwargs)
-        return md.Tensor(vmap_func(*args, **kwargs))
+        return Tensor(vmap_func(*args, **kwargs))
 
     return wrapper
 

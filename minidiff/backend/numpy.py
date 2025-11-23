@@ -32,7 +32,7 @@ class numpy_backend(backend.Backend):
     exp = np.exp
 
     @staticmethod
-    def flatten(a: np.ndarray, order="C"):
+    def flatten(a: np.ndarray, order="C") -> np.ndarray:
         return a.flatten(order=order)
 
     flip = np.flip
@@ -46,7 +46,7 @@ class numpy_backend(backend.Backend):
     prod = np.prod
 
     @staticmethod
-    def ravel(a: np.ndarray, order="C"):
+    def ravel(a: np.ndarray, order="C") -> np.ndarray:
         return a.ravel(order=order)
 
     sign = np.sign
@@ -71,7 +71,7 @@ class numpy_backend(backend.Backend):
     floor_divide = np.floor_divide
 
     @staticmethod
-    def getitem(a: np.ndarray, key: Any):
+    def getitem(a: np.ndarray, key: Any) -> Any:
         return a[key]
 
     greater = np.greater
@@ -109,11 +109,11 @@ class numpy_backend(backend.Backend):
 
     @staticmethod
     def vmap(fun: Callable) -> Callable:
-        def mapped(arr):
+        def mapped(arr: np.ndarray) -> np.ndarray:
             orig = arr.shape
             arr = arr.reshape(orig[0], -1)
 
-            def wrapped_fun(a):
+            def wrapped_fun(a: np.ndarray) -> np.ndarray:
                 reshaped = a.reshape(orig[1:])
                 return fun(reshaped)
 

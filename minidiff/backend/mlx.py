@@ -158,7 +158,7 @@ class mlx_backend(backend.Backend):
         a += accumulated
 
     @staticmethod
-    def isin(element, test_elements, **kwargs):
+    def isin(element: mx.array, test_elements: mx.array, **kwargs) -> mx.array:
         return mx.array(np.isin(element, test_elements, **kwargs))
 
     @staticmethod
@@ -168,7 +168,7 @@ class mlx_backend(backend.Backend):
     take_along_axis = mx.take_along_axis
 
     @staticmethod
-    def vmap(fun: Callable):
+    def vmap(fun: Callable) -> Callable:
         return mx.vmap(fun)
 
     put_along_axis = mx.put_along_axis
@@ -192,7 +192,7 @@ class mlx_backend(backend.Backend):
         low: Union[int, Sequence[int]],
         high: Optional[Union[int, Sequence[int]]] = None,
         size: Optional[Union[int, Sequence[int]]] = None,
-    ):
+    ) -> mx.array:
         if not isinstance(low, mx.array):
             low = mx.array(low)
         if not isinstance(high, mx.array):

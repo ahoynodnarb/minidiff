@@ -200,6 +200,12 @@ def mean_grad(
     return grad / prod(multiplied_dims)
 
 
+def std_grad(a, grad, axis=None, **kwargs):
+    mu = mean(a, axis=axis)
+    N = py_prod([dim for i, dim in enumerate(a.shape) if i in axis])
+    return grad * (a - mu) / (std(a, axis=axis, **kwargs) * N)
+
+
 # -------------------- UNARY FUNCS --------------------
 absolute: Callable[[md.Tensor], md.Tensor] = wrapping.create_unary_op_func(
     forward_func=wrapping.as_minidiff(current_backend.absolute),
@@ -333,14 +339,6 @@ squeeze: Callable[[md.Tensor], md.Tensor] = wrapping.create_unary_op_func(
     forward_func=wrapping.as_minidiff(current_backend.squeeze),
     grad=squeeze_grad,
 )
-
-
-def std_grad(a, grad, axis=None, **kwargs):
-    mu = mean(a, axis=axis)
-    N = py_prod([dim for i, dim in enumerate(a.shape) if i in axis])
-    return grad * (a - mu) / (std(a, axis=axis, **kwargs) * N)
-
-
 std: Callable[[md.Tensor], md.Tensor] = wrapping.create_unary_op_func(
     forward_func=wrapping.as_minidiff(current_backend.std),
     grad=std_grad,

@@ -60,7 +60,7 @@ class cupy_backend(backend.Backend):
     exp = cp.exp
 
     @staticmethod
-    def flatten(a: cp.ndarray, order="C"):
+    def flatten(a: cp.ndarray, order="C") -> cp.array:
         return a.flatten(order=order)
 
     flip = cp.flip
@@ -74,7 +74,7 @@ class cupy_backend(backend.Backend):
     prod = cp.prod
 
     @staticmethod
-    def ravel(a: cp.ndarray, order="C"):
+    def ravel(a: cp.ndarray, order="C") -> cp.array:
         return a.ravel(order=order)
 
     sign = cp.sign
@@ -89,7 +89,7 @@ class cupy_backend(backend.Backend):
     add = cp.add
 
     @staticmethod
-    def astype(x: cp.array, dtype: cp.dtype, **kwargs):
+    def astype(x: cp.array, dtype: cp.dtype, **kwargs) -> cp.array:
         return x.astype(dtype, **kwargs)
 
     broadcast_to = cp.broadcast_to
@@ -104,7 +104,7 @@ class cupy_backend(backend.Backend):
     floor_divide = cp.floor_divide
 
     @staticmethod
-    def getitem(a: cp.ndarray, key: Any):
+    def getitem(a: cp.ndarray, key: Any) -> Any:
         return a[key]
 
     greater = cp.greater
@@ -142,11 +142,11 @@ class cupy_backend(backend.Backend):
 
     @staticmethod
     def vmap(fun: Callable) -> Callable:
-        def mapped(arr):
+        def mapped(arr: cp.array) -> cp.array:
             orig = arr.shape
             arr = arr.reshape(orig[0], -1)
 
-            def wrapped_fun(a):
+            def wrapped_fun(a: cp.array) -> cp.array:
                 reshaped = a.reshape(orig[1:])
                 return fun(reshaped)
 
@@ -200,7 +200,7 @@ class cupy_backend(backend.Backend):
         return data.ndim
 
     @staticmethod
-    def tensor_dtype(data: cp.ndarray) -> dtype:
+    def tensor_dtype(data: cp.ndarray) -> cp.dtype:
         return data.dtype
 
     @staticmethod

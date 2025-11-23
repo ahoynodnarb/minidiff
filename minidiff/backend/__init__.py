@@ -58,7 +58,7 @@ def attempt_backend_import():
     for export in backend_exports.values():
         if (
             isinstance(export, type)
-            and export != type(Backend)
+            and export is not type(Backend)
             and issubclass(export, Backend)
         ):
             if _SPECIFIED_BACKEND is not None and _SPECIFIED_BACKEND != used_backend:

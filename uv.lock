@@ -23,7 +23,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "graphviz", specifier = ">=0.21" },
-    { name = "numpy", specifier = ">=2.3.1" },
+    { name = "numpy", specifier = ">=1.26" },
 ]
 
 [[package]]
