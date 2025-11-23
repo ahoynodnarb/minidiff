@@ -115,8 +115,8 @@ def as_minidiff(func: Callable[..., Any]) -> Callable[..., md.Tensor]:
     def wrapper(*args, **kwargs):
         allow_grad = _should_allow_grad(args)
 
-        wrapped_args = [md.try_unwrap(x) for x in args]
-        wrapped_kwargs = {key: md.try_unwrap(val) for key, val in kwargs.items()}
+        wrapped_args = md.try_unwrap(args)
+        wrapped_kwargs = md.try_unwrap(kwargs)
 
         output = func(*wrapped_args, **wrapped_kwargs)
         as_tensor = md.Tensor(output, allow_grad=allow_grad)

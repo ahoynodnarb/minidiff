@@ -4,6 +4,7 @@ from copy import deepcopy
 from typing import TYPE_CHECKING
 
 import graphviz
+from numpy import ndindex
 
 import minidiff as md
 
@@ -119,28 +120,41 @@ def calculate_finite_differences(
             ):
                 manual_gradients.append(None)
                 continue
-            # this just computes the gradients from first principles
-            left = input_tensors[:i]
-            right = input_tensors[i + 1 :]
-            flattened_input_tensor = input_tensor.flatten()
-            flattened_grad = md.zeros_like(flattened_input_tensor)
-            # this is the same as (f(x + h) - f(x - h)) / (2 * h), which is the definition of the derivative
-            for x in range(input_tensor.size):
-                shifted_left = flattened_input_tensor.copy()
-                shifted_left[x] += h
-                shifted_left = shifted_left.reshape(input_tensor.shape)
+            n_dimensions = input_tensor.ndim
+            n_elements = input_tensor.size
+            dummy_axes = (1,) * n_dimensions
 
-                shifted_right = flattened_input_tensor.copy()
-                shifted_right[x] -= h
-                shifted_right = shifted_right.reshape(input_tensor.shape)
+            left_args = input_tensors[:i]
+            right_args = input_tensors[i + 1 :]
 
-                first_term = func(*left, shifted_left, *right)
-                second_term = func(*left, shifted_right, *right)
-                calculated_grad = (first_term - second_term) / (2 * h)
+            def f(shifted):
+                return func(*left_args, shifted, *right_args)
 
-                flattened_grad[x] = calculated_grad
+            vmapped_func = md.vmap(f)
 
-            manual_gradients.append(flattened_grad.reshape(input_tensor.shape))
+            all_indices = md.Tensor(tuple(ndindex(input_tensor.shape)))
+            input_indices = (
+                md.arange(n_elements, dtype=md.int32),
+                *[all_indices[:, x] for x in range(n_dimensions)],
+            )
+
+            left_shifted = md.tile(
+                input_tensor.detach().copy(), (n_elements, *dummy_axes)
+            )
+            right_shifted = md.tile(
+                input_tensor.detach().copy(), (n_elements, *dummy_axes)
+            )
+            left_shifted[*input_indices] += h
+            right_shifted[*input_indices] -= h
+
+            forward = vmapped_func(left_shifted)
+            backward = vmapped_func(right_shifted)
+
+            calculated_grads = ((forward - backward) / (2 * h)).reshape(
+                input_tensor.shape
+            )
+
+            manual_gradients.append(calculated_grads)
 
     return manual_gradients
 
@@ -175,6 +189,7 @@ def compute_grads(
 
     computed = func(*copied_input_tensors)
     computed.backward()
+
     automatic_gradients = [
         t.grad if isinstance(t, md.Tensor) else None for t in copied_input_tensors
     ]

@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from numpy import ndarray
 
 import minidiff as md
-import minidiff.backend as backend
+from minidiff.backend import current_backend
 
 if TYPE_CHECKING:
     from typing import Any, Dict, List, Literal, Optional, Sequence, Tuple, Union
@@ -17,6 +17,19 @@ if TYPE_CHECKING:
 
 
 _allow_grad = contextvars.ContextVar("allow_grad", default=True)
+_allow_new_grads = contextvars.ContextVar("allow_new_grads", default=True)
+
+
+class disable_new_grads:
+    def __enter__(self):
+        self.prev_allow_grad = _allow_grad.get()
+        self.prev_allow_new_grads = _allow_new_grads.get()
+        set_allow_grad(False)
+        set_allow_new_grads(False)
+
+    def __exit__(self, type, value, traceback):
+        set_allow_grad(self.prev_allow_grad)
+        set_allow_new_grads(self.prev_allow_new_grads)
 
 
 class no_grad:
@@ -40,7 +53,15 @@ class enable_grad:
         set_allow_grad(self.prev)
 
 
-def set_allow_grad(allow):
+def set_allow_new_grads(allow: py_bool):
+    _allow_new_grads.set(allow)
+
+
+def new_grads_allowed_() -> py_bool:
+    return _allow_new_grads.get()
+
+
+def set_allow_grad(allow: py_bool):
     _allow_grad.set(allow)
 
 
@@ -52,9 +73,11 @@ def try_unwrap(t: Any):
     if isinstance(t, Tensor):
         return t._data
     elif isinstance(t, tuple):
-        return tuple([try_unwrap(x) for x in t])
+        return tuple(try_unwrap(x) for x in t)
     elif isinstance(t, list):
         return [try_unwrap(x) for x in t]
+    elif isinstance(t, dict):
+        return {key: try_unwrap(val) for key, val in t.items()}
     else:
         return t
 
@@ -69,19 +92,20 @@ def try_unwrap(t: Any):
 class Tensor:
     def __init__(
         self,
-        data: Optional[Union[int, float, backend.tensor_class]],
+        data: Optional[Union[int, float, current_backend.tensor_class]],
         allow_grad: py_bool = False,
         dtype: Optional[mdt.dtype] = None,
     ):
+        data = try_unwrap(data)
         if data is None:
-            data = backend.tensor_constructor([])
-        if not isinstance(data, backend.tensor_class):
-            data = backend.tensor_constructor(data)
+            data = current_backend.tensor_constructor([])
+        if not isinstance(data, current_backend.tensor_class):
+            data = current_backend.tensor_constructor(data)
         if dtype is not None:
             data = data.astype(dtype)
         self._data = data
 
-        data_size = backend.tensor_size(data)
+        data_size = current_backend.tensor_size(data)
         self._iterator = TensorIterator(
             data,
             len(self) if data_size > 1 else data_size,
@@ -133,22 +157,22 @@ class Tensor:
 
     @property
     def shape(self) -> Tuple[int, ...]:
-        return backend.tensor_shape(self._data)
+        return current_backend.tensor_shape(self._data)
 
     @property
     def size(self) -> int:
-        return backend.tensor_size(self._data)
+        return current_backend.tensor_size(self._data)
 
     @property
     def ndim(self) -> int:
-        return backend.tensor_ndim(self._data)
+        return current_backend.tensor_ndim(self._data)
 
     @property
     def dtype(self) -> mdt.dtype:
-        return backend.tensor_dtype(self._data)
+        return current_backend.tensor_dtype(self._data)
 
     def as_numpy(self) -> ndarray:
-        return backend.as_numpy(self._data)
+        return current_backend.as_numpy(self._data)
 
     def toposort(self) -> List[Tensor]:
         seen = set()
@@ -285,7 +309,7 @@ class Tensor:
                 "Only Tensors with a single element can be reduced to a Python scalar"
             )
 
-        return backend.tensor_item(self._data)
+        return current_backend.tensor_item(self._data)
 
     def sum(self, **kwargs) -> Tensor:
         return md.sum(self, **kwargs)
@@ -426,10 +450,10 @@ class Tensor:
         return -1 * self
 
     def __repr__(self) -> str:
-        return backend.repr(self._data)
+        return current_backend.repr(self._data)
 
     def __len__(self) -> int:
-        return backend.len(self._data)
+        return current_backend.len(self._data)
 
     def __getitem__(self, key: Any) -> Tensor:
         return md.getitem(self, key)
@@ -478,12 +502,14 @@ class Tensor:
     # numpy array specification requirements:
     @property
     def __array_interface__(self) -> Dict[str, Any]:
-        return backend.array_interface(self._data)
+        return current_backend.array_interface(self._data)
 
     def __array__(
-        self, dtype: Optional[backend.dtype] = None, copy: Optional[py_bool] = None
+        self,
+        dtype: Optional[current_backend.dtype] = None,
+        copy: Optional[py_bool] = None,
     ) -> ndarray:
-        return backend.array(self._data, dtype=dtype, copy=copy)
+        return current_backend.array(self._data, dtype=dtype, copy=copy)
 
 
 class TensorIterator:
@@ -506,25 +532,25 @@ class TensorIterator:
 def ones_like(a: mdt.TensorLike, allow_grad: py_bool = False, **kwargs) -> Tensor:
     a = try_unwrap(a)
 
-    return Tensor(backend.ones_like(a, **kwargs), allow_grad=allow_grad)
+    return Tensor(current_backend.ones_like(a, **kwargs), allow_grad=allow_grad)
 
 
 def ones(
     shape: Union[int, Sequence[int]], allow_grad: py_bool = False, **kwargs
 ) -> Tensor:
-    return Tensor(backend.ones(shape, **kwargs), allow_grad=allow_grad)
+    return Tensor(current_backend.ones(shape, **kwargs), allow_grad=allow_grad)
 
 
 def zeros_like(a: mdt.TensorLike, allow_grad: py_bool = False, **kwargs) -> Tensor:
     a = try_unwrap(a)
 
-    return Tensor(backend.zeros_like(a, **kwargs), allow_grad=allow_grad)
+    return Tensor(current_backend.zeros_like(a, **kwargs), allow_grad=allow_grad)
 
 
 def zeros(
     shape: Union[int, Sequence[int]], allow_grad: py_bool = False, **kwargs
 ) -> Tensor:
-    return Tensor(backend.zeros(shape, **kwargs), allow_grad=allow_grad)
+    return Tensor(current_backend.zeros(shape, **kwargs), allow_grad=allow_grad)
 
 
 def full_like(
@@ -533,13 +559,13 @@ def full_like(
     a = try_unwrap(a)
     x = try_unwrap(x)
 
-    return Tensor(backend.full_like(a, x, **kwargs), allow_grad=allow_grad)
+    return Tensor(current_backend.full_like(a, x, **kwargs), allow_grad=allow_grad)
 
 
 def full(
     shape: Union[int, Sequence[int]], allow_grad: py_bool = False, **kwargs
 ) -> Tensor:
-    return Tensor(backend.full(shape, **kwargs), allow_grad=allow_grad)
+    return Tensor(current_backend.full(shape, **kwargs), allow_grad=allow_grad)
 
 
 def concatenate(
@@ -548,7 +574,7 @@ def concatenate(
     allow_grad: py_bool = False,
 ) -> Tensor:
     arrays = try_unwrap(arrays)
-    return Tensor(backend.concatenate(arrays, axis=axis), allow_grad=allow_grad)
+    return Tensor(current_backend.concatenate(arrays, axis=axis), allow_grad=allow_grad)
 
 
 def index_add(
@@ -558,16 +584,16 @@ def index_add(
     indices = try_unwrap(indices)
     b = try_unwrap(b)
 
-    backend.index_add(a, indices, b)
+    current_backend.index_add(a, indices, b)
 
 
 def isin(
     element: mdt.TensorLike, test_elements: List[mdt.TensorLike], **kwargs
 ) -> py_bool:
     element = try_unwrap(element)
-    test_elements = [try_unwrap(x) for x in test_elements]
+    test_elements = try_unwrap(test_elements)
 
-    return backend.isin(element, test_elements, **kwargs)
+    return current_backend.isin(element, test_elements, **kwargs)
 
 
 def unravel_index(
@@ -576,8 +602,29 @@ def unravel_index(
     indices = try_unwrap(indices)
 
     return Tensor(
-        backend.unravel_index(indices, shape, **kwargs), allow_grad=allow_grad
+        current_backend.unravel_index(indices, shape, **kwargs), allow_grad=allow_grad
     )
+
+
+def vmap(fun: mdt.UnaryFunc) -> mdt.UnaryFunc:
+    def backend_func(arr, *args, **kwargs):
+        args = [md.Tensor(x) for x in args]
+        kwargs = {key: md.Tensor(val) for key, val in kwargs.items()}
+        val = fun(
+            md.Tensor(arr),
+            *args,
+            **kwargs,
+        )
+        return val._data
+
+    vmap_func = current_backend.vmap(backend_func)
+
+    def wrapper(*args, **kwargs):
+        args = try_unwrap(args)
+        kwargs = try_unwrap(kwargs)
+        return md.Tensor(vmap_func(*args, **kwargs))
+
+    return wrapper
 
 
 def take_along_axis(
@@ -590,7 +637,7 @@ def take_along_axis(
     indices = indices._data
 
     return Tensor(
-        backend.take_along_axis(arr, indices, axis=axis), allow_grad=allow_grad
+        current_backend.take_along_axis(arr, indices, axis=axis), allow_grad=allow_grad
     )
 
 
@@ -604,7 +651,7 @@ def put_along_axis(
     indices = indices._data
     values = try_unwrap(values)
 
-    backend.put_along_axis(arr, indices, values, axis)
+    current_backend.put_along_axis(arr, indices, values, axis)
 
 
 def repeat(
@@ -615,7 +662,7 @@ def repeat(
 ) -> Tensor:
     a = try_unwrap(a)
 
-    return Tensor(backend.repeat(a, repeats, axis=axis), allow_grad=allow_grad)
+    return Tensor(current_backend.repeat(a, repeats, axis=axis), allow_grad=allow_grad)
 
 
 def tile(
@@ -624,27 +671,27 @@ def tile(
     A = try_unwrap(A)
     reps = try_unwrap(reps)
 
-    return Tensor(backend.tile(A, reps), allow_grad=allow_grad)
+    return Tensor(current_backend.tile(A, reps), allow_grad=allow_grad)
 
 
 def arange(*args: Union[int, float], allow_grad: py_bool = False, **kwargs) -> Tensor:
-    return Tensor(backend.arange(*args, **kwargs), allow_grad=allow_grad)
+    return Tensor(current_backend.arange(*args, **kwargs), allow_grad=allow_grad)
 
 
 def stack(arrays: Sequence[Tensor], allow_grad: py_bool = False, **kwargs) -> Tensor:
     arrays = [x._data for x in arrays]
 
-    return Tensor(backend.stack(arrays, **kwargs), allow_grad=allow_grad)
+    return Tensor(current_backend.stack(arrays, **kwargs), allow_grad=allow_grad)
 
 
 def save(file, arr: mdt.TensorLike, **kwargs):
     arr = arr._data
 
-    backend.save(file, arr, **kwargs)
+    current_backend.save(file, arr, **kwargs)
 
 
 def load(file, allow_grad: py_bool = False, **kwargs) -> Tensor:
-    return Tensor(backend.load(file, **kwargs), allow_grad=allow_grad)
+    return Tensor(current_backend.load(file, **kwargs), allow_grad=allow_grad)
 
 
 def choice(
@@ -656,11 +703,11 @@ def choice(
     a = try_unwrap(a)
     p = try_unwrap(p)
 
-    return Tensor(backend.choice(a, size=size, replace=replace, p=p))
+    return Tensor(current_backend.choice(a, size=size, replace=replace, p=p))
 
 
 def rand(*dims: Optional[int], allow_grad: py_bool = False) -> Tensor:
-    return Tensor(backend.rand(*dims), allow_grad=allow_grad)
+    return Tensor(current_backend.rand(*dims), allow_grad=allow_grad)
 
 
 def randint(
@@ -672,11 +719,13 @@ def randint(
     low = try_unwrap(low)
     high = try_unwrap(high)
 
-    return Tensor(backend.randint(low, high=high, size=size), allow_grad=allow_grad)
+    return Tensor(
+        current_backend.randint(low, high=high, size=size), allow_grad=allow_grad
+    )
 
 
 def randn(*dims: Optional[int], allow_grad: py_bool = False) -> Tensor:
-    return Tensor(backend.randn(*dims), allow_grad=allow_grad)
+    return Tensor(current_backend.randn(*dims), allow_grad=allow_grad)
 
 
 def binomial(
@@ -688,17 +737,17 @@ def binomial(
     n = try_unwrap(n)
     p = try_unwrap(p)
 
-    return Tensor(backend.binomial(n, p, size=size), allow_grad=allow_grad)
+    return Tensor(current_backend.binomial(n, p, size=size), allow_grad=allow_grad)
 
 
 def permutation(x: Union[int, Tensor], allow_grad: py_bool = False) -> Tensor:
     x = try_unwrap(x)
 
-    return Tensor(backend.permutation(x), allow_grad=allow_grad)
+    return Tensor(current_backend.permutation(x), allow_grad=allow_grad)
 
 
 def shuffle(x: Tensor):
-    backend.shuffle(x._data)
+    current_backend.shuffle(x._data)
 
 
 def split(
@@ -710,7 +759,7 @@ def split(
     ary = ary._data
     indices_or_sections = try_unwrap(indices_or_sections)
 
-    backend_output = backend.split(ary, indices_or_sections, axis=axis)
+    backend_output = current_backend.split(ary, indices_or_sections, axis=axis)
     output = [None] * len(backend_output)
 
     for i, section in enumerate(backend_output):
@@ -720,17 +769,17 @@ def split(
 
 
 dtypes = [
-    float64 := backend.float64,
-    float32 := backend.float32,
-    float16 := backend.float16,
-    uint64 := backend.uint64,
-    uint32 := backend.uint32,
-    uint16 := backend.uint16,
-    uint8 := backend.uint8,
-    int64 := backend.int64,
-    int32 := backend.int32,
-    int16 := backend.int16,
-    int8 := backend.int8,
-    bool := backend.bool,
+    float64 := current_backend.float64,
+    float32 := current_backend.float32,
+    float16 := current_backend.float16,
+    uint64 := current_backend.uint64,
+    uint32 := current_backend.uint32,
+    uint16 := current_backend.uint16,
+    uint8 := current_backend.uint8,
+    int64 := current_backend.int64,
+    int32 := current_backend.int32,
+    int16 := current_backend.int16,
+    int8 := current_backend.int8,
+    bool := current_backend.bool,
 ]
 newaxis = None
