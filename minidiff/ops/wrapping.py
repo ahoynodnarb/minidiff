@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import minidiff as md
-from minidiff.topology import FuncNode
+from minidiff.topology import OpNode
 
 if TYPE_CHECKING:
     from typing import Any, Callable, Optional, ParamSpec, Sequence, Type
@@ -152,13 +152,14 @@ def create_op_func(
         allow_grad = _should_allow_grad(op_inputs)
         output = forward_func(*op_inputs, **op_kwargs)
         # the output already is part of some graph, so we just adopt it into this one
-        if output.func_node is not None:
+        if output.op_node is not None:
             output = output.detach()
         output.allow_grad = allow_grad
 
         # only attach a node if we're allowed to track gradients right now, and the tensor wants to track its gradient
         if allow_grad and md.grad_allowed_():
-            output.func_node = FuncNode(
+            output.op_node = OpNode(
+                forward_func=forward_func,
                 grad_functions=grad_funcs,
                 op_inputs=op_inputs,
                 op_kwargs=op_kwargs,
@@ -189,14 +190,15 @@ def create_stateful_op_func(
         instance = op_class()
         forward = instance.create_forward()
         output = forward(*op_inputs, **op_kwargs)
-        if output.func_node is not None:
+        if output.op_node is not None:
             output = output.detach()
         output.allow_grad = allow_grad
 
         # only attach a node if we're allowed to track gradients right now, and the tensor wants to track its gradient
         if allow_grad and md.grad_allowed_():
             grad_funcs = instance.create_grads()
-            output.func_node = FuncNode(
+            output.op_node = OpNode(
+                forward_func=forward,
                 grad_functions=grad_funcs,
                 op_inputs=op_inputs,
                 op_kwargs=op_kwargs,

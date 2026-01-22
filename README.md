@@ -47,7 +47,7 @@ Feel free to explore around the repo, it's structured as follows:
 
 [`minidiff/tensor.py`](https://github.com/ahoynodnarb/minidiff/blob/master/minidiff/tensor.py): Contains all the basic tensor code which includes a few convenient tensor creation functions and the actual backward pass
 
-[`minidiff/topology.py`](https://github.com/ahoynodnarb/minidiff/blob/master/minidiff/topology.py): The `FuncNode` class is defined here; it mostly acts as a dataclass for graph nodes, but also handles gradient accumulation
+[`minidiff/topology.py`](https://github.com/ahoynodnarb/minidiff/blob/master/minidiff/topology.py): The `OpNode` class is defined here; it mostly acts as a dataclass for graph nodes, but also handles gradient accumulation
 
 [`minidiff/typing.py`](https://github.com/ahoynodnarb/minidiff/blob/master/minidiff/typing.py): Just extra types for convenience to keep type hinting clean and readable
 

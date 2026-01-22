@@ -10,10 +10,11 @@ if TYPE_CHECKING:
     import minidiff.typing as mdt
 
 
-# FuncNodes represent operations on the computation graph, with incoming edges being the input tensors, and outgoing the output tensors
-class FuncNode:
+# OpNodes represent operations on the computation graph, with incoming edges being the input tensors, and outgoing the output tensors
+class OpNode:
     def __init__(
         self,
+        forward_func: mdt.GenericOp,
         grad_functions: Sequence[Optional[mdt.GenericOpGrad]],
         op_inputs: Sequence[Any],
         op_kwargs: Optional[Dict[str, Any]] = None,
@@ -38,6 +39,33 @@ class FuncNode:
 
         for tensor in self.tensor_inputs:
             tensor.graph_refs += 1
+
+        # since order of the inputs matters, substitute -1 for non-tensor/leaf op_inputs
+        self.op_ids = []
+
+        for op_input in self.op_inputs:
+            if not isinstance(op_input, md.Tensor) or op_input.is_leaf:
+                self.op_ids.append(-1)
+            else:
+                self.op_ids.append(op_input.op_node.op_ids)
+
+        self.op_ids.append(id(forward_func))
+        self.op_ids = tuple(self.op_ids)
+
+        self.tree = []
+        for op_input in self.op_inputs:
+            if not isinstance(op_input, md.Tensor):
+                continue
+            if id(op_input) in [id(x) for x in self.tree]:
+                continue
+            if not op_input.is_leaf:
+                self.tree.extend(op_input.op_node.tree)
+
+            self.tree.append(op_input)
+
+    @property
+    def hash(self) -> int:
+        return hash(tuple(self.op_ids))
 
     # this accumulates gradients for the input tensors through chain rule (reverse-mode)
     def update_grads(self, grad: md.Tensor):

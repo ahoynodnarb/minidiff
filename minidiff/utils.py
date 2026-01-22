@@ -24,7 +24,7 @@ def draw_tensor_op_graph(
     # this essentially just finds the name of every input tensor
     # and lists them as arguments to the function which produced tensor
     def find_nested_tensor_name(tensor: md.Tensor) -> str:
-        node = tensor.func_node
+        node = tensor.op_node
         input_names = []
         for input_tensor in node.op_inputs:
             input_names.append(lookup_tensor_name(input_tensor))
@@ -64,7 +64,7 @@ def draw_tensor_op_graph(
     def add_edges(graph: graphviz.Graph, tensor: md.Tensor):
         if tensor.is_leaf:
             return
-        node = tensor.func_node
+        node = tensor.op_node
         tensor_id = id(tensor)
         for child in node.op_inputs:
             child_id = id(child)

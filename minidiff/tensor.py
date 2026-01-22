@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import contextvars
+from contextvars import ContextVar
 from builtins import bool as py_bool
 from typing import TYPE_CHECKING
 
@@ -8,16 +8,17 @@ from numpy import ndarray
 
 import minidiff as md
 from minidiff.backend import current_backend
+import minidiff.caching as mdc
 
 if TYPE_CHECKING:
     from typing import Any, Dict, List, Literal, Optional, Sequence, Tuple, Union
 
     import minidiff.typing as mdt
-    from minidiff.topology import FuncNode
+    from minidiff.topology import OpNode
 
 
-_allow_grad = contextvars.ContextVar("allow_grad", default=True)
-_allow_new_grads = contextvars.ContextVar("allow_new_grads", default=True)
+_allow_grad = ContextVar("allow_grad", default=True)
+_allow_new_grads = ContextVar("allow_new_grads", default=True)
 
 
 class disable_new_grads:
@@ -105,28 +106,22 @@ class Tensor:
             data = data.astype(dtype)
         self._data = data
 
-        data_size = current_backend.tensor_size(data)
-        self._iterator = TensorIterator(
-            data,
-            len(self) if data_size > 1 else data_size,
-        )
-
         self._allow_grad = allow_grad
         self.graph_refs = 0
         self.grad: Optional[Tensor] = None
-        self.func_node: Optional[FuncNode] = None
+        self.op_node: Optional[OpNode] = None
 
     # graphed means we are used in a gradient-tracked computation.
     # this means either there is some portion of the graph referencing us
     # or we are referencing some portion of the graph
     @property
     def graphed(self) -> py_bool:
-        return self.graph_refs > 0 or self.func_node is not None
+        return self.graph_refs > 0 or self.op_node is not None
 
     # tensors not created by ops are leafs. this property is immutable
     @property
     def is_leaf(self) -> py_bool:
-        return self.func_node is None
+        return self.op_node is None
 
     @property
     def allow_grad(self) -> py_bool:
@@ -186,7 +181,7 @@ class Tensor:
                 continue
             seen.add(id(tensor))
 
-            node = tensor.func_node
+            node = tensor.op_node
             all_children_visited = True
 
             # append all children to the stack so they will be processed next
@@ -234,8 +229,6 @@ class Tensor:
         if cleanup_mode not in ["keep", "prune", "destroy"]:
             cleanup_mode = "prune"
 
-        traversal_path = self.toposort()
-
         # computing higher order derivatives means partially re-traversing the subgraph for whichever variable
         # we're computing the higher order derivative of, so the graph needs to remain.
         # in accumulating gradients when calling backward() the second time, gradients from intermediates
@@ -244,6 +237,13 @@ class Tensor:
             retain_grads = True
             if cleanup_mode == "destroy":
                 cleanup_mode = "prune"
+
+        if mdc.currently_caching():
+            traversal_indices = mdc.indices_for_tensor(self)
+            full_tree = self.op_node.tree + [self]
+            traversal_path = [full_tree[index] for index in traversal_indices]
+        else:
+            traversal_path = self.toposort()
 
         if reset_grads:
             for tensor in traversal_path:
@@ -261,7 +261,7 @@ class Tensor:
                 # this continues for their input tensors, and those tensor's inputs, and so on and so forth
                 grad = tensor.grad
                 grad.allow_grad = allow_higher_order
-                node = tensor.func_node
+                node = tensor.op_node
                 node.update_grads(grad)
                 # we're only temporarily storing grads
                 # so we need to remove any references when we're done to save memory
@@ -285,7 +285,7 @@ class Tensor:
 
     # destroy our portion of the graph
     def wipe(self):
-        self.func_node = None
+        self.op_node = None
 
     # returns a view that does not have gradient history
     def detach(self, allow_grad: py_bool = False) -> Tensor:
@@ -497,6 +497,12 @@ class Tensor:
         return md.invert(self)
 
     def __iter__(self) -> TensorIterator:
+        if self._iterator is None:
+            data_size = current_backend.tensor_size(self._data)
+            self._iterator = TensorIterator(
+                self._data,
+                len(self) if data_size > 1 else data_size,
+            )
         return self._iterator
 
     # numpy array specification requirements:
