@@ -107,6 +107,8 @@ class Tensor:
         self._data = data
 
         self._allow_grad = allow_grad
+        self._iterator = None
+
         self.graph_refs = 0
         self.grad: Optional[Tensor] = None
         self.op_node: Optional[OpNode] = None
