@@ -91,10 +91,15 @@ class OpNode:
             grad_computation = grad_function(*self.op_inputs, grad, **kwargs)
             # if broadcasting occured during the forward pass, we need to collect gradients
             # back in the backward pass so that the gradients are correctly distributed
-            collected_grad = md.unbroadcast(grad_computation, op_input.shape)
-            if op_input.grad is not None:
-                collected_grad = op_input.grad + collected_grad
-            op_input.grad = collected_grad
+            if grad_computation.shape == op_input.shape:
+                collected_grad = grad_computation
+            else:
+                collected_grad = md.unbroadcast(grad_computation, op_input.shape)
+
+            if op_input.grad is None:
+                op_input.grad = collected_grad
+            else:
+                op_input.grad = op_input.grad + collected_grad
 
     def __repr__(self) -> str:
         return f"{self.op_name}({', '.join([str(x) for x in self.op_inputs])})"

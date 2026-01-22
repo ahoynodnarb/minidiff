@@ -111,6 +111,7 @@ class mlx_backend(backend.Backend):
 
     @staticmethod
     def getitem(a: mx.array, key: Any):
+        key = tuple(key)
         return a[key]
 
     greater = mx.greater

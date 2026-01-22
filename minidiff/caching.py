@@ -27,16 +27,11 @@ def currently_caching() -> bool:
     return _caching_graph.get()
 
 
-def indices_for_tensor(tensor: md.Tensor) -> Tuple[int, ...]:
+def backward_indices_for_tensor(tensor: md.Tensor) -> Tuple[int, ...]:
     if not _caching_graph.get():
         raise ValueError("Not currently preserving graph")
 
     if tensor.is_leaf:
-        return ()
-
-    sorted_tensors = tensor.toposort()
-
-    if not sorted_tensors:
         return ()
 
     tensor_hash = tensor.op_node.hash
@@ -44,6 +39,11 @@ def indices_for_tensor(tensor: md.Tensor) -> Tuple[int, ...]:
     indices_dict = _cached_graph_indices.get()
     if tensor_hash in indices_dict:
         return indices_dict[tensor_hash]
+
+    sorted_tensors = tensor.toposort()
+
+    if not sorted_tensors:
+        return ()
 
     full_graph = tensor.op_node._tensor_graph
     tensor_to_index = {id(t): -1 for t in sorted_tensors if t is not tensor}

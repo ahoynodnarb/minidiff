@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import deque
 from contextvars import ContextVar
 from builtins import bool as py_bool
 from typing import TYPE_CHECKING
@@ -243,7 +244,7 @@ class Tensor:
         if mdc.currently_caching():
             full_graph = self.op_node._tensor_graph
 
-            traversal_indices = mdc.indices_for_tensor(self)
+            traversal_indices = mdc.backward_indices_for_tensor(self)
             traversal_path = [None] * (len(traversal_indices) + 1)
 
             for i, indices in enumerate(traversal_indices):
