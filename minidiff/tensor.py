@@ -239,9 +239,16 @@ class Tensor:
                 cleanup_mode = "prune"
 
         if mdc.currently_caching():
+            full_graph = self.op_node._tensor_graph + [self]
+
             traversal_indices = mdc.indices_for_tensor(self)
-            full_graph = self.op_node.flattened_graph + [self]
-            traversal_path = [full_graph[index] for index in traversal_indices]
+            traversal_path = [None] * len(traversal_indices)
+
+            for i, indices in enumerate(traversal_indices):
+                current_item = full_graph
+                for index in indices:
+                    current_item = current_item[index]
+                traversal_path[i] = current_item
         else:
             traversal_path = self.toposort()
 

@@ -41,8 +41,8 @@ class OpNode:
         for tensor in self.tensor_inputs:
             tensor.graph_refs += 1
 
-        self.flattened_graph = []
-        self.op_ids = []
+        self._op_ids = []
+        self._tensor_graph = []
 
         if not mdc.currently_caching():
             return
@@ -50,12 +50,12 @@ class OpNode:
         # since order of the inputs matters, substitute -1 for non-tensor/leaf op_inputs
         for op_input in self.op_inputs:
             if not isinstance(op_input, md.Tensor) or op_input.is_leaf:
-                self.op_ids.append(-1)
+                self._op_ids.append(-1)
             else:
-                self.op_ids.append(op_input.op_node.op_ids)
+                self._op_ids.append(op_input.op_node._op_ids)
 
-        self.op_ids.append(id(forward_func))
-        self.op_ids = tuple(self.op_ids)
+        self._op_ids.append(id(forward_func))
+        self._op_ids = tuple(self._op_ids)
 
         seen = set()
 
@@ -65,15 +65,15 @@ class OpNode:
             if id(op_input) in seen:
                 continue
             if not op_input.is_leaf:
-                self.flattened_graph.extend(op_input.op_node.flattened_graph)
+                self._tensor_graph.append(op_input.op_node._tensor_graph)
 
-            self.flattened_graph.append(op_input)
+            self._tensor_graph.append(op_input)
 
             seen.add(id(op_input))
 
     @property
     def hash(self) -> int:
-        return hash(tuple(self.op_ids))
+        return hash(tuple(self._op_ids))
 
     # this accumulates gradients for the input tensors through chain rule (reverse-mode)
     def update_grads(self, grad: md.Tensor):

@@ -27,7 +27,7 @@ def currently_caching() -> bool:
     return _caching_graph.get()
 
 
-def indices_for_tensor(tensor: md.Tensor) -> Tuple[int]:
+def indices_for_tensor(tensor: md.Tensor) -> Tuple[int, ...]:
     if not _caching_graph.get():
         raise ValueError("Not currently preserving graph")
 
@@ -45,13 +45,20 @@ def indices_for_tensor(tensor: md.Tensor) -> Tuple[int]:
     if tensor_hash in indices_dict:
         return indices_dict[tensor_hash]
 
-    full_graph = tensor.op_node.flattened_graph + [tensor]
+    full_graph = tensor.op_node._tensor_graph + [tensor]
     tensor_to_index = {id(t): -1 for t in sorted_tensors}
 
-    for i, t in enumerate(full_graph):
-        if id(t) not in tensor_to_index:
+    stack = [([i], t) for i, t in enumerate(full_graph)]
+
+    while stack:
+        index_list, item = stack.pop()
+        if isinstance(item, list):
+            stack.extend((index_list + [i], t) for i, t in enumerate(item))
             continue
-        tensor_to_index[id(t)] = i
+
+        if id(item) not in tensor_to_index:
+            continue
+        tensor_to_index[id(item)] = tuple(index_list)
 
     indices = tuple(tensor_to_index[id(t)] for t in sorted_tensors)
 
