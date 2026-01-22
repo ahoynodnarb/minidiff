@@ -171,31 +171,6 @@ class Tensor:
     def as_numpy(self) -> ndarray:
         return current_backend.as_numpy(self._data)
 
-    def toposort(self) -> List[Tensor]:
-        seen = set()
-        traversal_path = []
-
-        # topologically sort:
-        # step through the graph starting from the output tensor (self)
-        # go all the way down to the leaf tensors, skipping tensors we've already seen
-        # after getting all the way to the base, finally push ourselves onto the stack
-        # rinse and repeat for the input tensors, their input tensors, etc.
-        def dfs(op_output: Tensor):
-            if id(op_output) in seen:
-                return
-            seen.add(id(op_output))
-            if not op_output.is_leaf:
-                node = op_output.op_node
-                for op_input in node.tensor_inputs:
-                    dfs(op_input)
-            traversal_path.append(op_output)
-
-        dfs(self)
-
-        return traversal_path
-
-    # this does the actual advertised reverse-mode automatic differentiation.
-    # I mostly just referenced this Wikipedia page: https://en.wikipedia.org/wiki/Automatic_differentiation
     def backward(
         self,
         retain_grads: py_bool = False,
@@ -210,73 +185,17 @@ class Tensor:
         if self.is_leaf:
             return
 
-        if cleanup_mode not in ["keep", "prune", "destroy"]:
-            cleanup_mode = "prune"
+        self.grad = md.ones_like(self, allow_grad=allow_higher_order)
 
-        # computing higher order derivatives means partially re-traversing the subgraph for whichever variable
-        # we're computing the higher order derivative of, so the graph needs to remain.
-        # in accumulating gradients when calling backward() the second time, gradients from intermediates
-        # will almost always be necessary so those have to be kept in memory too
-        if allow_higher_order:
-            retain_grads = True
-            if cleanup_mode == "destroy":
-                cleanup_mode = "prune"
+        self.op_node.backward(
+            self.grad,
+            retain_grads=retain_grads,
+            cleanup_mode=cleanup_mode,
+            allow_higher_order=allow_higher_order,
+            reset_grads=reset_grads,
+        )
 
-        if mdc.currently_caching():
-            full_graph = self.op_node._tensor_graph
-
-            traversal_indices = mdc.backward_indices_for_tensor(self)
-            traversal_path = [None] * (len(traversal_indices) + 1)
-
-            for i, indices in enumerate(traversal_indices):
-                current_item = full_graph
-                for index in indices:
-                    current_item = current_item[index]
-                traversal_path[i] = current_item
-
-            traversal_path[-1] = self
-        else:
-            traversal_path = self.toposort()
-
-        if reset_grads:
-            for tensor in traversal_path:
-                tensor.grad = None
-
-        self.grad = ones_like(self)
-
-        with enable_grad(allow_higher_order):
-            for tensor in reversed(traversal_path):
-                # leaf tensors don't have any input tensors to update, so skip
-                if tensor.is_leaf:
-                    continue
-                # this should never be None since the final gradient (self's gradient) is manually set to ones
-                # first iteration updates input tensors who now have non-None grads too
-                # this continues for their input tensors, and those tensor's inputs, and so on and so forth
-                grad = tensor.grad
-                grad.allow_grad = allow_higher_order
-                node = tensor.op_node
-                node.update_grads(grad)
-                # we're only temporarily storing grads
-                # so we need to remove any references when we're done to save memory
-                if not retain_grads:
-                    tensor.grad = None
-
-                if cleanup_mode == "keep":
-                    continue
-
-                if cleanup_mode == "destroy":
-                    tensor.wipe()
-                    continue
-
-                if tensor.graph_refs > 0:
-                    continue
-
-                for child in node.tensor_inputs:
-                    child.graph_refs -= 1
-
-                tensor.wipe()
-
-    # destroy our portion of the graph
+    # remove our subgraph from the whole graph
     def wipe(self):
         self.op_node = None
 

@@ -15,6 +15,9 @@ if TYPE_CHECKING:
 
 # allow gradient tracking if at least one of the input tensors allows a gradient
 def _should_allow_grad(op_inputs: Sequence[Any]):
+    if not md.grad_allowed_():
+        return False
+
     for x in op_inputs:
         if isinstance(x, md.Tensor) and x.allow_grad:
             return True
