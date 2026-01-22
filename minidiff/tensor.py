@@ -1,15 +1,14 @@
 from __future__ import annotations
 
-from collections import deque
-from contextvars import ContextVar
 from builtins import bool as py_bool
+from contextvars import ContextVar
 from typing import TYPE_CHECKING
 
 from numpy import ndarray
 
 import minidiff as md
-from minidiff.backend import current_backend
 import minidiff.caching as mdc
+from minidiff.backend import current_backend
 
 if TYPE_CHECKING:
     from typing import Any, Dict, List, Literal, Optional, Sequence, Tuple, Union
@@ -175,41 +174,23 @@ class Tensor:
     def toposort(self) -> List[Tensor]:
         seen = set()
         traversal_path = []
-        stack = [self]
-        parents = []
 
-        while len(stack) != 0:
-            tensor = stack.pop()
-            if id(tensor) in seen:
-                continue
-            seen.add(id(tensor))
+        # topologically sort:
+        # step through the graph starting from the output tensor (self)
+        # go all the way down to the leaf tensors, skipping tensors we've already seen
+        # after getting all the way to the base, finally push ourselves onto the stack
+        # rinse and repeat for the input tensors, their input tensors, etc.
+        def dfs(op_output: Tensor):
+            if id(op_output) in seen:
+                return
+            seen.add(id(op_output))
+            if not op_output.is_leaf:
+                node = op_output.op_node
+                for op_input in node.tensor_inputs:
+                    dfs(op_input)
+            traversal_path.append(op_output)
 
-            node = tensor.op_node
-            all_children_visited = True
-
-            # append all children to the stack so they will be processed next
-            # (DFS)
-            if node is not None:
-                for t in node.tensor_inputs:
-                    if id(t) in seen:
-                        continue
-                    all_children_visited = False
-                    stack.append(t)
-
-            # if not all children have been seen, at least one is appended to the stack
-            # therefore the current tensor must be the next parent
-            # this is the post-order bit
-            if not all_children_visited:
-                parents.append(tensor)
-                continue
-
-            # all children were visited so that means we need to hop up a level on the graph (go to the parent)
-            # if there are no parents left, that means the current tensor is the output tensor
-            traversal_path.append(tensor)
-            if len(parents) != 0:
-                parent = parents.pop()
-                seen.remove(id(parent))
-                stack.append(parent)
+        dfs(self)
 
         return traversal_path
 

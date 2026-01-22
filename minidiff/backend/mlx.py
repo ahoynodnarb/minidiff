@@ -56,7 +56,7 @@ class mlx_backend(backend.Backend):
     def flip(a: mx.array, axis: Optional[Union[int, Sequence[int]]]):
         if axis is None:
             slices = [slice(None, None, -1) for _ in range(a.ndim)]
-        if isinstance(axis, int):
+        elif isinstance(axis, int):
             slices = [
                 slice(None, None, -1) if i == axis else slice(None, None, None)
                 for i in range(a.ndim)

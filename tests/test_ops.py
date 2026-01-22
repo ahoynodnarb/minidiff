@@ -533,6 +533,3 @@ def test_absolute():
             args=[md.randn(2, 2, 2, 2, allow_grad=True)],
             kwargs={},
         )
-
-
-test_absolute()
