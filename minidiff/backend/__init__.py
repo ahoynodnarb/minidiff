@@ -54,6 +54,8 @@ def attempt_backend_import():
             if backend_exports is not None:
                 used_backend = possible_backend
                 break
+        else:
+            raise Exception("could not find a suitable backend")
 
     for export in backend_exports.values():
         if (
