@@ -45,8 +45,8 @@ def indices_for_tensor(tensor: md.Tensor) -> Tuple[int, ...]:
     if tensor_hash in indices_dict:
         return indices_dict[tensor_hash]
 
-    full_graph = tensor.op_node._tensor_graph + [tensor]
-    tensor_to_index = {id(t): -1 for t in sorted_tensors}
+    full_graph = tensor.op_node._tensor_graph
+    tensor_to_index = {id(t): -1 for t in sorted_tensors if t is not tensor}
 
     stack = [([i], t) for i, t in enumerate(full_graph)]
 
@@ -60,7 +60,7 @@ def indices_for_tensor(tensor: md.Tensor) -> Tuple[int, ...]:
             continue
         tensor_to_index[id(item)] = tuple(index_list)
 
-    indices = tuple(tensor_to_index[id(t)] for t in sorted_tensors)
+    indices = tuple(tensor_to_index[id(t)] for t in sorted_tensors if t is not tensor)
 
     indices_dict[tensor_hash] = indices
 
