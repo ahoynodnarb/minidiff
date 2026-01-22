@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import minidiff as md
+import minidiff.caching as mdc
 
 if TYPE_CHECKING:
     from typing import Any, Dict, Optional, Sequence
@@ -40,9 +41,13 @@ class OpNode:
         for tensor in self.tensor_inputs:
             tensor.graph_refs += 1
 
-        # since order of the inputs matters, substitute -1 for non-tensor/leaf op_inputs
+        self.flattened_graph = []
         self.op_ids = []
 
+        if not mdc.currently_caching():
+            return
+
+        # since order of the inputs matters, substitute -1 for non-tensor/leaf op_inputs
         for op_input in self.op_inputs:
             if not isinstance(op_input, md.Tensor) or op_input.is_leaf:
                 self.op_ids.append(-1)
@@ -52,16 +57,19 @@ class OpNode:
         self.op_ids.append(id(forward_func))
         self.op_ids = tuple(self.op_ids)
 
-        self.tree = []
+        seen = set()
+
         for op_input in self.op_inputs:
             if not isinstance(op_input, md.Tensor):
                 continue
-            if id(op_input) in [id(x) for x in self.tree]:
+            if id(op_input) in seen:
                 continue
             if not op_input.is_leaf:
-                self.tree.extend(op_input.op_node.tree)
+                self.flattened_graph.extend(op_input.op_node.flattened_graph)
 
-            self.tree.append(op_input)
+            self.flattened_graph.append(op_input)
+
+            seen.add(id(op_input))
 
     @property
     def hash(self) -> int:

@@ -240,8 +240,8 @@ class Tensor:
 
         if mdc.currently_caching():
             traversal_indices = mdc.indices_for_tensor(self)
-            full_tree = self.op_node.tree + [self]
-            traversal_path = [full_tree[index] for index in traversal_indices]
+            full_graph = self.op_node.flattened_graph + [self]
+            traversal_path = [full_graph[index] for index in traversal_indices]
         else:
             traversal_path = self.toposort()
 

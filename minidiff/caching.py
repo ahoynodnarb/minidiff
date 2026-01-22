@@ -45,10 +45,10 @@ def indices_for_tensor(tensor: md.Tensor) -> Tuple[int]:
     if tensor_hash in indices_dict:
         return indices_dict[tensor_hash]
 
-    full_tree = tensor.op_node.tree + [tensor]
+    full_graph = tensor.op_node.flattened_graph + [tensor]
     tensor_to_index = {id(t): -1 for t in sorted_tensors}
 
-    for i, t in enumerate(full_tree):
+    for i, t in enumerate(full_graph):
         if id(t) not in tensor_to_index:
             continue
         tensor_to_index[id(t)] = i
