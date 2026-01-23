@@ -230,25 +230,25 @@ def create_unary_op_func(
 # two arguments
 def create_binary_op_func(
     forward_func: Callable[P, md.Tensor],
-    grad_a: Optional[mdt.BinaryOpGrad] = None,
-    grad_b: Optional[mdt.BinaryOpGrad] = None,
+    grad_x: Optional[mdt.BinaryOpGrad] = None,
+    grad_y: Optional[mdt.BinaryOpGrad] = None,
     **kwargs,
 ) -> Callable[P, md.Tensor]:
     return create_op_func(
-        forward_func=forward_func, grad_funcs=[grad_a, grad_b], **kwargs
+        forward_func=forward_func, grad_funcs=[grad_x, grad_y], **kwargs
     )
 
 
 # three arguments
 def create_ternary_op_func(
     forward_func: Callable[P, md.Tensor],
-    grad_a: Optional[mdt.TernaryOpGrad] = None,
-    grad_b: Optional[mdt.TernaryOpGrad] = None,
-    grad_c: Optional[mdt.TernaryOpGrad] = None,
+    grad_x: Optional[mdt.TernaryOpGrad] = None,
+    grad_y: Optional[mdt.TernaryOpGrad] = None,
+    grad_z: Optional[mdt.TernaryOpGrad] = None,
     **kwargs,
 ) -> Callable[P, md.Tensor]:
     return create_op_func(
-        forward_func=forward_func, grad_funcs=[grad_a, grad_b, grad_c], **kwargs
+        forward_func=forward_func, grad_funcs=[grad_x, grad_y, grad_z], **kwargs
     )
 
 

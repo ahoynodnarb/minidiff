@@ -25,32 +25,32 @@ def squeeze_grad(
     return expand_dims(grad, axis)
 
 
-def tensordot_grad_a(
-    a: md.Tensor,
-    b: md.Tensor,
+def tensordot_grad_x(
+    x: md.Tensor,
+    y: md.Tensor,
     grad: md.Tensor,
     axes: Union[int, Sequence[Tuple[int, ...]]] = 2,
 ) -> md.Tensor:
     if isinstance(axes, int):
-        axes_a = tuple(range(a.ndim - axes, a.ndim))
-        axes_b = tuple(range(axes))
-        axes = (axes_a, axes_b)
+        axes_x = tuple(range(x.ndim - axes, x.ndim))
+        axes_y = tuple(range(axes))
+        axes = (axes_x, axes_y)
     # indices of all dims in b not originally contracted in the forward tensordot
-    uncontracted_a = tuple(i for i in range(a.ndim) if i not in axes[0])
-    uncontracted_b = tuple(i for i in range(b.ndim) if i not in axes[1])
-    # indices of all dims in grad that align with uncontracted_b
-    grad_aligned = tuple(range(grad.ndim - len(uncontracted_b), grad.ndim))
-    new_axes = (grad_aligned, uncontracted_b)
-    result = tensordot(grad, b, axes=new_axes)
+    uncontracted_x = tuple(i for i in range(x.ndim) if i not in axes[0])
+    uncontracted_y = tuple(i for i in range(y.ndim) if i not in axes[1])
+    # indices of all dims in grad that align with uncontracted_y
+    grad_aligned = tuple(range(grad.ndim - len(uncontracted_y), grad.ndim))
+    new_axes = (grad_aligned, uncontracted_y)
+    result = tensordot(grad, y, axes=new_axes)
     # first few indices will be uncontracted in a, last few will be contracted in a (original forward pass)
     # need to transpose such that the first few take up the uncontracted a indices, and the last few take up the contracted a indices
-    permutation_indices = [0] * a.ndim
-    n_uncontracted_a = len(uncontracted_a)
+    permutation_indices = [0] * x.ndim
+    n_uncontracted_x = len(uncontracted_x)
     uncontracted_idx = 0
     contracted_idx = 0
-    for i in range(a.ndim):
-        if i < n_uncontracted_a:
-            permutation_indices[uncontracted_a[uncontracted_idx]] = i
+    for i in range(x.ndim):
+        if i < n_uncontracted_x:
+            permutation_indices[uncontracted_x[uncontracted_idx]] = i
             uncontracted_idx += 1
         else:
             permutation_indices[axes[0][contracted_idx]] = i
@@ -60,35 +60,35 @@ def tensordot_grad_a(
     return reshaped
 
 
-def tensordot_grad_b(
-    a: md.Tensor,
-    b: md.Tensor,
+def tensordot_grad_y(
+    x: md.Tensor,
+    y: md.Tensor,
     grad: md.Tensor,
     axes: Union[int, Sequence[Tuple[int, ...]]] = 2,
 ) -> md.Tensor:
     if isinstance(axes, int):
-        axes_a = tuple(range(a.ndim - axes, a.ndim))
-        axes_b = tuple(range(axes))
-        axes = (axes_a, axes_b)
+        axes_x = tuple(range(x.ndim - axes, x.ndim))
+        axes_y = tuple(range(axes))
+        axes = (axes_x, axes_y)
     # indices of all dims in a not originally contracted in the forward tensordot
-    uncontracted_a = tuple(i for i in range(a.ndim) if i not in axes[0])
-    uncontracted_b = tuple(i for i in range(b.ndim) if i not in axes[1])
-    # indices of all dims in grad that align with uncontracted_a
-    grad_aligned = tuple(range(len(uncontracted_a)))
-    new_axes = (uncontracted_a, grad_aligned)
-    result = tensordot(a, grad, axes=new_axes)
+    uncontracted_x = tuple(i for i in range(x.ndim) if i not in axes[0])
+    uncontracted_y = tuple(i for i in range(y.ndim) if i not in axes[1])
+    # indices of all dims in grad that align with uncontracted_x
+    grad_aligned = tuple(range(len(uncontracted_x)))
+    new_axes = (uncontracted_x, grad_aligned)
+    result = tensordot(x, grad, axes=new_axes)
     # first few indices of result will be contracted in a, last few will be uncontracted in b (original forward pass
     # need to transpose so that the last few take up the uncontracted b indices, and the first few take up the original contracted indices
-    n_contracted_a = len(axes[0])
+    n_contracted_x = len(axes[0])
     contracted_idx = 0
     uncontracted_idx = 0
-    permutation_indices = [0] * b.ndim
-    for i in range(b.ndim):
-        if i < n_contracted_a:
+    permutation_indices = [0] * y.ndim
+    for i in range(y.ndim):
+        if i < n_contracted_x:
             permutation_indices[axes[1][contracted_idx]] = i
             contracted_idx += 1
         else:
-            permutation_indices[uncontracted_b[uncontracted_idx]] = i
+            permutation_indices[uncontracted_y[uncontracted_idx]] = i
             uncontracted_idx += 1
 
     reshaped = md.transpose(result, axes=permutation_indices)
@@ -96,47 +96,47 @@ def tensordot_grad_b(
 
 
 def max_grad(
-    a: md.Tensor,
+    x: md.Tensor,
     grad: md.Tensor,
     axis: Optional[Union[int, Tuple[int]]] = None,
     **kwargs,
 ) -> md.Tensor:
-    max_indices = argmax(a, axis=axis, keepdims=True)
+    max_indices = argmax(x, axis=axis, keepdims=True)
     grad = grad.reshape(max_indices.shape)
-    ret = md.zeros_like(a)
+    ret = md.zeros_like(x)
     md.put_along_axis(ret, max_indices, grad, axis=axis)
     return ret
 
 
 def min_grad(
-    a: md.Tensor,
+    x: md.Tensor,
     grad: md.Tensor,
     axis: Optional[Union[int, Tuple[int]]] = None,
     **kwargs,
 ) -> md.Tensor:
-    min_indices = argmin(a, axis=axis, keepdims=True)
+    min_indices = argmin(x, axis=axis, keepdims=True)
     grad = grad.reshape(min_indices.shape)
-    ret = md.zeros_like(a)
+    ret = md.zeros_like(x)
     md.put_along_axis(ret, min_indices, grad, axis=axis)
     return ret
 
 
 def prod_grad(
-    a: md.Tensor,
+    x: md.Tensor,
     grad: md.Tensor,
     axis: Optional[Union[int, Tuple[int]]] = None,
     **kwargs,
 ) -> md.Tensor:
     if axis == ():
-        return grad.reshape(a.shape)
-    multiplied = prod(a, axis=axis, keepdims=True)
+        return grad.reshape(x.shape)
+    multiplied = prod(x, axis=axis, keepdims=True)
     grad = grad.reshape(multiplied.shape)
     # will be zero anyway over axes where an element is 0, just do this for numerical stability
-    return md.where(a == 0, 0, grad * multiplied / a)
+    return md.where(x == 0, 0, grad * multiplied / x)
 
 
 def transpose_grad(
-    a: md.Tensor, grad: md.Tensor, axes: Optional[Union[int, Tuple[int]]] = None
+    x: md.Tensor, grad: md.Tensor, axes: Optional[Union[int, Tuple[int]]] = None
 ) -> md.Tensor:
     if axes is None:
         return transpose(grad)
@@ -148,68 +148,68 @@ def transpose_grad(
 
 # if broadcasting happened during the forward pass, you need to correctly
 # sum up the correct dimensions so that the gradients match up
-def unbroadcast_forward(a: md.Tensor, target_shape: Sequence[int]) -> md.Tensor:
-    if a.shape == target_shape:
-        return a
+def unbroadcast_forward(x: md.Tensor, target_shape: Sequence[int]) -> md.Tensor:
+    if x.shape == target_shape:
+        return x
     # this collects the prepended axes
     # numpy inserts dimensions from the left when broadcasting
     # this just sums across those prepended dimensions
-    len_prepended = a.ndim - len(target_shape)
+    len_prepended = x.ndim - len(target_shape)
     broadcasted_axes = tuple(range(len_prepended))
     if len(broadcasted_axes) != 0:
-        a = a.sum(axis=broadcasted_axes)
+        x = x.sum(axis=broadcasted_axes)
 
     # this collects the axes that were stretched to span a greater dim
     # numpy will "stretch" dimensions so that dimensions of size 1 are tiled
     # so that they match the greater dimension.
     # we can undo this by just summing across those dimensions until we reach size 1 again
-    ndims = py_min(len(target_shape), a.ndim)
+    ndims = py_min(len(target_shape), x.ndim)
     stretched_axes = tuple(
-        i for i in range(ndims) if a.shape[i] > 1 and target_shape[i] == 1
+        i for i in range(ndims) if x.shape[i] > 1 and target_shape[i] == 1
     )
     if len(stretched_axes) != 0:
-        a = a.sum(axis=stretched_axes, keepdims=True)
+        x = x.sum(axis=stretched_axes, keepdims=True)
 
     # final reshape operation that can upsample if necessary
-    if a.size == py_prod(target_shape):
-        return a.reshape(target_shape)
+    if x.size == py_prod(target_shape):
+        return x.reshape(target_shape)
 
-    return broadcast_to(a, target_shape)
+    return broadcast_to(x, target_shape)
 
 
-def getitem_grad(a: md.Tensor, key: Any, grad: md.Tensor) -> md.Tensor:
-    ret = md.zeros_like(a)
+def getitem_grad(x: md.Tensor, key: Any, grad: md.Tensor) -> md.Tensor:
+    ret = md.zeros_like(x)
     md.index_add(ret, key, grad)
     return ret
 
 
 def mean_grad(
-    a: md.Tensor,
+    x: md.Tensor,
     grad: md.Tensor,
     axis: Optional[Union[int, Tuple[int]]] = None,
     **kwargs,
 ) -> md.Tensor:
     if axis is None:
-        return grad / a.size
+        return grad / x.size
     if axis == ():
         return grad
     if isinstance(axis, int):
-        return grad / a.shape[axis]
-    in_shape = a.shape
+        return grad / x.shape[axis]
+    in_shape = x.shape
     multiplied_dims = md.Tensor([in_shape[dim] for dim in axis])
     return grad / prod(multiplied_dims)
 
 
-def std_grad(a, grad, axis=None, **kwargs):
-    mu = mean(a, axis=axis)
-    N = py_prod([dim for i, dim in enumerate(a.shape) if i in axis])
-    return grad * (a - mu) / (std(a, axis=axis, **kwargs) * N)
+def std_grad(x, grad, axis=None, **kwargs):
+    mu = mean(x, axis=axis)
+    N = py_prod([dim for i, dim in enumerate(x.shape) if i in axis])
+    return grad * (x - mu) / (std(x, axis=axis, **kwargs) * N)
 
 
 # -------------------- UNARY FUNCS --------------------
 absolute: Callable[[md.Tensor], md.Tensor] = wrapping.create_unary_op_func(
     forward_func=wrapping.as_minidiff(current_backend.absolute),
-    grad=lambda a, grad: grad * sign(a),
+    grad=lambda x, grad: grad * sign(x),
 )
 abs = absolute
 all: Callable[[md.Tensor], md.Tensor] = wrapping.create_unary_op_func(
@@ -234,15 +234,15 @@ argwhere: Callable[[md.Tensor], md.Tensor] = wrapping.create_unary_op_func(
 )
 atleast_1d: Callable[[md.Tensor], md.Tensor] = wrapping.create_unary_op_func(
     forward_func=wrapping.as_minidiff(current_backend.atleast_1d),
-    grad=lambda a, grad: grad,
+    grad=lambda x, grad: grad,
 )
 atleast_2d: Callable[[md.Tensor], md.Tensor] = wrapping.create_unary_op_func(
     forward_func=wrapping.as_minidiff(current_backend.atleast_2d),
-    grad=lambda a, grad: grad,
+    grad=lambda x, grad: grad,
 )
 atleast_3d: Callable[[md.Tensor], md.Tensor] = wrapping.create_unary_op_func(
     forward_func=wrapping.as_minidiff(current_backend.atleast_3d),
-    grad=lambda a, grad: grad,
+    grad=lambda x, grad: grad,
 )
 ceil: Callable[[md.Tensor], md.Tensor] = wrapping.create_unary_op_func(
     forward_func=wrapping.as_minidiff(current_backend.ceil),
@@ -250,27 +250,27 @@ ceil: Callable[[md.Tensor], md.Tensor] = wrapping.create_unary_op_func(
 )
 copy: Callable[[md.Tensor], md.Tensor] = wrapping.create_unary_op_func(
     forward_func=wrapping.as_minidiff(current_backend.copy),
-    grad=lambda a, grad: grad,
+    grad=lambda x, grad: grad,
 )
 cos: Callable[[md.Tensor], md.Tensor] = wrapping.create_unary_op_func(
     forward_func=wrapping.as_minidiff(current_backend.cos),
-    grad=lambda a, grad: grad * -sin(a),
+    grad=lambda x, grad: grad * -sin(x),
 )
 cosh: Callable[[md.Tensor], md.Tensor] = wrapping.create_unary_op_func(
     forward_func=wrapping.as_minidiff(current_backend.cosh),
-    grad=lambda a, grad: grad * sinh(a),
+    grad=lambda x, grad: grad * sinh(x),
 )
 exp: Callable[[md.Tensor], md.Tensor] = wrapping.create_unary_op_func(
     forward_func=wrapping.as_minidiff(current_backend.exp),
-    grad=lambda a, grad: grad * exp(a),
+    grad=lambda x, grad: grad * exp(x),
 )
 flatten: Callable[[md.Tensor], md.Tensor] = wrapping.create_unary_op_func(
     forward_func=wrapping.as_minidiff(current_backend.flatten),
-    grad=lambda a, grad, order="C": reshape(grad, a.shape, order=order),
+    grad=lambda x, grad, order="C": reshape(grad, x.shape, order=order),
 )
 flip: Callable[[md.Tensor], md.Tensor] = wrapping.create_unary_op_func(
     forward_func=wrapping.as_minidiff(current_backend.flip),
-    grad=lambda a, grad, **kwargs: flip(grad, **kwargs),
+    grad=lambda x, grad, **kwargs: flip(grad, **kwargs),
     propagate_kwargs=True,
 )
 floor: Callable[[md.Tensor], md.Tensor] = wrapping.create_unary_op_func(
@@ -283,7 +283,7 @@ invert: Callable[[md.Tensor], md.Tensor] = wrapping.create_unary_op_func(
 )
 log: Callable[[md.Tensor], md.Tensor] = wrapping.create_unary_op_func(
     forward_func=wrapping.as_minidiff(current_backend.log),
-    grad=lambda a, grad: grad / a,
+    grad=lambda x, grad: grad / x,
 )
 logical_not: Callable[[mdt.TensorLike], md.Tensor] = wrapping.create_unary_op_func(
     forward_func=wrapping.as_minidiff(current_backend.logical_not),
@@ -311,7 +311,7 @@ prod: Callable[[md.Tensor], md.Tensor] = wrapping.create_unary_op_func(
 )
 ravel: Callable[[md.Tensor], md.Tensor] = wrapping.create_unary_op_func(
     forward_func=wrapping.as_minidiff(current_backend.ravel),
-    grad=lambda a, grad, order="C": reshape(grad, a.shape, order=order),
+    grad=lambda x, grad, order="C": reshape(grad, x.shape, order=order),
 )
 sign: Callable[[md.Tensor], md.Tensor] = wrapping.create_unary_op_func(
     forward_func=wrapping.as_minidiff(current_backend.sign),
@@ -319,11 +319,11 @@ sign: Callable[[md.Tensor], md.Tensor] = wrapping.create_unary_op_func(
 )
 sin: Callable[[md.Tensor], md.Tensor] = wrapping.create_unary_op_func(
     forward_func=wrapping.as_minidiff(current_backend.sin),
-    grad=lambda a, grad: grad * cos(a),
+    grad=lambda x, grad: grad * cos(x),
 )
 sinh: Callable[[md.Tensor], md.Tensor] = wrapping.create_unary_op_func(
     forward_func=wrapping.as_minidiff(current_backend.sinh),
-    grad=lambda a, grad: grad * cosh(a),
+    grad=lambda x, grad: grad * cosh(x),
 )
 
 
@@ -346,15 +346,15 @@ std: Callable[[md.Tensor], md.Tensor] = wrapping.create_unary_op_func(
 )
 sum: Callable[[md.Tensor], md.Tensor] = wrapping.create_unary_op_func(
     forward_func=wrapping.as_minidiff(current_backend.sum),
-    grad=lambda a, grad: grad,
+    grad=lambda x, grad: grad,
 )
 tan: Callable[[md.Tensor], md.Tensor] = wrapping.create_unary_op_func(
     forward_func=wrapping.as_minidiff(current_backend.tan),
-    grad=lambda a, grad: grad * (1 / cos(a) ** 2),
+    grad=lambda x, grad: grad * (1 / cos(x) ** 2),
 )
 tanh: Callable[[md.Tensor], md.Tensor] = wrapping.create_unary_op_func(
     forward_func=wrapping.as_minidiff(current_backend.tanh),
-    grad=lambda a, grad: grad * (1 / cosh(a) ** 2),
+    grad=lambda x, grad: grad * (1 / cosh(x) ** 2),
 )
 transpose: Callable[[md.Tensor], md.Tensor] = wrapping.create_unary_op_func(
     forward_func=wrapping.as_minidiff(current_backend.transpose),
@@ -367,24 +367,24 @@ transpose: Callable[[md.Tensor], md.Tensor] = wrapping.create_unary_op_func(
 add: Callable[[mdt.TensorLike, mdt.TensorLike], md.Tensor] = (
     wrapping.create_binary_op_func(
         forward_func=wrapping.as_minidiff(current_backend.add),
-        grad_a=lambda a, b, grad: grad,
-        grad_b=lambda a, b, grad: grad,
+        grad_x=lambda x, y, grad: grad,
+        grad_y=lambda x, y, grad: grad,
     )
 )
 astype: Callable[[md.Tensor, mdt.dtype], md.Tensor] = wrapping.create_binary_op_func(
     forward_func=wrapping.as_minidiff(current_backend.astype),
-    grad_a=lambda a, dtype, grad: grad.astype(a.dtype),
+    grad_x=lambda x, dtype, grad: grad.astype(x.dtype),
 )
 broadcast_to: Callable[[md.Tensor, Sequence[int]], md.Tensor] = (
     wrapping.create_binary_op_func(
         forward_func=wrapping.as_minidiff(current_backend.broadcast_to),
-        grad_a=lambda a, shape, grad: unbroadcast(grad, a.shape),
+        grad_x=lambda x, shape, grad: unbroadcast(grad, x.shape),
     )
 )
 dot: Callable[[md.Tensor, md.Tensor], md.Tensor] = wrapping.create_binary_op_func(
     forward_func=wrapping.as_minidiff(current_backend.dot),
-    grad_a=lambda a, b, grad: grad * b,
-    grad_b=lambda a, b, grad: grad * a,
+    grad_x=lambda x, y, grad: grad * y,
+    grad_y=lambda x, y, grad: grad * x,
 )
 equal: Callable[[mdt.TensorLike, mdt.TensorLike], md.Tensor] = (
     wrapping.create_binary_op_func(
@@ -395,7 +395,7 @@ equal: Callable[[mdt.TensorLike, mdt.TensorLike], md.Tensor] = (
 expand_dims: Callable[[md.Tensor, Union[int, Sequence[int]]], md.Tensor] = (
     wrapping.create_binary_op_func(
         forward_func=wrapping.as_minidiff(current_backend.expand_dims),
-        grad_a=lambda a, axis, grad: squeeze(grad, axis=axis),
+        grad_x=lambda x, axis, grad: squeeze(grad, axis=axis),
     )
 )
 floor_divide: Callable[[mdt.TensorLike, mdt.TensorLike], md.Tensor] = (
@@ -406,7 +406,7 @@ floor_divide: Callable[[mdt.TensorLike, mdt.TensorLike], md.Tensor] = (
 )
 getitem: Callable[[md.Tensor, Any], md.Tensor] = wrapping.create_binary_op_func(
     forward_func=wrapping.as_minidiff(current_backend.getitem),
-    grad_a=getitem_grad,
+    grad_x=getitem_grad,
     op_name="index",
 )
 greater: Callable[[mdt.TensorLike, mdt.TensorLike], md.Tensor] = (
@@ -453,22 +453,22 @@ logical_xor: Callable[[mdt.TensorLike, mdt.TensorLike], md.Tensor] = (
 )
 matmul: Callable[[md.Tensor, md.Tensor], md.Tensor] = wrapping.create_binary_op_func(
     forward_func=wrapping.as_minidiff(current_backend.matmul),
-    grad_a=lambda a, b, grad: matmul(grad, b.T),
-    grad_b=lambda a, b, grad: matmul(a.T, grad),
+    grad_x=lambda x, y, grad: matmul(grad, y.T),
+    grad_y=lambda x, y, grad: matmul(x.T, grad),
     tensor_only=True,
 )
 mod: Callable[[mdt.TensorLike, mdt.TensorLike], md.Tensor] = (
     wrapping.create_binary_op_func(
         forward_func=wrapping.as_minidiff(current_backend.mod),
-        grad_a=lambda a, b, grad: md.where(a % b == 0, 0, grad),
-        grad_b=lambda a, b, grad: md.where(a % b == 0, 0, grad),
+        grad_x=lambda x, y, grad: md.where(x % y == 0, 0, grad),
+        grad_y=lambda x, y, grad: md.where(x % y == 0, 0, grad),
     )
 )
 multiply: Callable[[mdt.TensorLike, mdt.TensorLike], md.Tensor] = (
     wrapping.create_binary_op_func(
         forward_func=wrapping.as_minidiff(current_backend.multiply),
-        grad_a=lambda a, b, grad: grad * b,
-        grad_b=lambda a, b, grad: grad * a,
+        grad_x=lambda x, y, grad: grad * y,
+        grad_y=lambda x, y, grad: grad * x,
     )
 )
 not_equal: Callable[[mdt.TensorLike, mdt.TensorLike], md.Tensor] = (
@@ -480,41 +480,41 @@ not_equal: Callable[[mdt.TensorLike, mdt.TensorLike], md.Tensor] = (
 power: Callable[[mdt.TensorLike, mdt.TensorLike], md.Tensor] = (
     wrapping.create_binary_op_func(
         forward_func=wrapping.as_minidiff(current_backend.power),
-        grad_a=lambda a, b, grad: grad * b * (a ** (b - 1)),
-        grad_b=lambda a, b, grad: grad * log(a) * a**b,
+        grad_x=lambda x, y, grad: grad * y * (x ** (y - 1)),
+        grad_y=lambda x, y, grad: grad * log(x) * x**y,
     )
 )
 reshape: Callable[[md.Tensor, Union[int, Sequence[int]]], md.Tensor] = (
     wrapping.create_binary_op_func(
         forward_func=wrapping.as_minidiff(current_backend.reshape),
-        grad_a=lambda a, b, grad: grad.reshape(a.shape),
+        grad_x=lambda x, y, grad: grad.reshape(x.shape),
     )
 )
 subtract: Callable[[mdt.TensorLike, mdt.TensorLike], md.Tensor] = (
     wrapping.create_binary_op_func(
         forward_func=wrapping.as_minidiff(current_backend.subtract),
-        grad_a=lambda a, b, grad: grad,
-        grad_b=lambda a, b, grad: -grad,
+        grad_x=lambda x, y, grad: grad,
+        grad_y=lambda x, y, grad: -grad,
     )
 )
 tensordot: Callable[[md.Tensor, md.Tensor], md.Tensor] = wrapping.create_binary_op_func(
     forward_func=wrapping.as_minidiff(current_backend.tensordot),
-    grad_a=tensordot_grad_a,
-    grad_b=tensordot_grad_b,
+    grad_x=tensordot_grad_x,
+    grad_y=tensordot_grad_y,
     tensor_only=True,
     propagate_kwargs=True,
 )
 true_divide: Callable[[mdt.TensorLike, mdt.TensorLike], md.Tensor] = (
     wrapping.create_binary_op_func(
         forward_func=wrapping.as_minidiff(current_backend.true_divide),
-        grad_a=lambda a, b, grad: grad / b,
-        grad_b=lambda a, b, grad: grad * (-a / b**2),
+        grad_x=lambda x, y, grad: grad / y,
+        grad_y=lambda x, y, grad: grad * (-x / y**2),
     )
 )
 unbroadcast: Callable[[md.Tensor, Sequence[int]], md.Tensor] = (
     wrapping.create_binary_op_func(
         forward_func=unbroadcast_forward,
-        grad_a=lambda a, shape, grad: broadcast_to(grad, a.shape),
+        grad_x=lambda x, shape, grad: broadcast_to(grad, x.shape),
     )
 )
 # -------------------- TERNARY FUNCS --------------------
@@ -522,15 +522,15 @@ clip: Callable[
     [md.Tensor, Optional[mdt.TensorLike], Optional[mdt.TensorLike]], md.Tensor
 ] = wrapping.create_ternary_op_func(
     forward_func=wrapping.as_minidiff(current_backend.clip),
-    grad_a=lambda a, grad, a_min=None, a_max=None: grad
+    grad_x=lambda x, grad, a_min=None, a_max=None: grad
     * logical_and(
-        1 if a_min is None else a > a_min,
-        1 if a_max is None else a < a_max,
+        1 if a_min is None else x > a_min,
+        1 if a_max is None else x < a_max,
     ),
 )
 swapaxes: Callable[[md.Tensor, int, int], md.Tensor] = wrapping.create_ternary_op_func(
     forward_func=wrapping.as_minidiff(current_backend.swapaxes),
-    grad_a=lambda a, axis1, axis2, grad, **kwargs: swapaxes(
+    grad_x=lambda x, axis1, axis2, grad, **kwargs: swapaxes(
         grad, axis1, axis2, **kwargs
     ),
     propagate_kwargs=True,
@@ -538,8 +538,8 @@ swapaxes: Callable[[md.Tensor, int, int], md.Tensor] = wrapping.create_ternary_o
 where: Callable[[md.Tensor, md.Tensor, md.Tensor], md.Tensor] = (
     wrapping.create_ternary_op_func(
         forward_func=wrapping.as_minidiff(current_backend.where),
-        grad_b=lambda condition, b, c, grad: grad * condition,
-        grad_c=lambda condition, b, c, grad: grad * (1 - condition),
+        grad_y=lambda condition, y, z, grad: grad * condition,
+        grad_z=lambda condition, y, z, grad: grad * (1 - condition),
     )
 )
 
