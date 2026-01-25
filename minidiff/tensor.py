@@ -412,7 +412,7 @@ class Tensor:
         if self._iterator is None:
             data_size = current_backend.tensor_size(self._data)
             self._iterator = TensorIterator(
-                self._data,
+                self,
                 len(self) if data_size > 1 else data_size,
             )
         return self._iterator
@@ -431,7 +431,7 @@ class Tensor:
 
 
 class TensorIterator:
-    def __init__(self, data, length):
+    def __init__(self, data: Tensor, length: int):
         self.data = data
         self.length = length
         self.index = 0
@@ -439,7 +439,7 @@ class TensorIterator:
     def __iter__(self):
         return self
 
-    def __next__(self):
+    def __next__(self) -> Tensor:
         if self.index >= self.length:
             raise StopIteration
         item = self.data[self.index]
