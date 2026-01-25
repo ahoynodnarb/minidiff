@@ -266,7 +266,7 @@ class Tensor:
     def __imod__(self, other: mdt.TensorLike) -> Tensor:
         self._validate_mutation()
 
-        self._data = self._data % try_unwrap(other)
+        self._data %= try_unwrap(other)
 
         return self
 
@@ -276,7 +276,7 @@ class Tensor:
     def __imatmul__(self, other: Tensor) -> Tensor:
         self._validate_mutation()
 
-        self._data = self._data @ other._data
+        self._data @= other._data
 
         return self
 

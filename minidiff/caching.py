@@ -55,7 +55,7 @@ def backward_indices_for_node(op_node: md.OpNode) -> Tuple[int, ...]:
 
         if id(item) not in tensor_to_index:
             continue
-        tensor_to_index[id(item)] = tuple(index_list)
+        tensor_to_index[id(item)] = index_list
 
     indices = tuple(tensor_to_index[id(t)] for t in sorted_tensors)
 
