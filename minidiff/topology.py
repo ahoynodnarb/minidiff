@@ -152,7 +152,7 @@ class OpNode:
         if mdc.currently_caching():
             full_graph = self._tensor_graph
 
-            traversal_indices = mdc.backward_indices_for_node(self)
+            traversal_indices = mdc.backward_indices_for_root(self)
             traversal_path = [None] * len(traversal_indices)
 
             for i, indices in enumerate(traversal_indices):
