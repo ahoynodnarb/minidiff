@@ -173,7 +173,12 @@ class mlx_backend(backend.Backend):
     def vmap(fun: Callable) -> Callable:
         return mx.vmap(fun)
 
-    put_along_axis = mx.put_along_axis
+    @staticmethod
+    def put_along_axis(
+        array: mx.array, indices: mx.array, values: mx.array, axis: Optional[int]
+    ) -> None:
+        array[:] = mx.put_along_axis(array, indices, values, axis=axis)
+
     repeat = mx.repeat
     tile = mx.tile
     arange = mx.arange

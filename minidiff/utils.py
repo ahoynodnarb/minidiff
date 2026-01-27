@@ -134,7 +134,7 @@ def calculate_finite_differences(
 
             all_indices = md.Tensor(tuple(ndindex(input_tensor.shape)))
             input_indices = (
-                md.arange(n_elements, dtype=md.int32),
+                md.arange(n_elements),
                 *[all_indices[:, x] for x in range(n_dimensions)],
             )
 
@@ -183,15 +183,15 @@ def compute_grads(
         if id(t) in excluded_ids:
             copied_exclude.append(copied)
 
-    manual_gradients = calculate_finite_differences(
-        *copied_input_tensors, func=func, h=h, exclude=copied_exclude
-    )
-
     computed = func(*copied_input_tensors)
-    computed.backward()
+    computed.backward(retain_grads=True)
 
     automatic_gradients = [
         t.grad if isinstance(t, md.Tensor) else None for t in copied_input_tensors
     ]
+
+    manual_gradients = calculate_finite_differences(
+        *copied_input_tensors, func=func, h=h, exclude=copied_exclude
+    )
 
     return manual_gradients, automatic_gradients

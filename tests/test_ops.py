@@ -61,9 +61,12 @@ def perform_test(
         manual, auto = filter_nan(
             current_backend.as_numpy(manual), current_backend.as_numpy(auto)
         )
+        # print(np.argwhere(np.abs((manual - auto) / manual) > 1e-1))
         assert np.allclose(
             manual, auto, rtol=backward_rtol, atol=backward_atol
         ), f"❌ Gradient Test wrt {i}th parameter failed for {func}. \nmanual gradients:\n{manual}\nautomatic gradients:\n{auto}\ndifference:\n{manual - auto}"
+        # indices =
+        # print()
 
 
 def test_ravel():
@@ -533,3 +536,7 @@ def test_absolute():
             args=[md.randn(2, 2, 2, 2, allow_grad=True)],
             kwargs={},
         )
+
+
+if __name__ == "__main__":
+    test_matmul()
