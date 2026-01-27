@@ -220,7 +220,8 @@ class mlx_backend(backend.Backend):
 
     @staticmethod
     def shuffle(a: mx.array, *args, **kwargs) -> mx.array:
-        raise NotImplementedError("mlx has no random shuffle function")
+        indices = mx.random.permutation(len(a))
+        a[:] = a[indices]
 
     split = mx.split
 
