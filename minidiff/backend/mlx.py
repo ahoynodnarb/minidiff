@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from builtins import bool as py_bool
+import math
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -155,13 +156,11 @@ class mlx_backend(backend.Backend):
 
     @staticmethod
     def index_add(a: mx.array, indices: mx.array, b: Optional[mx.array] = None):
-        accumulated = mx.zeros_like(a)
-        accumulated = accumulated.at[indices].add(b)
-        a += accumulated
+        a[:] = a.at[indices].add(b)
 
     @staticmethod
     def isin(element: mx.array, test_elements: mx.array, **kwargs) -> mx.array:
-        return mx.array(np.isin(element, test_elements, **kwargs))
+        return mx.array([x in test_elements for x in element])
 
     @staticmethod
     def unravel_index(indices: mx.array, shape: Sequence[int]) -> mx.array:
@@ -213,8 +212,15 @@ class mlx_backend(backend.Backend):
         return mx.random.normal(dims)
 
     @staticmethod
-    def binomial(*args, **kwargs) -> mx.array:
-        return mx.array(np.random.binomial(*args, **kwargs))
+    def binomial(
+        n: int, p: float, size: Optional[Union[int, Tuple[int, ...]]]
+    ) -> mx.array:
+        if size is None:
+            return mx.sum(mx.random.uniform(shape=(n,)) < p)
+        if isinstance(size, int):
+            size = (size,)
+        trials = mx.random.uniform(shape=(n, *size))
+        return mx.sum(trials < p, axis=0)
 
     permutation = mx.random.permutation
 
