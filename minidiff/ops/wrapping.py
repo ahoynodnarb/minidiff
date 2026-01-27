@@ -160,7 +160,7 @@ def create_op_func(
         output.allow_grad = allow_grad
 
         # only attach a node if we're allowed to track gradients right now, and the tensor wants to track its gradient
-        if allow_grad and md.grad_allowed_():
+        if is_differentiable and allow_grad and md.grad_allowed_():
             output.op_node = OpNode(
                 forward_func=forward_func,
                 grad_functions=grad_funcs,
