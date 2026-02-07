@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING
 from numpy import ndarray
 
 import minidiff as md
-import minidiff.caching as mdc
 from minidiff.backend import current_backend
 
 if TYPE_CHECKING:

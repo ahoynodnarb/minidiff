@@ -72,7 +72,7 @@ def draw_tensor_op_graph(
 
     def draw_tensor_graph(graph: graphviz.Graph, t: md.Tensor):
         # iterate through every tensor starting from leaf tensors
-        all_tensors = t.toposort()
+        all_tensors = t.op_node.toposort() + [t]
         for tensor in all_tensors:
             tensor_id = id(tensor)
 
