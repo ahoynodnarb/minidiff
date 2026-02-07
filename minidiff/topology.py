@@ -138,7 +138,7 @@ class OpNode:
         reset_grads: bool = True,
     ):
         if cleanup_mode not in ["keep", "prune", "destroy"]:
-            cleanup_mode = "prune"
+            raise ValueError(f"Cleanup mode not recognized ({cleanup_mode})")
 
         # computing higher order derivatives means partially re-traversing the subgraph for whichever variable
         # we're computing the higher order derivative of, so the graph needs to remain.
