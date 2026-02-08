@@ -208,8 +208,8 @@ class Tensor:
     def flatten(self, order="C"):
         return md.flatten(self, order=order)
 
-    def astype(self, dtype: mdt.dtype, **kwargs):
-        return md.astype(self, dtype, **kwargs)
+    def astype(self, dtype: mdt.dtype):
+        return md.astype(self, dtype)
 
     def transpose(self, axes: Optional[Union[int, Sequence[int]]] = None):
         return md.transpose(self, axes=axes)
@@ -222,11 +222,15 @@ class Tensor:
 
         return backend.tensor_item(self._data)
 
-    def sum(self, **kwargs) -> Tensor:
-        return md.sum(self, **kwargs)
+    def sum(
+        self,
+        axis: Optional[Union[int, Sequence[int]]] = None,
+        keepdims: py_bool = False,
+    ) -> Tensor:
+        return md.sum(self, axis=axis, keepdims=keepdims)
 
-    def copy(self, **kwargs) -> Tensor:
-        return md.copy(self, **kwargs)
+    def copy(self) -> Tensor:
+        return md.copy(self)
 
     def clip(
         self,
@@ -235,20 +239,20 @@ class Tensor:
     ) -> Tensor:
         return md.clip(self, a_min=a_min, a_max=a_max)
 
-    def reshape(self, shape: Union[int, Sequence[int]], **kwargs) -> Tensor:
-        return md.reshape(self, shape, **kwargs)
+    def reshape(self, shape: Union[int, Sequence[int]]) -> Tensor:
+        return md.reshape(self, shape)
 
-    def dot(self, other: mdt.TensorLike, **kwargs) -> Tensor:
-        return md.dot(self, other, **kwargs)
+    def dot(self, other: mdt.TensorLike) -> Tensor:
+        return md.dot(self, other)
 
-    def matmul(self, other: mdt.TensorLike, **kwargs) -> Tensor:
-        return md.matmul(self, other, **kwargs)
+    def matmul(self, other: mdt.TensorLike) -> Tensor:
+        return md.matmul(self, other)
 
-    def add(self, other: mdt.TensorLike, **kwargs) -> Tensor:
-        return md.add(self, other, **kwargs)
+    def add(self, other: mdt.TensorLike) -> Tensor:
+        return md.add(self, other)
 
-    def multiply(self, other: mdt.TensorLike, **kwargs) -> Tensor:
-        return md.multiply(self, other, **kwargs)
+    def multiply(self, other: mdt.TensorLike) -> Tensor:
+        return md.multiply(self, other)
 
     def _graph_tracking(self):
         return self._allow_grad and md.grad_allowed_() and self.graphed
@@ -446,43 +450,35 @@ class TensorIterator:
         return item
 
 
-def ones_like(a: mdt.TensorLike, allow_grad: py_bool = False, **kwargs) -> Tensor:
+def ones_like(a: mdt.TensorLike, allow_grad: py_bool = False) -> Tensor:
     a = try_unwrap(a)
 
-    return Tensor(backend.ones_like(a, **kwargs), allow_grad=allow_grad)
+    return Tensor(backend.ones_like(a), allow_grad=allow_grad)
 
 
-def ones(
-    shape: Union[int, Sequence[int]], allow_grad: py_bool = False, **kwargs
-) -> Tensor:
-    return Tensor(backend.ones(shape, **kwargs), allow_grad=allow_grad)
+def ones(shape: Union[int, Sequence[int]], allow_grad: py_bool = False) -> Tensor:
+    return Tensor(backend.ones(shape), allow_grad=allow_grad)
 
 
-def zeros_like(a: mdt.TensorLike, allow_grad: py_bool = False, **kwargs) -> Tensor:
+def zeros_like(a: mdt.TensorLike, allow_grad: py_bool = False) -> Tensor:
     a = try_unwrap(a)
 
-    return Tensor(backend.zeros_like(a, **kwargs), allow_grad=allow_grad)
+    return Tensor(backend.zeros_like(a), allow_grad=allow_grad)
 
 
-def zeros(
-    shape: Union[int, Sequence[int]], allow_grad: py_bool = False, **kwargs
-) -> Tensor:
-    return Tensor(backend.zeros(shape, **kwargs), allow_grad=allow_grad)
+def zeros(shape: Union[int, Sequence[int]], allow_grad: py_bool = False) -> Tensor:
+    return Tensor(backend.zeros(shape), allow_grad=allow_grad)
 
 
-def full_like(
-    a: Tensor, x: mdt.TensorLike, allow_grad: py_bool = False, **kwargs
-) -> Tensor:
+def full_like(a: Tensor, x: mdt.TensorLike, allow_grad: py_bool = False) -> Tensor:
     a = try_unwrap(a)
     x = try_unwrap(x)
 
-    return Tensor(backend.full_like(a, x, **kwargs), allow_grad=allow_grad)
+    return Tensor(backend.full_like(a, x), allow_grad=allow_grad)
 
 
-def full(
-    shape: Union[int, Sequence[int]], allow_grad: py_bool = False, **kwargs
-) -> Tensor:
-    return Tensor(backend.full(shape, **kwargs), allow_grad=allow_grad)
+def full(shape: Union[int, Sequence[int]], allow_grad: py_bool = False) -> Tensor:
+    return Tensor(backend.full(shape), allow_grad=allow_grad)
 
 
 def concatenate(
@@ -504,23 +500,19 @@ def index_add(
     backend.index_add(a, indices, b)
 
 
-def isin(
-    element: mdt.TensorLike, test_elements: List[mdt.TensorLike], **kwargs
-) -> py_bool:
+def isin(element: mdt.TensorLike, test_elements: List[mdt.TensorLike]) -> py_bool:
     element = try_unwrap(element)
     test_elements = try_unwrap(test_elements)
 
-    return backend.isin(element, test_elements, **kwargs)
+    return backend.isin(element, test_elements)
 
 
 def unravel_index(
-    indices: mdt.TensorLike, shape: Sequence[int], allow_grad: py_bool = False, **kwargs
+    indices: mdt.TensorLike, shape: Sequence[int], allow_grad: py_bool = False
 ) -> Tensor:
     indices = try_unwrap(indices)
 
-    return Tensor(
-        backend.unravel_index(indices, shape, **kwargs), allow_grad=allow_grad
-    )
+    return Tensor(backend.unravel_index(indices, shape), allow_grad=allow_grad)
 
 
 def vmap(fun: mdt.UnaryFunc) -> mdt.UnaryFunc:
@@ -563,7 +555,7 @@ def put_along_axis(
     indices: Tensor,
     values: mdt.TensorLike,
     axis: Optional[int],
-) -> Tensor:
+):
     arr = arr._data
     indices = indices._data
     values = try_unwrap(values)

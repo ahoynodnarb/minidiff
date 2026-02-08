@@ -437,22 +437,24 @@ def where(
 
 
 def ones_like(
-    a: Union[int, float, tensor_class], allow_grad: py_bool = False, **kwargs
-):
+    a: Union[int, float, tensor_class], allow_grad: py_bool = False
+) -> tensor_class:
     raise NotImplementedError("Attempting to call default unimplemented Backend method")
 
 
-def ones(shape: Union[int, Sequence[int]], allow_grad: py_bool = False, **kwargs):
+def ones(shape: Union[int, Sequence[int]], allow_grad: py_bool = False) -> tensor_class:
     raise NotImplementedError("Attempting to call default unimplemented Backend method")
 
 
 def zeros_like(
-    a: Union[int, float, tensor_class], allow_grad: py_bool = False, **kwargs
-):
+    a: Union[int, float, tensor_class], allow_grad: py_bool = False
+) -> tensor_class:
     raise NotImplementedError("Attempting to call default unimplemented Backend method")
 
 
-def zeros(shape: Union[int, Sequence[int]], allow_grad: py_bool = False, **kwargs):
+def zeros(
+    shape: Union[int, Sequence[int]], allow_grad: py_bool = False
+) -> tensor_class:
     raise NotImplementedError("Attempting to call default unimplemented Backend method")
 
 
@@ -460,12 +462,11 @@ def full_like(
     a: tensor_class,
     x: Union[int, float, tensor_class],
     allow_grad: py_bool = False,
-    **kwargs,
-):
+) -> tensor_class:
     raise NotImplementedError("Attempting to call default unimplemented Backend method")
 
 
-def full(shape: Union[int, Sequence[int]], allow_grad: py_bool = False, **kwargs):
+def full(shape: Union[int, Sequence[int]], allow_grad: py_bool = False) -> tensor_class:
     raise NotImplementedError("Attempting to call default unimplemented Backend method")
 
 
@@ -473,7 +474,7 @@ def concatenate(
     arrays: Sequence[Union[int, float, tensor_class]],
     axis: Optional[int] = 0,
     allow_grad: py_bool = False,
-):
+) -> tensor_class:
     raise NotImplementedError("Attempting to call default unimplemented Backend method")
 
 
@@ -488,8 +489,7 @@ def index_add(
 def isin(
     element: Union[int, float, tensor_class],
     test_elements: List[Union[int, float, tensor_class]],
-    **kwargs,
-):
+) -> tensor_class:
     raise NotImplementedError("Attempting to call default unimplemented Backend method")
 
 
@@ -497,12 +497,13 @@ def unravel_index(
     indices: Union[int, float, tensor_class],
     shape: Sequence[int],
     allow_grad: py_bool = False,
-    **kwargs,
-):
+) -> tensor_class:
     raise NotImplementedError("Attempting to call default unimplemented Backend method")
 
 
-def vmap(fun: Callable[[tensor_class], tensor_class]):
+def vmap(
+    fun: Callable[[tensor_class], tensor_class],
+) -> Callable[[tensor_class], tensor_class]:
     raise NotImplementedError("Attempting to call default unimplemented Backend method")
 
 
@@ -511,7 +512,7 @@ def take_along_axis(
     indices: tensor_class,
     axis: Optional[int] = None,
     allow_grad: py_bool = False,
-):
+) -> tensor_class:
     raise NotImplementedError("Attempting to call default unimplemented Backend method")
 
 
@@ -529,7 +530,7 @@ def repeat(
     repeats: Union[int, Sequence[int]],
     allow_grad: py_bool = False,
     axis: Optional[int] = None,
-):
+) -> tensor_class:
     raise NotImplementedError("Attempting to call default unimplemented Backend method")
 
 
@@ -537,20 +538,17 @@ def tile(
     A: Union[int, float, tensor_class],
     reps: Union[int, float, tensor_class],
     allow_grad: py_bool = False,
-):
+) -> tensor_class:
     raise NotImplementedError("Attempting to call default unimplemented Backend method")
 
 
-def arange(*args: Union[int, float], allow_grad: py_bool = False, **kwargs):
+def arange(*args: Union[int, float], allow_grad: py_bool = False) -> tensor_class:
     raise NotImplementedError("Attempting to call default unimplemented Backend method")
 
 
 def stack(
-    arrays: Sequence[tensor_class],
-    axis: Optional[int] = 0,
-    allow_grad: py_bool = False,
-    **kwargs,
-):
+    arrays: Sequence[tensor_class], axis: Optional[int] = 0, allow_grad: py_bool = False
+) -> tensor_class:
     raise NotImplementedError("Attempting to call default unimplemented Backend method")
 
 
@@ -558,7 +556,7 @@ def save(file, arr: Union[int, float, tensor_class]):
     raise NotImplementedError("Attempting to call default unimplemented Backend method")
 
 
-def load(file, allow_grad: py_bool = False):
+def load(file, allow_grad: py_bool = False) -> tensor_class:
     raise NotImplementedError("Attempting to call default unimplemented Backend method")
 
 
@@ -567,11 +565,11 @@ def choice(
     size: Optional[Union[int, Sequence[int]]] = None,
     replace: py_bool = True,
     p: Optional[Union[int, float, tensor_class]] = None,
-):
+) -> tensor_class:
     raise NotImplementedError("Attempting to call default unimplemented Backend method")
 
 
-def rand(*dims: Optional[int], allow_grad: py_bool = False):
+def rand(*dims: Optional[int], allow_grad: py_bool = False) -> tensor_class:
     raise NotImplementedError("Attempting to call default unimplemented Backend method")
 
 
@@ -580,11 +578,11 @@ def randint(
     high: Optional[Union[int, Union[int, float, tensor_class]]] = None,
     size: Optional[Union[int, Sequence[int]]] = None,
     allow_grad: py_bool = False,
-):
+) -> tensor_class:
     raise NotImplementedError("Attempting to call default unimplemented Backend method")
 
 
-def randn(*dims: Optional[int], allow_grad: py_bool = False):
+def randn(*dims: Optional[int], allow_grad: py_bool = False) -> tensor_class:
     raise NotImplementedError("Attempting to call default unimplemented Backend method")
 
 
@@ -593,11 +591,13 @@ def binomial(
     p: Union[float, tensor_class[float]],
     size: Optional[Tuple[int]] = None,
     allow_grad: py_bool = False,
-):
+) -> tensor_class:
     raise NotImplementedError("Attempting to call default unimplemented Backend method")
 
 
-def permutation(x: Union[int, tensor_class], allow_grad: py_bool = False):
+def permutation(
+    x: Union[int, tensor_class], allow_grad: py_bool = False
+) -> tensor_class:
     raise NotImplementedError("Attempting to call default unimplemented Backend method")
 
 
@@ -610,7 +610,7 @@ def split(
     indices_or_sections: Union[int, Sequence[int]],
     axis: int = 0,
     allow_grad: py_bool = False,
-):
+) -> tensor_class:
     raise NotImplementedError("Attempting to call default unimplemented Backend method")
 
 
@@ -650,7 +650,7 @@ def array(
     data: tensor_class,
     dtype: Optional[dtype] = None,
     copy: Optional[py_bool] = None,
-):
+) -> tensor_class:
     raise NotImplementedError("Attempting to call default unimplemented Backend method")
 
 

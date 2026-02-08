@@ -159,7 +159,7 @@ class mlx_backend(backend.Backend):
         a[:] = a.at[indices].add(b)
 
     @staticmethod
-    def isin(element: mx.array, test_elements: mx.array, **kwargs) -> mx.array:
+    def isin(element: mx.array, test_elements: mx.array) -> mx.array:
         return mx.array([x in test_elements for x in element])
 
     @staticmethod
@@ -290,7 +290,7 @@ class mlx_backend(backend.Backend):
     permutation = mx.random.permutation
 
     @staticmethod
-    def shuffle(a: mx.array, *args, **kwargs) -> mx.array:
+    def shuffle(a: mx.array) -> mx.array:
         indices = mx.random.permutation(len(a))
         a[:] = a[indices]
 
