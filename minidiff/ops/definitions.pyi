@@ -6,7 +6,7 @@ from typing import Any, Optional, Sequence, Union
 import minidiff as md
 import minidiff.typing as mdt
 
-from .tensor import *
+from .definitions import *
 
 def absolute(x: md.Tensor) -> md.Tensor: ...
 def abs(x: md.Tensor) -> md.Tensor: ...
