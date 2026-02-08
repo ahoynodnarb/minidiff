@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from builtins import bool as py_bool
 import math
+from builtins import bool as py_bool
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -164,7 +164,28 @@ class mlx_backend(backend.Backend):
 
     @staticmethod
     def unravel_index(indices: mx.array, shape: Sequence[int]) -> mx.array:
-        return mx.array(np.unravel_index(indices, shape))
+        if not isinstance(indices, mx.array):
+            indices = mx.array(indices)
+        if indices.ndim <= 1:
+            indices = mx.atleast_1d(indices)
+
+        if not isinstance(shape, mx.array):
+            shape = mx.array(shape)
+
+        if mx.any(indices >= (total_elements := mx.prod(shape))):
+            raise ValueError(
+                f"index out of bounds for array with size {total_elements}"
+            )
+
+        ret = mx.zeros((len(shape), len(indices)))
+        running_prod = total_elements
+        running_numerator = indices
+
+        for i in mx.arange(len(shape)):
+            running_prod = running_prod / shape[i]
+            ret[i], running_numerator = mx.divmod(running_numerator, running_prod)
+
+        return ret
 
     take_along_axis = mx.take_along_axis
 

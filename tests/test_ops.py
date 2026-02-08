@@ -536,7 +536,3 @@ def test_absolute():
             args=[md.randn(2, 2, 2, 2, allow_grad=True)],
             kwargs={},
         )
-
-
-if __name__ == "__main__":
-    test_matmul()
