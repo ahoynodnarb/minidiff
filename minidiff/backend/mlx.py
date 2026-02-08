@@ -186,8 +186,52 @@ class mlx_backend(backend.Backend):
     load = mx.load
 
     @staticmethod
-    def choice(*args, **kwargs) -> mx.array:
-        return mx.array(np.random.choice(*args, **kwargs))
+    def choice(
+        a: Union[int, mx.array],
+        size: Optional[Union[int, Sequence[int]]] = None,
+        replace: py_bool = True,
+        p: Optional[mx.array] = None,
+    ) -> mx.array:
+        if isinstance(a, int):
+            a = mx.arange(a)
+
+        if size is None:
+            size = (1,)
+        if isinstance(size, int):
+            size = (size,)
+
+        if not replace and (out_elems := math.prod(size)) > a.size:
+            raise ValueError(
+                "Cannot take a larger sample than population when 'replace=False'"
+            )
+
+        if p is None:
+            p = mx.full(a.shape, 1 / len(a))
+
+        p = mx.where(p > 0, p, 0)
+
+        if (total := mx.sum(p)) != 1:
+            p = p / total
+
+        ret = mx.full(size, 0)
+        if replace:
+            sums = mx.cumsum(p) - p
+            sample = mx.random.uniform(0, 1, shape=size)
+        else:
+            indices = mx.random.permutation(len(a))[:out_elems]
+            a = a[indices]
+            p = p[indices]
+            sums = mx.cumsum(p) - p
+            sample = mx.random.uniform(
+                sums.reshape(size), mx.ones_like(sums).reshape(size), shape=size
+            )
+
+        for i in mx.arange(len(p)):
+            s = sums[i]
+            v = p[i]
+            ret += mx.where(mx.logical_and(s < sample, sample < s + v), a[i], 0)
+
+        return ret
 
     @staticmethod
     def rand(*dims) -> mx.array:
