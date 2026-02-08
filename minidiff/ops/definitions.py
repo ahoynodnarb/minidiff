@@ -9,9 +9,7 @@ import minidiff.backend as backend
 import minidiff.ops.wrapping as wrapping
 
 if TYPE_CHECKING:
-    from typing import Any, Callable, Optional, Sequence, Tuple, Union
-
-    import minidiff.typing as mdt
+    from typing import Any, Optional, Sequence, Tuple, Union
 
 
 def squeeze_grad(
