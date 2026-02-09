@@ -198,10 +198,52 @@ def mean_grad(
     return grad / prod(multiplied_dims)
 
 
-def std_grad(x, grad, axis=None, **kwargs):
+def std_grad(
+    x: md.Tensor,
+    grad: md.Tensor,
+    axis: Optional[Union[int, Tuple[int]]] = None,
+    **kwargs,
+) -> md.Tensor:
     mu = mean(x, axis=axis)
     N = py_prod([dim for i, dim in enumerate(x.shape) if i in axis])
     return grad * (x - mu) / (std(x, axis=axis, **kwargs) * N)
+
+
+def sum_grad(
+    x: md.Tensor,
+    grad: md.Tensor,
+    axis: Optional[Union[int, Tuple[int]]] = None,
+    **kwargs,
+) -> md.Tensor:
+    if isinstance(axis, int):
+        axis = tuple(axis)
+    if axis is None or not axis:
+        return grad
+    shape = x.shape
+    ndim = len(x.shape)
+
+    summed_indices = [i for i in range(ndim) if i in axis]
+    summed_dims = [shape[i] for i in summed_indices]
+    summed_ndim = len(summed_indices)
+
+    n_compressed = ndim - summed_ndim
+
+    tiled_axes = summed_dims + [1] * n_compressed
+    prepended = md.tile(grad, tiled_axes)
+
+    transposed_axes = [0] * ndim
+
+    n_shifted = 0
+    for i in reversed(range(ndim)):
+        if n_shifted != summed_ndim and i == summed_indices[-(n_shifted + 1)]:
+            transposed_axes[i] = summed_ndim - 1 - n_shifted
+            n_shifted += 1
+        else:
+            transposed_axes[i] = i + n_shifted
+
+    transposed = md.transpose(prepended, axes=transposed_axes)
+
+    return transposed
 
 
 # -------------------- UNARY FUNCS --------------------
@@ -344,7 +386,8 @@ std = wrapping.create_unary_op_func(
 )
 sum = wrapping.create_unary_op_func(
     forward_func=wrapping.as_minidiff(backend.sum),
-    grad=lambda x, grad: grad,
+    grad=sum_grad,
+    propagate_kwargs=True,
 )
 tan = wrapping.create_unary_op_func(
     forward_func=wrapping.as_minidiff(backend.tan),
