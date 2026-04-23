@@ -58,7 +58,7 @@ def perform_test(
             continue
         manual, auto = filter_nan(backend.as_numpy(manual), backend.as_numpy(auto))
         assert np.allclose(manual, auto, rtol=backward_rtol, atol=backward_atol), (
-            f"❌ Gradient Test wrt {i}th parameter failed for {func}. \nmanual gradients:\n{manual}\nautomatic gradients:\n{auto}\ndifference:\n{manual - auto}"
+            f"❌ Gradient Test wrt {i}th parameter failed for {func}. \nmanual gradients:\n{manual}\nautomatic gradients:\n{auto}\ndifference:\n{manual - auto}\nmax:\n{np.max(np.abs(manual - auto))}"
         )
 
 
@@ -119,7 +119,11 @@ def test_max():
             args=[
                 md.randn(2, 2, 2, 2, allow_grad=True),
             ],
-            kwargs={"axis": random.randint(0, 3)},
+            kwargs={
+                "axis": random.choice(
+                    [tuple(random.sample(range(4), k=random.randint(0, 4))), None]
+                )
+            },
         )
 
 
@@ -131,7 +135,11 @@ def test_min():
             args=[
                 md.randn(2, 2, 2, 2, allow_grad=True),
             ],
-            kwargs={"axis": random.randint(0, 3)},
+            kwargs={
+                "axis": random.choice(
+                    [tuple(random.sample(range(4), k=random.randint(0, 4))), None]
+                )
+            },
         )
 
 
@@ -159,7 +167,11 @@ def test_prod():
             args=[
                 md.randn(2, 2, 2, 2, allow_grad=True),
             ],
-            kwargs={"axis": tuple(random.sample(range(4), k=random.randint(0, 4)))},
+            kwargs={
+                "axis": random.choice(
+                    [tuple(random.sample(range(4), k=random.randint(0, 4))), None]
+                )
+            },
         )
 
 
@@ -171,7 +183,11 @@ def test_std():
             args=[
                 md.randn(2, 2, 2, 2, allow_grad=True),
             ],
-            kwargs={"axis": tuple(random.sample(range(4), k=random.randint(0, 4)))},
+            kwargs={
+                "axis": random.choice(
+                    [tuple(random.sample(range(4), k=random.randint(0, 4))), None]
+                )
+            },
         )
 
 
@@ -210,7 +226,11 @@ def test_flip():
             args=[
                 md.randn(2, 2, 2, 2, allow_grad=True),
             ],
-            kwargs={"axis": random.randint(0, 3)},
+            kwargs={
+                "axis": random.choice(
+                    [tuple(random.sample(range(4), k=random.randint(0, 4))), None]
+                )
+            },
         )
 
 
@@ -507,7 +527,11 @@ def test_sum():
             func=md.sum,
             backend_func=backend.sum,
             args=[md.randn(2, 2, 2, 2, allow_grad=True)],
-            kwargs={"axis": tuple(random.sample(range(4), k=random.randint(0, 3)))},
+            kwargs={
+                "axis": random.choice(
+                    [tuple(random.sample(range(4), k=random.randint(0, 4))), None]
+                )
+            },
         )
 
 
@@ -517,7 +541,11 @@ def test_mean():
             func=md.mean,
             backend_func=backend.mean,
             args=[md.randn(2, 2, 2, 2, allow_grad=True)],
-            kwargs={},
+            kwargs={
+                "axis": random.choice(
+                    [tuple(random.sample(range(4), k=random.randint(0, 4))), None]
+                )
+            },
         )
 
 
@@ -531,4 +559,7 @@ def test_absolute():
         )
 
 
-test_sum()
+# test_max()
+# test_sum()
+if __name__ == "__main__":
+    test_max()

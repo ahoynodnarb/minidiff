@@ -20,6 +20,8 @@ def squeeze_grad(
 ) -> md.Tensor:
     if axis is None:
         axis = [i for i, dim in enumerate(a.shape) if dim == 1]
+    if not axis:
+        return grad
     return expand_dims(grad, axis)
 
 
@@ -99,6 +101,12 @@ def max_grad(
     axis: Optional[Union[int, Tuple[int]]] = None,
     **kwargs,
 ) -> md.Tensor:
+    if axis is None:
+        index = argmax(x, axis=axis, keepdims=True)
+        return grad[index]
+    if not axis:
+        return grad
+
     max_indices = argmax(x, axis=axis, keepdims=True)
     grad = grad.reshape(max_indices.shape)
     ret = md.zeros_like(x)
@@ -189,13 +197,13 @@ def mean_grad(
 ) -> md.Tensor:
     if axis is None:
         return grad / x.size
-    if axis == ():
+    if not axis:
         return grad
     if isinstance(axis, int):
         return grad / x.shape[axis]
     in_shape = x.shape
     multiplied_dims = md.Tensor([in_shape[dim] for dim in axis])
-    return grad / prod(multiplied_dims)
+    return sum_grad(x, grad, axis=axis) / prod(multiplied_dims)
 
 
 def std_grad(
@@ -204,6 +212,10 @@ def std_grad(
     axis: Optional[Union[int, Tuple[int]]] = None,
     **kwargs,
 ) -> md.Tensor:
+    if axis is None:
+        axis = md.arange(x.ndim)
+    if not axis:
+        return md.zeros_like(x)
     mu = mean(x, axis=axis)
     N = py_prod([dim for i, dim in enumerate(x.shape) if i in axis])
     return grad * (x - mu) / (std(x, axis=axis, **kwargs) * N)
@@ -217,7 +229,11 @@ def sum_grad(
 ) -> md.Tensor:
     if isinstance(axis, int):
         axis = tuple(axis)
-    if axis is None or not axis:
+    # here, we're letting it broadcast
+    if axis is None:
+        return grad
+    # here, nothing's even happened
+    if not axis:
         return grad
     shape = x.shape
     ndim = len(x.shape)
