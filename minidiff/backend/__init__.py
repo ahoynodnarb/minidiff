@@ -21,6 +21,13 @@ _DEFAULT_BACKENDS = [cupy, mlx, numpy]
 current_backend: Backend = None
 
 
+class minidiff_backend_proxy:
+    _instance: Backend = None
+
+    def __getattr__(self, name):
+        return getattr(self._instance, name)
+
+
 def _update_backend(new_backend: Backend):
     if not isinstance(new_backend, Backend):
         raise ValueError(f"{new_backend} is not of type {Backend}")
@@ -28,23 +35,18 @@ def _update_backend(new_backend: Backend):
     global current_backend
 
     if current_backend is None:
-        current_backend = new_backend
-        return
+        current_backend = minidiff_backend_proxy()
 
     # we have to update the existing current_backend so that all instances of current_backend
     # including those copied from `from minidiff.backend import current_backend` are updated
-    for attr, value in new_backend.__dict__.items():
-        setattr(current_backend, attr, value)
+    current_backend._instance = new_backend
 
 
 def _get_module_backend(module: Union[ModuleType, str]) -> Optional[Backend]:
     if isinstance(module, ModuleType):
         module_dict = module.__dict__
     else:
-        try:
-            module_dict = importlib.import_module(module).__dict__
-        except:
-            module_dict = {}
+        module_dict = importlib.import_module(module).__dict__
 
     for obj in module_dict.values():
         if isinstance(obj, Backend):
@@ -57,15 +59,12 @@ def set_backend(backend: Union[Backend, ModuleType, str], silent=False):
     if not isinstance(backend, Backend):
         possible_backend = _get_module_backend(backend)
 
-        if possible_backend is None:
-            raise ValueError(f"Could not import backend from module {backend}")
-
         backend = possible_backend
 
     _update_backend(backend)
 
     if not silent:
-        print(f"Using {current_backend} as backend")
+        print(f"Using {backend} as backend")
 
 
 def _attempt_backend_import():
@@ -74,6 +73,7 @@ def _attempt_backend_import():
 
     for module_name in _DEFAULT_BACKENDS:
         try:
+            # print(module_name)
             set_backend(module_name, silent=True)
             return
         except:

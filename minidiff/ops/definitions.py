@@ -268,121 +268,121 @@ def sum_grad(
 
 # -------------------- UNARY FUNCS --------------------
 absolute = wrapping.create_unary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.absolute),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.absolute),
     grad=lambda x, grad: grad * sign(x),
 )
 abs = absolute
 all = wrapping.create_unary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.all),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.all),
     is_differentiable=False,
 )
 any = wrapping.create_unary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.any),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.any),
     is_differentiable=False,
 )
 argmax = wrapping.create_unary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.argmax),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.argmax),
     is_differentiable=False,
 )
 argmin = wrapping.create_unary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.argmin),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.argmin),
     is_differentiable=False,
 )
 argwhere = wrapping.create_unary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.argwhere),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.argwhere),
     is_differentiable=False,
 )
 atleast_1d = wrapping.create_unary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.atleast_1d),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.atleast_1d),
     grad=lambda x, grad: grad,
 )
 atleast_2d = wrapping.create_unary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.atleast_2d),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.atleast_2d),
     grad=lambda x, grad: grad,
 )
 atleast_3d = wrapping.create_unary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.atleast_3d),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.atleast_3d),
     grad=lambda x, grad: grad,
 )
 ceil = wrapping.create_unary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.ceil),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.ceil),
     is_differentiable=False,
 )
 copy = wrapping.create_unary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.copy),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.copy),
     grad=lambda x, grad: grad,
 )
 cos = wrapping.create_unary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.cos),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.cos),
     grad=lambda x, grad: grad * -sin(x),
 )
 cosh = wrapping.create_unary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.cosh),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.cosh),
     grad=lambda x, grad: grad * sinh(x),
 )
 exp = wrapping.create_unary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.exp),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.exp),
     grad=lambda x, grad: grad * exp(x),
 )
 flatten = wrapping.create_unary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.flatten),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.flatten),
     grad=lambda x, grad, order="C": reshape(grad, x.shape, order=order),
 )
 flip = wrapping.create_unary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.flip),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.flip),
     grad=lambda x, grad, **kwargs: flip(grad, **kwargs),
     propagate_kwargs=True,
 )
 floor = wrapping.create_unary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.floor),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.floor),
     is_differentiable=False,
 )
 invert = wrapping.create_unary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.invert),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.invert),
     is_differentiable=False,
 )
 log = wrapping.create_unary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.log),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.log),
     grad=lambda x, grad: grad / x,
 )
 logical_not = wrapping.create_unary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.logical_not),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.logical_not),
     is_differentiable=False,
 )
 max = wrapping.create_unary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.max),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.max),
     grad=max_grad,
     propagate_kwargs=True,
 )
 mean = wrapping.create_unary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.mean),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.mean),
     grad=mean_grad,
     propagate_kwargs=True,
 )
 min = wrapping.create_unary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.min),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.min),
     grad=min_grad,
     propagate_kwargs=True,
 )
 prod = wrapping.create_unary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.prod),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.prod),
     grad=prod_grad,
     propagate_kwargs=True,
 )
 ravel = wrapping.create_unary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.ravel),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.ravel),
     grad=lambda x, grad, order="C": reshape(grad, x.shape, order=order),
 )
 sign = wrapping.create_unary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.sign),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.sign),
     is_differentiable=False,
 )
 sin = wrapping.create_unary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.sin),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.sin),
     grad=lambda x, grad: grad * cos(x),
 )
 sinh = wrapping.create_unary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.sinh),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.sinh),
     grad=lambda x, grad: grad * cosh(x),
 )
 
@@ -396,29 +396,29 @@ def square(a: md.Tensor, **kwargs) -> md.Tensor:
 
 
 squeeze = wrapping.create_unary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.squeeze),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.squeeze),
     grad=squeeze_grad,
 )
 std = wrapping.create_unary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.std),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.std),
     grad=std_grad,
     propagate_kwargs=True,
 )
 sum = wrapping.create_unary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.sum),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.sum),
     grad=sum_grad,
     propagate_kwargs=True,
 )
 tan = wrapping.create_unary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.tan),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.tan),
     grad=lambda x, grad: grad * (1 / cos(x) ** 2),
 )
 tanh = wrapping.create_unary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.tanh),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.tanh),
     grad=lambda x, grad: grad * (1 / cosh(x) ** 2),
 )
 transpose = wrapping.create_unary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.transpose),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.transpose),
     grad=transpose_grad,
     propagate_kwargs=True,
 )
@@ -426,111 +426,111 @@ transpose = wrapping.create_unary_op_func(
 
 # -------------------- BINARY FUNCS --------------------
 add = wrapping.create_binary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.add),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.add),
     grad_x=lambda x, y, grad: grad,
     grad_y=lambda x, y, grad: grad,
 )
 astype = wrapping.create_binary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.astype),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.astype),
     grad_x=lambda x, dtype, grad: grad.astype(x.dtype),
 )
 broadcast_to = wrapping.create_binary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.broadcast_to),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.broadcast_to),
     grad_x=lambda x, shape, grad: unbroadcast(grad, x.shape),
 )
 dot = wrapping.create_binary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.dot),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.dot),
     grad_x=lambda x, y, grad: grad * y,
     grad_y=lambda x, y, grad: grad * x,
 )
 equal = wrapping.create_binary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.equal),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.equal),
     is_differentiable=False,
 )
 expand_dims = wrapping.create_binary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.expand_dims),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.expand_dims),
     grad_x=lambda x, axis, grad: squeeze(grad, axis=axis),
 )
 floor_divide = wrapping.create_binary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.floor_divide),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.floor_divide),
     is_differentiable=False,
 )
 getitem = wrapping.create_binary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.getitem),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.getitem),
     grad_x=getitem_grad,
     op_name="index",
 )
 greater = wrapping.create_binary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.greater),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.greater),
     is_differentiable=False,
 )
 greater_equal = wrapping.create_binary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.greater_equal),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.greater_equal),
     is_differentiable=False,
 )
 less = wrapping.create_binary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.less),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.less),
     is_differentiable=False,
 )
 less_equal = wrapping.create_binary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.less_equal),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.less_equal),
     is_differentiable=False,
 )
 logical_and = wrapping.create_binary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.logical_and),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.logical_and),
     is_differentiable=False,
 )
 logical_or = wrapping.create_binary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.logical_or),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.logical_or),
     is_differentiable=False,
 )
 logical_xor = wrapping.create_binary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.logical_xor),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.logical_xor),
     is_differentiable=False,
 )
 matmul = wrapping.create_binary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.matmul),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.matmul),
     grad_x=lambda x, y, grad: matmul(grad, y.T),
     grad_y=lambda x, y, grad: matmul(x.T, grad),
     tensor_only=True,
 )
 mod = wrapping.create_binary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.mod),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.mod),
     grad_x=lambda x, y, grad: md.where(x % y == 0, 0, grad),
     grad_y=lambda x, y, grad: md.where(x % y == 0, 0, grad),
 )
 multiply = wrapping.create_binary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.multiply),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.multiply),
     grad_x=lambda x, y, grad: grad * y,
     grad_y=lambda x, y, grad: grad * x,
 )
 not_equal = wrapping.create_binary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.not_equal),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.not_equal),
     is_differentiable=False,
 )
 power = wrapping.create_binary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.power),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.power),
     grad_x=lambda x, y, grad: grad * y * (x ** (y - 1)),
     grad_y=lambda x, y, grad: grad * log(x) * x**y,
 )
 reshape = wrapping.create_binary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.reshape),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.reshape),
     grad_x=lambda x, y, grad: grad.reshape(x.shape),
 )
 subtract = wrapping.create_binary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.subtract),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.subtract),
     grad_x=lambda x, y, grad: grad,
     grad_y=lambda x, y, grad: -grad,
 )
 tensordot = wrapping.create_binary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.tensordot),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.tensordot),
     grad_x=tensordot_grad_x,
     grad_y=tensordot_grad_y,
     tensor_only=True,
     propagate_kwargs=True,
 )
 true_divide = wrapping.create_binary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.true_divide),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.true_divide),
     grad_x=lambda x, y, grad: grad / y,
     grad_y=lambda x, y, grad: grad * (-x / y**2),
 )
@@ -540,7 +540,7 @@ unbroadcast = wrapping.create_binary_op_func(
 )
 # -------------------- TERNARY FUNCS --------------------
 clip = wrapping.create_ternary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.clip),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.clip),
     grad_x=lambda x, a_min, a_max, grad: (
         grad
         * logical_and(
@@ -550,14 +550,14 @@ clip = wrapping.create_ternary_op_func(
     ),
 )
 swapaxes = wrapping.create_ternary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.swapaxes),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.swapaxes),
     grad_x=lambda x, axis1, axis2, grad, **kwargs: swapaxes(
         grad, axis1, axis2, **kwargs
     ),
     propagate_kwargs=True,
 )
 where = wrapping.create_ternary_op_func(
-    forward_func=wrapping.as_minidiff(current_backend.where),
+    forward_func=wrapping.as_minidiff(lambda: current_backend.where),
     grad_y=lambda condition, y, z, grad: grad * condition,
     grad_z=lambda condition, y, z, grad: grad * (1 - condition),
 )

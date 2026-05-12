@@ -121,15 +121,14 @@ def as_minidiff(func: Callable[..., Any]) -> Callable[..., md.Tensor]:
         wrapped_args = md.try_unwrap(args)
         wrapped_kwargs = md.try_unwrap(kwargs)
 
-        output = func(*wrapped_args, **wrapped_kwargs)
+        output = func()(*wrapped_args, **wrapped_kwargs)
         as_tensor = md.Tensor(output, allow_grad=allow_grad)
 
         return as_tensor
 
-    wrapper.__name__ = func.__name__
-    wrapper.__qualname__ = (
-        func.__qualname__ if hasattr(func, "__qualname__") else func.__name__
-    )
+    f = func()
+    wrapper.__name__ = f.__name__
+    wrapper.__qualname__ = f.__qualname__ if hasattr(f, "__qualname__") else f.__name__
 
     return wrapper
 
