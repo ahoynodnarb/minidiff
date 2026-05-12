@@ -346,13 +346,11 @@ class Tensor:
         return md.invert(self)
 
     def __iter__(self) -> TensorIterator:
-        if self._iterator is None:
-            data_size = current_backend.tensor_size(self._data)
-            self._iterator = TensorIterator(
-                self,
-                len(self) if data_size > 1 else data_size,
-            )
-        return self._iterator
+        data_size = current_backend.tensor_size(self._data)
+        return TensorIterator(
+            self,
+            len(self) if data_size > 1 else data_size,
+        )
 
     # numpy array specification requirements:
     @property
