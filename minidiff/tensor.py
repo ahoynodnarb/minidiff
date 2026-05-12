@@ -1,85 +1,19 @@
 from __future__ import annotations
 
 from builtins import bool as py_bool
-from contextvars import ContextVar
 from typing import TYPE_CHECKING
 
 from numpy import ndarray
 
 import minidiff as md
-import minidiff.backend as backend
+from minidiff.backend import current_backend
+from minidiff.utils import try_unwrap
 
 if TYPE_CHECKING:
-    from typing import Any, Dict, List, Literal, Optional, Sequence, Tuple, Union
+    from typing import Any, Dict, Literal, Optional, Sequence, Tuple, Union
 
     import minidiff.typing as mdt
     from minidiff.topology import OpNode
-
-
-_allow_grad = ContextVar("allow_grad", default=True)
-_allow_new_grads = ContextVar("allow_new_grads", default=True)
-
-
-class disable_new_grads:
-    def __enter__(self):
-        self.prev_allow_grad = _allow_grad.get()
-        self.prev_allow_new_grads = _allow_new_grads.get()
-        set_allow_grad(False)
-        set_allow_new_grads(False)
-
-    def __exit__(self, type, value, traceback):
-        set_allow_grad(self.prev_allow_grad)
-        set_allow_new_grads(self.prev_allow_new_grads)
-
-
-class no_grad:
-    def __enter__(self):
-        self.prev = _allow_grad.get()
-        set_allow_grad(False)
-
-    def __exit__(self, type, value, traceback):
-        set_allow_grad(self.prev)
-
-
-class enable_grad:
-    def __init__(self, enable: py_bool):
-        self.enable = enable
-
-    def __enter__(self):
-        self.prev = _allow_grad.get()
-        set_allow_grad(self.enable)
-
-    def __exit__(self, type, value, traceback):
-        set_allow_grad(self.prev)
-
-
-def set_allow_new_grads(allow: py_bool):
-    _allow_new_grads.set(allow)
-
-
-def new_grads_allowed_() -> py_bool:
-    return _allow_new_grads.get()
-
-
-def set_allow_grad(allow: py_bool):
-    _allow_grad.set(allow)
-
-
-def grad_allowed_() -> py_bool:
-    return _allow_grad.get()
-
-
-def try_unwrap(t: Any):
-    if isinstance(t, Tensor):
-        return t._data
-    elif isinstance(t, tuple):
-        return tuple(try_unwrap(x) for x in t)
-    elif isinstance(t, list):
-        return [try_unwrap(x) for x in t]
-    elif isinstance(t, dict):
-        return {key: try_unwrap(val) for key, val in t.items()}
-    else:
-        return t
 
 
 # compute from left to right, dy/dw2 then dw2/dw1 to get dy/dw1 and finally dw1/dx to get dy/dx
@@ -92,15 +26,15 @@ def try_unwrap(t: Any):
 class Tensor:
     def __init__(
         self,
-        data: Optional[Union[int, float, backend.tensor_class]],
+        data: Optional[Union[int, float, mdt.BackendTensor]],
         allow_grad: py_bool = False,
         dtype: Optional[mdt.dtype] = None,
     ):
         data = try_unwrap(data)
         if data is None:
-            data = backend.tensor_constructor([])
-        if not isinstance(data, backend.tensor_class):
-            data = backend.tensor_constructor(data)
+            data = current_backend.tensor_constructor([])
+        if not isinstance(data, current_backend.tensor_class):
+            data = current_backend.tensor_constructor(data)
         if dtype is not None:
             data = data.astype(dtype)
         self._data = data
@@ -153,22 +87,22 @@ class Tensor:
 
     @property
     def shape(self) -> Tuple[int, ...]:
-        return backend.tensor_shape(self._data)
+        return current_backend.tensor_shape(self._data)
 
     @property
     def size(self) -> int:
-        return backend.tensor_size(self._data)
+        return current_backend.tensor_size(self._data)
 
     @property
     def ndim(self) -> int:
-        return backend.tensor_ndim(self._data)
+        return current_backend.tensor_ndim(self._data)
 
     @property
     def dtype(self) -> mdt.dtype:
-        return backend.tensor_dtype(self._data)
+        return current_backend.tensor_dtype(self._data)
 
     def as_numpy(self) -> ndarray:
-        return backend.as_numpy(self._data)
+        return current_backend.as_numpy(self._data)
 
     def backward(
         self,
@@ -220,7 +154,7 @@ class Tensor:
                 "Only Tensors with a single element can be reduced to a Python scalar"
             )
 
-        return backend.tensor_item(self._data)
+        return current_backend.tensor_item(self._data)
 
     def sum(
         self,
@@ -365,10 +299,10 @@ class Tensor:
         return -1 * self
 
     def __repr__(self) -> str:
-        return backend.repr(self._data)
+        return current_backend.repr(self._data)
 
     def __len__(self) -> int:
-        return backend.len(self._data)
+        return current_backend.len(self._data)
 
     def __getitem__(self, key: Any) -> Tensor:
         return md.getitem(self, key)
@@ -413,7 +347,7 @@ class Tensor:
 
     def __iter__(self) -> TensorIterator:
         if self._iterator is None:
-            data_size = backend.tensor_size(self._data)
+            data_size = current_backend.tensor_size(self._data)
             self._iterator = TensorIterator(
                 self,
                 len(self) if data_size > 1 else data_size,
@@ -423,14 +357,14 @@ class Tensor:
     # numpy array specification requirements:
     @property
     def __array_interface__(self) -> Dict[str, Any]:
-        return backend.array_interface(self._data)
+        return current_backend.array_interface(self._data)
 
     def __array__(
         self,
-        dtype: Optional[backend.dtype] = None,
+        dtype: Optional[mdt.dtype] = None,
         copy: Optional[py_bool] = None,
     ) -> ndarray:
-        return backend.array(self._data, dtype=dtype, copy=copy)
+        return current_backend.array(self._data, dtype=dtype, copy=copy)
 
 
 class TensorIterator:
@@ -448,247 +382,3 @@ class TensorIterator:
         item = self.data[self.index]
         self.index += 1
         return item
-
-
-def ones_like(a: mdt.TensorLike, allow_grad: py_bool = False) -> Tensor:
-    a = try_unwrap(a)
-
-    return Tensor(backend.ones_like(a), allow_grad=allow_grad)
-
-
-def ones(shape: Union[int, Sequence[int]], allow_grad: py_bool = False) -> Tensor:
-    return Tensor(backend.ones(shape), allow_grad=allow_grad)
-
-
-def zeros_like(a: mdt.TensorLike, allow_grad: py_bool = False) -> Tensor:
-    a = try_unwrap(a)
-
-    return Tensor(backend.zeros_like(a), allow_grad=allow_grad)
-
-
-def zeros(shape: Union[int, Sequence[int]], allow_grad: py_bool = False) -> Tensor:
-    return Tensor(backend.zeros(shape), allow_grad=allow_grad)
-
-
-def full_like(a: Tensor, x: mdt.TensorLike, allow_grad: py_bool = False) -> Tensor:
-    a = try_unwrap(a)
-    x = try_unwrap(x)
-
-    return Tensor(backend.full_like(a, x), allow_grad=allow_grad)
-
-
-def full(shape: Union[int, Sequence[int]], allow_grad: py_bool = False) -> Tensor:
-    return Tensor(backend.full(shape), allow_grad=allow_grad)
-
-
-def concatenate(
-    arrays: Sequence[mdt.TensorLike],
-    axis: Optional[int] = 0,
-    allow_grad: py_bool = False,
-) -> Tensor:
-    arrays = try_unwrap(arrays)
-    return Tensor(backend.concatenate(arrays, axis=axis), allow_grad=allow_grad)
-
-
-def index_add(
-    a: mdt.TensorLike, indices: mdt.TensorLike, b: Optional[mdt.TensorLike] = None
-):
-    a = try_unwrap(a)
-    indices = try_unwrap(indices)
-    b = try_unwrap(b)
-
-    backend.index_add(a, indices, b)
-
-
-def isin(element: mdt.TensorLike, test_elements: List[mdt.TensorLike]) -> py_bool:
-    element = try_unwrap(element)
-    test_elements = try_unwrap(test_elements)
-
-    return backend.isin(element, test_elements)
-
-
-def unravel_index(
-    indices: mdt.TensorLike, shape: Sequence[int], allow_grad: py_bool = False
-) -> Tensor:
-    indices = try_unwrap(indices)
-
-    return Tensor(backend.unravel_index(indices, shape), allow_grad=allow_grad)
-
-
-def vmap(fun: mdt.UnaryFunc) -> mdt.UnaryFunc:
-    def backend_func(arr, *args, **kwargs):
-        args = [Tensor(x) for x in args]
-        kwargs = {key: Tensor(val) for key, val in kwargs.items()}
-        val = fun(
-            Tensor(arr),
-            *args,
-            **kwargs,
-        )
-        return val._data
-
-    vmap_func = backend.vmap(backend_func)
-
-    def wrapper(*args, **kwargs) -> Tensor:
-        args = try_unwrap(args)
-        kwargs = try_unwrap(kwargs)
-        return Tensor(vmap_func(*args, **kwargs))
-
-    return wrapper
-
-
-def take_along_axis(
-    arr: Tensor,
-    indices: Tensor,
-    axis: Optional[int] = None,
-    allow_grad: py_bool = False,
-) -> Tensor:
-    arr = arr._data
-    indices = indices._data
-
-    return Tensor(
-        backend.take_along_axis(arr, indices, axis=axis), allow_grad=allow_grad
-    )
-
-
-def put_along_axis(
-    arr: Tensor,
-    indices: Tensor,
-    values: mdt.TensorLike,
-    axis: Optional[int],
-):
-    arr = arr._data
-    indices = indices._data
-    values = try_unwrap(values)
-
-    backend.put_along_axis(arr, indices, values, axis)
-
-
-def repeat(
-    a: mdt.TensorLike,
-    repeats: Union[int, Sequence[int]],
-    allow_grad: py_bool = False,
-    axis: Optional[int] = None,
-) -> Tensor:
-    a = try_unwrap(a)
-
-    return Tensor(backend.repeat(a, repeats, axis=axis), allow_grad=allow_grad)
-
-
-def tile(
-    A: mdt.TensorLike, reps: mdt.TensorLike, allow_grad: py_bool = False
-) -> Tensor:
-    A = try_unwrap(A)
-    reps = try_unwrap(reps)
-
-    return Tensor(backend.tile(A, reps), allow_grad=allow_grad)
-
-
-def arange(*args: Union[int, float], allow_grad: py_bool = False) -> Tensor:
-    return Tensor(backend.arange(*args), allow_grad=allow_grad)
-
-
-def stack(
-    arrays: Sequence[Tensor], axis: Optional[int] = 0, allow_grad: py_bool = False
-) -> Tensor:
-    arrays = [x._data for x in arrays]
-
-    return Tensor(backend.stack(arrays, axis=axis), allow_grad=allow_grad)
-
-
-def save(file, arr: mdt.TensorLike):
-    arr = arr._data
-
-    backend.save(file, arr)
-
-
-def load(file, allow_grad: py_bool = False) -> Tensor:
-    return Tensor(backend.load(file), allow_grad=allow_grad)
-
-
-def choice(
-    a: Union[int, mdt.TensorLike],
-    size: Optional[Union[int, Sequence[int]]] = None,
-    replace: py_bool = True,
-    p: Optional[mdt.TensorLike] = None,
-) -> Tensor:
-    a = try_unwrap(a)
-    p = try_unwrap(p)
-
-    return Tensor(backend.choice(a, size=size, replace=replace, p=p))
-
-
-def rand(*dims: Optional[int], allow_grad: py_bool = False) -> Tensor:
-    return Tensor(backend.rand(*dims), allow_grad=allow_grad)
-
-
-def randint(
-    low: Union[int, mdt.TensorLike],
-    high: Optional[Union[int, mdt.TensorLike]] = None,
-    size: Optional[Union[int, Sequence[int]]] = None,
-    allow_grad: py_bool = False,
-) -> Tensor:
-    low = try_unwrap(low)
-    high = try_unwrap(high)
-
-    return Tensor(backend.randint(low, high=high, size=size), allow_grad=allow_grad)
-
-
-def randn(*dims: Optional[int], allow_grad: py_bool = False) -> Tensor:
-    return Tensor(backend.randn(*dims), allow_grad=allow_grad)
-
-
-def binomial(
-    n: Union[int, Tensor[int]],
-    p: Union[float, Tensor[float]],
-    size: Optional[Tuple[int]] = None,
-    allow_grad: py_bool = False,
-) -> Tensor:
-    n = try_unwrap(n)
-    p = try_unwrap(p)
-
-    return Tensor(backend.binomial(n, p, size=size), allow_grad=allow_grad)
-
-
-def permutation(x: Union[int, Tensor], allow_grad: py_bool = False) -> Tensor:
-    x = try_unwrap(x)
-
-    return Tensor(backend.permutation(x), allow_grad=allow_grad)
-
-
-def shuffle(x: Tensor):
-    backend.shuffle(x._data)
-
-
-def split(
-    ary: Tensor,
-    indices_or_sections: Union[int, Sequence[int]],
-    axis: int = 0,
-    allow_grad: py_bool = False,
-) -> Tensor:
-    ary = ary._data
-    indices_or_sections = try_unwrap(indices_or_sections)
-
-    backend_output = backend.split(ary, indices_or_sections, axis=axis)
-    output = [None] * len(backend_output)
-
-    for i, section in enumerate(backend_output):
-        output[i] = Tensor(section, allow_grad=allow_grad)
-
-    return output
-
-
-dtypes = [
-    float64 := backend.float64,
-    float32 := backend.float32,
-    float16 := backend.float16,
-    uint64 := backend.uint64,
-    uint32 := backend.uint32,
-    uint16 := backend.uint16,
-    uint8 := backend.uint8,
-    int64 := backend.int64,
-    int32 := backend.int32,
-    int16 := backend.int16,
-    int8 := backend.int8,
-    bool := backend.bool,
-]
-newaxis = None

@@ -7,24 +7,11 @@ if TYPE_CHECKING:
 
     import minidiff as md
 
-    T = TypeVar("T")
+    BackendTensor = TypeVar("BackendTensor")
 
     TensorLike = Union[int, float, md.Tensor]
 
-    dtype = Union[
-        md.float64,
-        md.float32,
-        md.float16,
-        md.uint64,
-        md.uint32,
-        md.uint16,
-        md.uint8,
-        md.int64,
-        md.int32,
-        md.int16,
-        md.int8,
-        md.bool,
-    ]
+    dtype = TypeVar("dtype")
 
     GenericFunc = Callable[..., md.Tensor]
     GenericOp = GenericFunc

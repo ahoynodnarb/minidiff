@@ -8,10 +8,10 @@ if TYPE_CHECKING:
 
     import cupy.typing as cpt
 
-import cupy as cp
 from cupy.lib._shape_base import internal
 
 import minidiff.backend as backend
+import minidiff.backend.default_cupy as cp
 
 
 # https://github.com/cupy/cupy/blob/main/cupy/lib/_shape_base.py#L156

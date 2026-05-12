@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import importlib
-from argparse import ArgumentParser
-from typing import TYPE_CHECKING
+from types import ModuleType
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from builtins import bool as py_bool
@@ -10,750 +10,505 @@ if TYPE_CHECKING:
 
     import numpy as np
 
-_parser = ArgumentParser()
-_parser.add_argument(
-    "--backend", help="specify selected backend", required=False, default=None
-)
-_args = vars(_parser.parse_args())
+    import minidiff.typing as mdt
 
-_SPECIFIED_BACKEND = _args["backend"]
-_DEFAULT_BACKENDS = [
-    "minidiff.backend.cupy",
-    "minidiff.backend.mlx",
-    "minidiff.backend.numpy",
-]
+cupy = "minidiff.backend.default_cupy"
+mlx = "minidiff.backend.default_mlx"
+numpy = "minidiff.backend.default_numpy"
+
+_DEFAULT_BACKENDS = [cupy, mlx, numpy]
+
+current_backend: Backend = None
 
 
-def import_backend(backend_name: str, package_name: Optional[str] = None) -> dict:
-    # https://stackoverflow.com/questions/43059267/how-to-do-from-module-import-using-importlib
-    module = importlib.import_module(backend_name, package=package_name)
-    module_dict = module.__dict__
-    return module_dict
+def _update_backend(new_backend: Backend):
+    if not isinstance(new_backend, Backend):
+        raise ValueError(f"{new_backend} is not of type {Backend}")
+
+    global current_backend
+
+    if current_backend is None:
+        current_backend = new_backend
+        return
+
+    # we have to update the existing current_backend so that all instances of current_backend
+    # including those copied from `from minidiff.backend import current_backend` are updated
+    for attr, value in new_backend.__dict__.items():
+        setattr(current_backend, attr, value)
 
 
-def attempt_import(possible_backend: Optional[str]) -> Optional[dict]:
-    if possible_backend is None:
-        return None
-    try:
-        return import_backend(possible_backend)
-    except:
-        return None
-
-
-def attempt_backend_import():
-    current_backend = None
-
-    used_backend = None
-    backend_exports = None
-
-    backend_exports = attempt_import(_SPECIFIED_BACKEND)
-    if backend_exports is not None:
-        used_backend = _SPECIFIED_BACKEND
+def _get_module_backend(module: Union[ModuleType, str]) -> Optional[Backend]:
+    if isinstance(module, ModuleType):
+        module_dict = module.__dict__
     else:
-        for possible_backend in _DEFAULT_BACKENDS:
-            backend_exports = attempt_import(possible_backend)
-            if backend_exports is not None:
-                used_backend = possible_backend
-                break
-        else:
-            raise Exception("could not find a suitable backend")
+        try:
+            module_dict = importlib.import_module(module).__dict__
+        except:
+            module_dict = {}
 
-    for export in backend_exports.values():
-        if (
-            isinstance(export, type)
-            and export is not type(Backend)
-            and issubclass(export, Backend)
-        ):
-            if _SPECIFIED_BACKEND is not None and _SPECIFIED_BACKEND != used_backend:
-                print(
-                    f"could not find backend named {_SPECIFIED_BACKEND}, defaulting to {used_backend} instead"
-                )
-            current_backend = export
-            break
+    for obj in module_dict.values():
+        if isinstance(obj, Backend):
+            return obj
 
-    if current_backend is None or used_backend is None:
-        raise Exception("could not find a suitable backend")
+    return None
 
-    import_backend_funcs(current_backend)
 
+def set_backend(backend: Union[Backend, ModuleType, str], silent=False):
+    if not isinstance(backend, Backend):
+        possible_backend = _get_module_backend(backend)
 
-def import_backend_funcs(current_backend: Backend):
-    class_dict = current_backend.__dict__
-    module_exports = [x for x in class_dict if not x.startswith("_")]
-    pairs = {k: getattr(current_backend, k) for k in module_exports}
+        if possible_backend is None:
+            raise ValueError(f"Could not import backend from module {backend}")
 
-    globals().update(pairs)
+        backend = possible_backend
 
+    _update_backend(backend)
 
-class tensor_class:
-    def __init__(self):
-        raise NotImplementedError(
-            f"Attempting to instantiate default unimplemented Backend class {self.__class__}"
-        )
+    if not silent:
+        print(f"Using {current_backend} as backend")
 
 
-def tensor_constructor(*args, **kwargs) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
+def _attempt_backend_import():
+    if current_backend is not None:
+        return
 
+    for module_name in _DEFAULT_BACKENDS:
+        try:
+            set_backend(module_name, silent=True)
+            return
+        except:
+            continue
 
-def absolute(x: tensor_class) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
+    raise Exception("could not find a suitable backend")
 
 
-def abs(x: tensor_class) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
+@runtime_checkable
+class Backend(Protocol):
+    tensor_class: mdt.BackendTensor
 
+    def tensor_constructor(*args, **kwargs) -> Backend.mdt.BackendTensor: ...
 
-def all(x: tensor_class) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
+    def absolute(x: mdt.BackendTensor) -> mdt.BackendTensor: ...
 
+    def abs(x: mdt.BackendTensor) -> mdt.BackendTensor: ...
 
-def any(x: tensor_class) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
+    def all(x: mdt.BackendTensor) -> mdt.BackendTensor: ...
 
+    def any(x: mdt.BackendTensor) -> mdt.BackendTensor: ...
 
-def argmax(
-    x: tensor_class,
-    axis: Optional[Union[int, Sequence[int]]] = None,
-    keepdims: py_bool = False,
-) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
+    def argmax(
+        x: mdt.BackendTensor,
+        axis: Optional[Union[int, Sequence[int]]] = None,
+        keepdims: py_bool = False,
+    ) -> mdt.BackendTensor: ...
 
+    def argmin(
+        x: mdt.BackendTensor,
+        axis: Optional[Union[int, Sequence[int]]] = None,
+        keepdims: py_bool = False,
+    ) -> mdt.BackendTensor: ...
 
-def argmin(
-    x: tensor_class,
-    axis: Optional[Union[int, Sequence[int]]] = None,
-    keepdims: py_bool = False,
-) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
+    def argwhere(x: mdt.BackendTensor) -> mdt.BackendTensor: ...
 
+    def atleast_1d(x: mdt.BackendTensor) -> mdt.BackendTensor: ...
 
-def argwhere(x: tensor_class) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
+    def atleast_2d(x: mdt.BackendTensor) -> mdt.BackendTensor: ...
 
+    def atleast_3d(x: mdt.BackendTensor) -> mdt.BackendTensor: ...
 
-def atleast_1d(x: tensor_class) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
+    def ceil(x: mdt.BackendTensor) -> mdt.BackendTensor: ...
 
+    def copy(x: mdt.BackendTensor) -> mdt.BackendTensor: ...
 
-def atleast_2d(x: tensor_class) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
+    def cos(x: mdt.BackendTensor) -> mdt.BackendTensor: ...
 
+    def cosh(x: mdt.BackendTensor) -> mdt.BackendTensor: ...
 
-def atleast_3d(x: tensor_class) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
+    def exp(x: mdt.BackendTensor) -> mdt.BackendTensor: ...
 
+    def flatten(x: mdt.BackendTensor) -> mdt.BackendTensor: ...
 
-def ceil(x: tensor_class) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
+    def flip(
+        x: mdt.BackendTensor,
+        axis: Optional[Union[int, Sequence[int]]] = None,
+        keepdims: py_bool = False,
+    ) -> mdt.BackendTensor: ...
 
+    def floor(x: mdt.BackendTensor) -> mdt.BackendTensor: ...
 
-def copy(x: tensor_class) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
+    def invert(x: mdt.BackendTensor) -> mdt.BackendTensor: ...
 
+    def log(x: mdt.BackendTensor) -> mdt.BackendTensor: ...
 
-def cos(x: tensor_class) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
+    def logical_not(x: mdt.BackendTensor) -> mdt.BackendTensor: ...
 
+    def max(
+        x: mdt.BackendTensor,
+        axis: Optional[Union[int, Sequence[int]]] = None,
+        keepdims: py_bool = False,
+    ) -> mdt.BackendTensor: ...
 
-def cosh(x: tensor_class) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
+    def mean(
+        x: mdt.BackendTensor,
+        axis: Optional[Union[int, Sequence[int]]] = None,
+        keepdims: py_bool = False,
+    ) -> mdt.BackendTensor: ...
 
+    def min(
+        x: mdt.BackendTensor,
+        axis: Optional[Union[int, Sequence[int]]] = None,
+        keepdims: py_bool = False,
+    ) -> mdt.BackendTensor: ...
 
-def exp(x: tensor_class) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
+    def prod(
+        x: mdt.BackendTensor,
+        axis: Optional[Union[int, Sequence[int]]] = None,
+        keepdims: py_bool = False,
+    ) -> mdt.BackendTensor: ...
 
+    def ravel(x: mdt.BackendTensor) -> mdt.BackendTensor: ...
+
+    def sign(x: mdt.BackendTensor) -> mdt.BackendTensor: ...
 
-def flatten(x: tensor_class) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
+    def sin(x: mdt.BackendTensor) -> mdt.BackendTensor: ...
 
+    def sinh(x: mdt.BackendTensor) -> mdt.BackendTensor: ...
 
-def flip(
-    x: tensor_class,
-    axis: Optional[Union[int, Sequence[int]]] = None,
-    keepdims: py_bool = False,
-) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
+    def sqrt(x: mdt.BackendTensor) -> mdt.BackendTensor: ...
+
+    def square(x: mdt.BackendTensor) -> mdt.BackendTensor: ...
 
+    def squeeze(
+        x: mdt.BackendTensor, axis: Optional[Union[int, Sequence[int]]] = None
+    ) -> mdt.BackendTensor: ...
 
-def floor(x: tensor_class) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
+    def std(
+        x: mdt.BackendTensor,
+        axis: Optional[Union[int, Sequence[int]]] = None,
+        keepdims: py_bool = False,
+    ) -> mdt.BackendTensor: ...
+
+    def sum(
+        x: mdt.BackendTensor,
+        axis: Optional[Union[int, Sequence[int]]] = None,
+        keepdims: py_bool = False,
+    ) -> mdt.BackendTensor: ...
+
+    def tan(x: mdt.BackendTensor) -> mdt.BackendTensor: ...
+
+    def tanh(x: mdt.BackendTensor) -> mdt.BackendTensor: ...
+
+    def transpose(
+        x: mdt.BackendTensor, axes: Optional[Sequence[int]] = None
+    ) -> mdt.BackendTensor: ...
+
+    def add(
+        x: Union[int, float, mdt.BackendTensor],
+        y: Union[int, float, mdt.BackendTensor],
+    ) -> mdt.BackendTensor: ...
+
+    def astype(x: mdt.BackendTensor, type: mdt.dtype) -> mdt.BackendTensor: ...
+
+    def broadcast_to(
+        x: mdt.BackendTensor, shape: Sequence[int]
+    ) -> mdt.BackendTensor: ...
+
+    def dot(
+        x: Union[int, float, mdt.BackendTensor],
+        y: Union[int, float, mdt.BackendTensor],
+    ) -> mdt.BackendTensor: ...
+
+    def equal(
+        x: Union[int, float, mdt.BackendTensor],
+        y: Union[int, float, mdt.BackendTensor],
+    ) -> mdt.BackendTensor: ...
+
+    def expand_dims(
+        x: mdt.BackendTensor, axis: Union[int, Sequence[int]]
+    ) -> mdt.BackendTensor: ...
+
+    def floor_divide(
+        x: Union[int, float, mdt.BackendTensor],
+        y: Union[int, float, mdt.BackendTensor],
+    ) -> mdt.BackendTensor: ...
+
+    def getitem(x: mdt.BackendTensor, index: Any) -> mdt.BackendTensor: ...
+
+    def greater(
+        x: Union[int, float, mdt.BackendTensor],
+        y: Union[int, float, mdt.BackendTensor],
+    ) -> mdt.BackendTensor: ...
+
+    def greater_equal(
+        x: Union[int, float, mdt.BackendTensor],
+        y: Union[int, float, mdt.BackendTensor],
+    ) -> mdt.BackendTensor: ...
+
+    def less(
+        x: Union[int, float, mdt.BackendTensor],
+        y: Union[int, float, mdt.BackendTensor],
+    ) -> mdt.BackendTensor: ...
+
+    def less_equal(
+        x: Union[int, float, mdt.BackendTensor],
+        y: Union[int, float, mdt.BackendTensor],
+    ) -> mdt.BackendTensor: ...
+
+    def logical_and(
+        x: Union[int, float, mdt.BackendTensor],
+        y: Union[int, float, mdt.BackendTensor],
+    ) -> mdt.BackendTensor: ...
+
+    def logical_or(
+        x: Union[int, float, mdt.BackendTensor],
+        y: Union[int, float, mdt.BackendTensor],
+    ) -> mdt.BackendTensor: ...
+
+    def logical_xor(
+        x: Union[int, float, mdt.BackendTensor],
+        y: Union[int, float, mdt.BackendTensor],
+    ) -> mdt.BackendTensor: ...
+
+    def matmul(x: mdt.BackendTensor, y: mdt.BackendTensor) -> mdt.BackendTensor: ...
+
+    def mod(
+        x: Union[int, float, mdt.BackendTensor],
+        y: Union[int, float, mdt.BackendTensor],
+    ) -> mdt.BackendTensor: ...
+
+    def multiply(
+        x: Union[int, float, mdt.BackendTensor],
+        y: Union[int, float, mdt.BackendTensor],
+    ) -> mdt.BackendTensor: ...
+
+    def not_equal(
+        x: Union[int, float, mdt.BackendTensor],
+        y: Union[int, float, mdt.BackendTensor],
+    ) -> mdt.BackendTensor: ...
+
+    def power(
+        x: Union[int, float, mdt.BackendTensor],
+        y: Union[int, float, mdt.BackendTensor],
+    ) -> mdt.BackendTensor: ...
+
+    def reshape(
+        x: mdt.BackendTensor, shape: Union[int, Sequence[int]]
+    ) -> mdt.BackendTensor: ...
+
+    def subtract(
+        x: Union[int, float, mdt.BackendTensor],
+        y: Union[int, float, mdt.BackendTensor],
+    ) -> mdt.BackendTensor: ...
+
+    def tensordot(x: mdt.BackendTensor, y: mdt.BackendTensor) -> mdt.BackendTensor: ...
+
+    def true_divide(
+        x: Union[int, float, mdt.BackendTensor],
+        y: Union[int, float, mdt.BackendTensor],
+    ) -> mdt.BackendTensor: ...
+
+    def unbroadcast(
+        x: mdt.BackendTensor, shape: Sequence[int]
+    ) -> mdt.BackendTensor: ...
+
+    def clip(
+        x: mdt.BackendTensor,
+        a_min: Optional[Union[int, float, mdt.BackendTensor]],
+        a_max: Optional[Union[int, float, mdt.BackendTensor]],
+    ) -> mdt.BackendTensor: ...
+
+    def swapaxes(x: mdt.BackendTensor, axis1: int, axis2: int) -> mdt.BackendTensor: ...
+
+    def where(
+        condition: Union[int, float, mdt.BackendTensor],
+        y: Union[int, float, mdt.BackendTensor],
+        z: Union[int, float, mdt.BackendTensor],
+    ) -> mdt.BackendTensor: ...
+
+    def ones_like(
+        a: Union[int, float, mdt.BackendTensor], allow_grad: py_bool = False
+    ) -> mdt.BackendTensor: ...
+
+    def ones(
+        shape: Union[int, Sequence[int]], allow_grad: py_bool = False
+    ) -> mdt.BackendTensor: ...
+
+    def zeros_like(
+        a: Union[int, float, mdt.BackendTensor], allow_grad: py_bool = False
+    ) -> mdt.BackendTensor: ...
+
+    def zeros(
+        shape: Union[int, Sequence[int]], allow_grad: py_bool = False
+    ) -> mdt.BackendTensor: ...
+
+    def full_like(
+        a: mdt.BackendTensor,
+        x: Union[int, float, mdt.BackendTensor],
+        allow_grad: py_bool = False,
+    ) -> mdt.BackendTensor: ...
+
+    def full(
+        shape: Union[int, Sequence[int]], allow_grad: py_bool = False
+    ) -> mdt.BackendTensor: ...
+
+    def concatenate(
+        arrays: Sequence[Union[int, float, mdt.BackendTensor]],
+        axis: Optional[int] = 0,
+        allow_grad: py_bool = False,
+    ) -> mdt.BackendTensor: ...
+
+    def index_add(
+        a: Union[int, float, mdt.BackendTensor],
+        indices: Union[int, float, mdt.BackendTensor],
+        b: Optional[Union[int, float, mdt.BackendTensor]] = None,
+    ): ...
+
+    def isin(
+        element: Union[int, float, mdt.BackendTensor],
+        test_elements: List[Union[int, float, mdt.BackendTensor]],
+    ) -> mdt.BackendTensor: ...
+
+    def unravel_index(
+        indices: Union[int, float, mdt.BackendTensor],
+        shape: Sequence[int],
+        allow_grad: py_bool = False,
+    ) -> mdt.BackendTensor: ...
+
+    def vmap(
+        fun: Callable[[mdt.BackendTensor], mdt.BackendTensor],
+    ) -> Callable[[mdt.BackendTensor], mdt.BackendTensor]: ...
+
+    def take_along_axis(
+        arr: mdt.BackendTensor,
+        indices: mdt.BackendTensor,
+        axis: Optional[int] = None,
+        allow_grad: py_bool = False,
+    ) -> mdt.BackendTensor: ...
+
+    def put_along_axis(
+        arr: mdt.BackendTensor,
+        indices: mdt.BackendTensor,
+        values: Union[int, float, mdt.BackendTensor],
+        axis: Optional[int],
+    ): ...
+
+    def repeat(
+        a: Union[int, float, mdt.BackendTensor],
+        repeats: Union[int, Sequence[int]],
+        allow_grad: py_bool = False,
+        axis: Optional[int] = None,
+    ) -> mdt.BackendTensor: ...
+
+    def tile(
+        A: Union[int, float, mdt.BackendTensor],
+        reps: Union[int, float, mdt.BackendTensor],
+        allow_grad: py_bool = False,
+    ) -> mdt.BackendTensor: ...
 
+    def arange(
+        *args: Union[int, float], allow_grad: py_bool = False
+    ) -> mdt.BackendTensor: ...
 
-def invert(x: tensor_class) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
+    def stack(
+        arrays: Sequence[mdt.BackendTensor],
+        axis: Optional[int] = 0,
+        allow_grad: py_bool = False,
+    ) -> mdt.BackendTensor: ...
 
+    def save(file, arr: Union[int, float, mdt.BackendTensor]): ...
 
-def log(x: tensor_class) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
+    def load(file, allow_grad: py_bool = False) -> mdt.BackendTensor: ...
 
+    def choice(
+        a: Union[int, Union[int, float, mdt.BackendTensor]],
+        size: Optional[Union[int, Sequence[int]]] = None,
+        replace: py_bool = True,
+        p: Optional[Union[int, float, mdt.BackendTensor]] = None,
+    ) -> mdt.BackendTensor: ...
 
-def logical_not(x: tensor_class) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
+    def rand(
+        *dims: Optional[int], allow_grad: py_bool = False
+    ) -> mdt.BackendTensor: ...
 
+    def randint(
+        low: Union[int, Union[int, float, mdt.BackendTensor]],
+        high: Optional[Union[int, Union[int, float, mdt.BackendTensor]]] = None,
+        size: Optional[Union[int, Sequence[int]]] = None,
+        allow_grad: py_bool = False,
+    ) -> mdt.BackendTensor: ...
 
-def max(
-    x: tensor_class,
-    axis: Optional[Union[int, Sequence[int]]] = None,
-    keepdims: py_bool = False,
-) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
+    def randn(
+        *dims: Optional[int], allow_grad: py_bool = False
+    ) -> mdt.BackendTensor: ...
 
+    def binomial(
+        n: Union[int, mdt.BackendTensor[int]],
+        p: Union[float, mdt.BackendTensor[float]],
+        size: Optional[Tuple[int]] = None,
+        allow_grad: py_bool = False,
+    ) -> mdt.BackendTensor: ...
 
-def mean(
-    x: tensor_class,
-    axis: Optional[Union[int, Sequence[int]]] = None,
-    keepdims: py_bool = False,
-) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
+    def permutation(
+        x: Union[int, mdt.BackendTensor], allow_grad: py_bool = False
+    ) -> mdt.BackendTensor: ...
 
+    def shuffle(x: mdt.BackendTensor): ...
 
-def min(
-    x: tensor_class,
-    axis: Optional[Union[int, Sequence[int]]] = None,
-    keepdims: py_bool = False,
-) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
+    def split(
+        ary: mdt.BackendTensor,
+        indices_or_sections: Union[int, Sequence[int]],
+        axis: int = 0,
+        allow_grad: py_bool = False,
+    ) -> mdt.BackendTensor: ...
 
+    def tensor_shape(data: mdt.BackendTensor) -> Tuple[int, ...]: ...
 
-def prod(
-    x: tensor_class,
-    axis: Optional[Union[int, Sequence[int]]] = None,
-    keepdims: py_bool = False,
-) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
+    def tensor_size(data: mdt.BackendTensor) -> int: ...
 
+    def tensor_ndim(data: mdt.BackendTensor) -> int: ...
 
-def ravel(x: tensor_class) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
+    def tensor_dtype(data: mdt.BackendTensor) -> mdt.dtype: ...
 
+    def tensor_item(data: mdt.BackendTensor) -> Any: ...
 
-def sign(x: tensor_class) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
+    def repr(data: mdt.BackendTensor) -> str: ...
 
+    def len(data: mdt.BackendTensor) -> int: ...
 
-def sin(x: tensor_class) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
+    def array_interface(data: mdt.BackendTensor) -> dict[str, Any]: ...
 
+    def array(
+        data: mdt.BackendTensor,
+        dtype: Optional[mdt.dtype] = None,
+        copy: Optional[py_bool] = None,
+    ) -> mdt.BackendTensor: ...
 
-def sinh(x: tensor_class) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
+    dtype: mdt.dtype
 
+    float64: mdt.dtype
 
-def sqrt(x: tensor_class) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
+    float32: mdt.dtype
 
+    float16: mdt.dtype
 
-def square(x: tensor_class) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
+    uint64: mdt.dtype
 
+    uint32: mdt.dtype
 
-def squeeze(
-    x: tensor_class, axis: Optional[Union[int, Sequence[int]]] = None
-) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
+    uint16: mdt.dtype
 
+    uint8: mdt.dtype
 
-def std(
-    x: tensor_class,
-    axis: Optional[Union[int, Sequence[int]]] = None,
-    keepdims: py_bool = False,
-) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
+    int64: mdt.dtype
 
+    int32: mdt.dtype
 
-def sum(
-    x: tensor_class,
-    axis: Optional[Union[int, Sequence[int]]] = None,
-    keepdims: py_bool = False,
-) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
+    int16: mdt.dtype
 
+    int8: mdt.dtype
 
-def tan(x: tensor_class) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
+    bool: mdt.dtype
 
+    nan: Any
 
-def tanh(x: tensor_class) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def transpose(x: tensor_class, axes: Optional[Sequence[int]] = None) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def add(
-    x: Union[int, float, tensor_class], y: Union[int, float, tensor_class]
-) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def astype(x: tensor_class, type: dtype) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def broadcast_to(x: tensor_class, shape: Sequence[int]) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def dot(
-    x: Union[int, float, tensor_class], y: Union[int, float, tensor_class]
-) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def equal(
-    x: Union[int, float, tensor_class], y: Union[int, float, tensor_class]
-) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def expand_dims(x: tensor_class, axis: Union[int, Sequence[int]]) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def floor_divide(
-    x: Union[int, float, tensor_class], y: Union[int, float, tensor_class]
-) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def getitem(x: tensor_class, index: Any) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def greater(
-    x: Union[int, float, tensor_class], y: Union[int, float, tensor_class]
-) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def greater_equal(
-    x: Union[int, float, tensor_class], y: Union[int, float, tensor_class]
-) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def less(
-    x: Union[int, float, tensor_class], y: Union[int, float, tensor_class]
-) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def less_equal(
-    x: Union[int, float, tensor_class], y: Union[int, float, tensor_class]
-) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def logical_and(
-    x: Union[int, float, tensor_class], y: Union[int, float, tensor_class]
-) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def logical_or(
-    x: Union[int, float, tensor_class], y: Union[int, float, tensor_class]
-) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def logical_xor(
-    x: Union[int, float, tensor_class], y: Union[int, float, tensor_class]
-) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def matmul(x: tensor_class, y: tensor_class) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def mod(
-    x: Union[int, float, tensor_class], y: Union[int, float, tensor_class]
-) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def multiply(
-    x: Union[int, float, tensor_class], y: Union[int, float, tensor_class]
-) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def not_equal(
-    x: Union[int, float, tensor_class], y: Union[int, float, tensor_class]
-) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def power(
-    x: Union[int, float, tensor_class], y: Union[int, float, tensor_class]
-) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def reshape(x: tensor_class, shape: Union[int, Sequence[int]]) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def subtract(
-    x: Union[int, float, tensor_class], y: Union[int, float, tensor_class]
-) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def tensordot(x: tensor_class, y: tensor_class) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def true_divide(
-    x: Union[int, float, tensor_class], y: Union[int, float, tensor_class]
-) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def unbroadcast(x: tensor_class, shape: Sequence[int]) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def clip(
-    x: tensor_class,
-    a_min: Optional[Union[int, float, tensor_class]],
-    a_max: Optional[Union[int, float, tensor_class]],
-) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def swapaxes(x: tensor_class, axis1: int, axis2: int) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def where(
-    condition: Union[int, float, tensor_class],
-    y: Union[int, float, tensor_class],
-    z: Union[int, float, tensor_class],
-) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def ones_like(
-    a: Union[int, float, tensor_class], allow_grad: py_bool = False
-) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def ones(shape: Union[int, Sequence[int]], allow_grad: py_bool = False) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def zeros_like(
-    a: Union[int, float, tensor_class], allow_grad: py_bool = False
-) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def zeros(
-    shape: Union[int, Sequence[int]], allow_grad: py_bool = False
-) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def full_like(
-    a: tensor_class,
-    x: Union[int, float, tensor_class],
-    allow_grad: py_bool = False,
-) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def full(shape: Union[int, Sequence[int]], allow_grad: py_bool = False) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def concatenate(
-    arrays: Sequence[Union[int, float, tensor_class]],
-    axis: Optional[int] = 0,
-    allow_grad: py_bool = False,
-) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def index_add(
-    a: Union[int, float, tensor_class],
-    indices: Union[int, float, tensor_class],
-    b: Optional[Union[int, float, tensor_class]] = None,
-):
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def isin(
-    element: Union[int, float, tensor_class],
-    test_elements: List[Union[int, float, tensor_class]],
-) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def unravel_index(
-    indices: Union[int, float, tensor_class],
-    shape: Sequence[int],
-    allow_grad: py_bool = False,
-) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def vmap(
-    fun: Callable[[tensor_class], tensor_class],
-) -> Callable[[tensor_class], tensor_class]:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def take_along_axis(
-    arr: tensor_class,
-    indices: tensor_class,
-    axis: Optional[int] = None,
-    allow_grad: py_bool = False,
-) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def put_along_axis(
-    arr: tensor_class,
-    indices: tensor_class,
-    values: Union[int, float, tensor_class],
-    axis: Optional[int],
-):
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def repeat(
-    a: Union[int, float, tensor_class],
-    repeats: Union[int, Sequence[int]],
-    allow_grad: py_bool = False,
-    axis: Optional[int] = None,
-) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def tile(
-    A: Union[int, float, tensor_class],
-    reps: Union[int, float, tensor_class],
-    allow_grad: py_bool = False,
-) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def arange(*args: Union[int, float], allow_grad: py_bool = False) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def stack(
-    arrays: Sequence[tensor_class], axis: Optional[int] = 0, allow_grad: py_bool = False
-) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def save(file, arr: Union[int, float, tensor_class]):
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def load(file, allow_grad: py_bool = False) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def choice(
-    a: Union[int, Union[int, float, tensor_class]],
-    size: Optional[Union[int, Sequence[int]]] = None,
-    replace: py_bool = True,
-    p: Optional[Union[int, float, tensor_class]] = None,
-) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def rand(*dims: Optional[int], allow_grad: py_bool = False) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def randint(
-    low: Union[int, Union[int, float, tensor_class]],
-    high: Optional[Union[int, Union[int, float, tensor_class]]] = None,
-    size: Optional[Union[int, Sequence[int]]] = None,
-    allow_grad: py_bool = False,
-) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def randn(*dims: Optional[int], allow_grad: py_bool = False) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def binomial(
-    n: Union[int, tensor_class[int]],
-    p: Union[float, tensor_class[float]],
-    size: Optional[Tuple[int]] = None,
-    allow_grad: py_bool = False,
-) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def permutation(
-    x: Union[int, tensor_class], allow_grad: py_bool = False
-) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def shuffle(x: tensor_class):
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def split(
-    ary: tensor_class,
-    indices_or_sections: Union[int, Sequence[int]],
-    axis: int = 0,
-    allow_grad: py_bool = False,
-) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def tensor_shape(data: tensor_class) -> Tuple[int, ...]:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def tensor_size(data: tensor_class) -> int:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def tensor_ndim(data: tensor_class) -> int:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def tensor_dtype(data: tensor_class) -> dtype:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def tensor_item(data: tensor_class) -> Any:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def repr(data: tensor_class) -> str:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def len(data: tensor_class) -> int:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def array_interface(data: tensor_class) -> dict[str, Any]:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-def array(
-    data: tensor_class,
-    dtype: Optional[dtype] = None,
-    copy: Optional[py_bool] = None,
-) -> tensor_class:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-class dtype:
-    def __init__(self):
-        raise NotImplementedError(
-            f"Attempting to instantiate default unimplemented Backend class {self.__class__}"
-        )
-
-
-class float64(dtype):
-    def __init__(self):
-        raise NotImplementedError(
-            f"Attempting to instantiate default unimplemented Backend class {self.__class__}"
-        )
-
-
-class float32(dtype):
-    def __init__(self):
-        raise NotImplementedError(
-            f"Attempting to instantiate default unimplemented Backend class {self.__class__}"
-        )
-
-
-class float16(dtype):
-    def __init__(self):
-        raise NotImplementedError(
-            f"Attempting to instantiate default unimplemented Backend class {self.__class__}"
-        )
-
-
-class uint64(dtype):
-    def __init__(self):
-        raise NotImplementedError(
-            f"Attempting to instantiate default unimplemented Backend class {self.__class__}"
-        )
-
-
-class uint32(dtype):
-    def __init__(self):
-        raise NotImplementedError(
-            f"Attempting to instantiate default unimplemented Backend class {self.__class__}"
-        )
-
-
-class uint16(dtype):
-    def __init__(self):
-        raise NotImplementedError(
-            f"Attempting to instantiate default unimplemented Backend class {self.__class__}"
-        )
-
-
-class uint8(dtype):
-    def __init__(self):
-        raise NotImplementedError(
-            f"Attempting to instantiate default unimplemented Backend class {self.__class__}"
-        )
-
-
-class int64(dtype):
-    def __init__(self):
-        raise NotImplementedError(
-            f"Attempting to instantiate default unimplemented Backend class {self.__class__}"
-        )
-
-
-class int32(dtype):
-    def __init__(self):
-        raise NotImplementedError(
-            f"Attempting to instantiate default unimplemented Backend class {self.__class__}"
-        )
-
-
-class int16(dtype):
-    def __init__(self):
-        raise NotImplementedError(
-            f"Attempting to instantiate default unimplemented Backend class {self.__class__}"
-        )
-
-
-class int8(dtype):
-    def __init__(self):
-        raise NotImplementedError(
-            f"Attempting to instantiate default unimplemented Backend class {self.__class__}"
-        )
-
-
-class bool(dtype):
-    def __init__(self):
-        raise NotImplementedError(
-            f"Attempting to instantiate default unimplemented Backend class {self.__class__}"
-        )
-
-
-nan: Any
-
-
-def as_numpy(a: tensor_class) -> np.array:
-    raise NotImplementedError("Attempting to call default unimplemented Backend method")
-
-
-class Backend:
-    def __init__(self):
-        raise NotImplementedError(
-            f"Attempting to instantiate default unimplemented Backend class {self.__class__}"
-        )
+    def as_numpy(a: mdt.BackendTensor) -> np.array: ...
