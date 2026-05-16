@@ -73,7 +73,6 @@ def _attempt_backend_import():
 
     for module_name in _DEFAULT_BACKENDS:
         try:
-            # print(module_name)
             set_backend(module_name, silent=True)
             return
         except:

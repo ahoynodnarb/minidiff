@@ -37,27 +37,23 @@ def draw_tensor_op_graph(
         nonlocal n_anonymous_tensors
 
         tensor_id = id(tensor)
-        if isinstance(tensor, md.Tensor) and tensor.size == 1:
-            tensor = tensor.item()
-            tensor_id = id(tensor)
+        if not isinstance(tensor, md.Tensor):
+            return str(tensor)
+        flattened = tensor.flatten()
+        broadcasted_constant = md.all(flattened == flattened[0]).item()
         # already has a name
         if tensor_id in all_tensor_names:
             tensor_name = all_tensor_names[tensor_id]
-        # this is just a scalar so return the value as its name
-        elif not isinstance(tensor, md.Tensor):
-            tensor_name = str(tensor)
-            all_tensor_names[tensor_id] = tensor_name
-        # if we're either giving everything a name, or we haven't found its name and it's a leaf
-        # then we give it a name
+        elif tensor.is_leaf and broadcasted_constant:
+            tensor_name = f"full({tensor.shape}, {flattened[0].item()})"
+        # if we're either giving everything a name, or we haven't found its name and it's a leaf then we give it a name
         elif insert_intermediates or tensor.is_leaf:
             tensor_name = f"t{n_anonymous_tensors}"
             n_anonymous_tensors += 1
-            all_tensor_names[tensor_id] = tensor_name
-        # default to just the explicit definition
         else:
-            tensor_name = find_nested_tensor_name(tensor)
-            all_tensor_names[tensor_id] = tensor_name
-
+            return find_nested_tensor_name(tensor)
+        # default to just the explicit definition
+        tensor_names[tensor_id] = tensor_name
         return tensor_name
 
     # self-explanatory: just connect every tensor to the tensors which created it
@@ -67,15 +63,15 @@ def draw_tensor_op_graph(
         node = tensor.op_node
         tensor_id = id(tensor)
         for child in node.op_inputs:
-            child_id = id(child)
-            graph.edge(str(child_id), str(tensor_id))
+            if not isinstance(child, md.Tensor):
+                continue
+            graph.edge(str(id(child)), str(tensor_id))
 
     def draw_tensor_graph(graph: graphviz.Graph, t: md.Tensor):
         # iterate through every tensor starting from leaf tensors
         all_tensors = t.op_node.toposort() + [t]
         for tensor in all_tensors:
             tensor_id = id(tensor)
-
             tensor_name = lookup_tensor_name(tensor)
 
             # if we're naming everything, then all tensors are expanded

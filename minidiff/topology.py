@@ -113,14 +113,13 @@ class OpNode:
         # after getting all the way to the base, finally push ourselves onto the stack
         # rinse and repeat for the input tensors, their input tensors, etc.
         def dfs(op_node: OpNode):
-            if op_node is None:
-                return
             for op_input in op_node.tensor_inputs:
                 input_id = id(op_input)
                 if input_id in seen:
                     continue
                 seen.add(input_id)
-                dfs(op_input.op_node)
+                if op_input.op_node is not None:
+                    dfs(op_input.op_node)
                 traversal_path.append(op_input)
 
         dfs(self)
