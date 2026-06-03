@@ -26,6 +26,9 @@ class minidiff_backend_proxy:
 
     def __getattr__(self, name):
         return getattr(self._instance, name)
+    
+    def __repr__(self):
+        return self._instance.name
 
 
 def _update_backend(new_backend: Backend):
@@ -511,3 +514,5 @@ class Backend(Protocol):
     nan: Any
 
     def as_numpy(a: mdt.BackendTensor) -> np.array: ...
+
+    name: str

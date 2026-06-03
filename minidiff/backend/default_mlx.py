@@ -361,3 +361,5 @@ class mlx_backend(backend.Backend):
     @staticmethod
     def as_numpy(a: mx.array) -> np.array:
         return np.array(a)
+
+    name = "mlx"
