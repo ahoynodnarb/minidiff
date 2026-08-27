@@ -1,7 +1,8 @@
-import minidiff as md
 from minidl.layers import ActivationLayer, Dense
 from minidl.neural_networks import NeuralNetwork
 from minidl.optimizers import AdamW
+
+import minidiff as md
 
 
 # Burgers' equation: du/dt + u * du/dx - v * d^2u/dx^2 = 0
@@ -41,8 +42,10 @@ def get_train_resources():
         ds[boundary_indices, 1] = t_bc
 
     def mse_loss(u: md.Tensor) -> md.Tensor:
-        u.backward(allow_higher_order=True, cleanup_mode="destroy")
+        u.backward(allow_higher_order=True)
         dx, dt = ds.grad.T
+        # we will eventually be calling backward() on the losses, so the gradients themselves
+        # will contribute to further downstream gradients hence we need them to track gradients
         dx.backward(allow_higher_order=True)
         dxx = ds.grad[:, 0]
 
