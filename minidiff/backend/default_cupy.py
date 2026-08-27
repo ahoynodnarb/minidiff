@@ -251,3 +251,5 @@ class cupy_backend(backend.Backend):
     nan = cp.nan
 
     as_numpy = cp.asnumpy
+
+    name = "cupy"

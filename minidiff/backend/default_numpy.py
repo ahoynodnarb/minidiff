@@ -204,3 +204,5 @@ class numpy_backend(backend.Backend):
     @staticmethod
     def as_numpy(a: np.ndarray) -> np.ndarray:
         return a
+
+    name = "numpy"

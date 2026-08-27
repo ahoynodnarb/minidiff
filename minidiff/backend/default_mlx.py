@@ -147,8 +147,8 @@ class mlx_backend(backend.Backend):
     zeros = mx.zeros
 
     @staticmethod
-    def full_like(a: mx.array, fill_value, dtype: mx.Dtype) -> mx.array:
-        return mx.full(a.shape, fill_value, dtype=dtype)
+    def full_like(a: mx.array, fill_value) -> mx.array:
+        return mx.full(a.shape, fill_value)
 
     full = mx.full
 
@@ -361,3 +361,5 @@ class mlx_backend(backend.Backend):
     @staticmethod
     def as_numpy(a: mx.array) -> np.array:
         return np.array(a)
+
+    name = "mlx"
