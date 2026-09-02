@@ -58,3 +58,20 @@ def set_allow_grad(allow: py_bool):
 
 def grad_allowed_() -> py_bool:
     return _allow_grad.get()
+
+
+dtype = current_backend.dtype
+float64 = current_backend.float64
+float32 = current_backend.float32
+float16 = current_backend.float16
+uint64 = current_backend.uint64
+uint32 = current_backend.uint32
+uint16 = current_backend.uint16
+uint8 = current_backend.uint8
+int64 = current_backend.int64
+int32 = current_backend.int32
+int16 = current_backend.int16
+int8 = current_backend.int8
+bool = current_backend.bool
+nan = current_backend.nan
+pi = 3.1415926535897932384626433

@@ -177,53 +177,22 @@ def create_op_func(
     return minidiff_func
 
 
-def create_stateful_op_func(
-    op_class: Type[OpClass],
-    propagate_kwargs: bool = False,
-    tensor_only: bool = False,
-    op_name: Optional[str] = None,
-) -> mdt.GenericOp:
-    if op_name is None:
-        op_name = op_class.__name__
-
-    def minidiff_func(*op_inputs: P.args, **op_kwargs: P.kwargs) -> md.Tensor:
-        _validate_op_inputs(op_inputs, tensor_only)
-        allow_grad = _should_allow_grad(op_inputs)
-        instance = op_class()
-        forward = instance.create_forward()
-        output = forward(*op_inputs, **op_kwargs)
-        if output.op_node is not None:
-            output = output.detach()
-        output.allow_grad = allow_grad
-
-        # only attach a node if we're allowed to track gradients right now, and the tensor wants to track its gradient
-        if allow_grad and md.grad_allowed_():
-            grad_funcs = instance.create_grads()
-            output.op_node = OpNode(
-                forward_func=forward,
-                grad_functions=grad_funcs,
-                op_inputs=op_inputs,
-                op_kwargs=op_kwargs,
-                op_name=op_name,
-                propagate_kwargs=propagate_kwargs,
-            )
-
-        return output
-
-    minidiff_func.__name__ = op_name
-    minidiff_func.__qualname__ = f"<stateful op func '{op_name}'>"
-
-    return minidiff_func
-
-
 # single argument
 def create_unary_op_func(
     forward_func: Callable[P, md.Tensor],
     grad: Optional[mdt.UnaryOpGrad] = None,
-    **kwargs,
+    propagate_kwargs: bool = False,
+    is_differentiable: bool = True,
+    op_name: Optional[str] = None,
 ) -> Callable[P, md.Tensor]:
-    kwargs = dict(kwargs, tensor_only=True)
-    return create_op_func(forward_func=forward_func, grad_funcs=[grad], **kwargs)
+    return create_op_func(
+        forward_func=forward_func,
+        grad_funcs=[grad],
+        propagate_kwargs=propagate_kwargs,
+        is_differentiable=is_differentiable,
+        tensor_only=True,
+        op_name=op_name,
+    )
 
 
 # two arguments
@@ -231,10 +200,18 @@ def create_binary_op_func(
     forward_func: Callable[P, md.Tensor],
     grad_x: Optional[mdt.BinaryOpGrad] = None,
     grad_y: Optional[mdt.BinaryOpGrad] = None,
-    **kwargs,
+    propagate_kwargs: bool = False,
+    is_differentiable: bool = True,
+    tensor_only: bool = False,
+    op_name: Optional[str] = None,
 ) -> Callable[P, md.Tensor]:
     return create_op_func(
-        forward_func=forward_func, grad_funcs=[grad_x, grad_y], **kwargs
+        forward_func=forward_func,
+        grad_funcs=[grad_x, grad_y],
+        propagate_kwargs=propagate_kwargs,
+        is_differentiable=is_differentiable,
+        tensor_only=tensor_only,
+        op_name=op_name,
     )
 
 
@@ -244,10 +221,18 @@ def create_ternary_op_func(
     grad_x: Optional[mdt.TernaryOpGrad] = None,
     grad_y: Optional[mdt.TernaryOpGrad] = None,
     grad_z: Optional[mdt.TernaryOpGrad] = None,
-    **kwargs,
+    propagate_kwargs: bool = False,
+    is_differentiable: bool = True,
+    tensor_only: bool = False,
+    op_name: Optional[str] = None,
 ) -> Callable[P, md.Tensor]:
     return create_op_func(
-        forward_func=forward_func, grad_funcs=[grad_x, grad_y, grad_z], **kwargs
+        forward_func=forward_func,
+        grad_funcs=[grad_x, grad_y, grad_z],
+        propagate_kwargs=propagate_kwargs,
+        is_differentiable=is_differentiable,
+        tensor_only=tensor_only,
+        op_name=op_name,
     )
 
 
@@ -262,7 +247,6 @@ __all__ = [
     "ternary_op_func",
     "as_minidiff",
     "create_op_func",
-    "create_stateful_op_func",
     "create_unary_op_func",
     "create_binary_op_func",
     "create_ternary_op_func",

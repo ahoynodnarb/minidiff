@@ -232,7 +232,7 @@ def sum_grad(
     **kwargs,
 ) -> md.Tensor:
     if isinstance(axis, int):
-        axis = tuple(axis)
+        axis = (axis,)
     # here, we're letting it broadcast
     if axis is None:
         return grad
@@ -541,13 +541,14 @@ unbroadcast = wrapping.create_binary_op_func(
 # -------------------- TERNARY FUNCS --------------------
 clip = wrapping.create_ternary_op_func(
     forward_func=wrapping.as_minidiff(lambda: current_backend.clip),
-    grad_x=lambda x, a_min, a_max, grad: (
+    grad_x=lambda x, grad, a_min=None, a_max=None: (
         grad
         * logical_and(
             1 if a_min is None else x > a_min,
             1 if a_max is None else x < a_max,
         )
     ),
+    propagate_kwargs=True,
 )
 swapaxes = wrapping.create_ternary_op_func(
     forward_func=wrapping.as_minidiff(lambda: current_backend.swapaxes),
